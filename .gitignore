@@ -1,0 +1,33 @@
+# Dependencies
+node_modules/
+
+# Environment (never commit secrets)
+.env
+.env.local
+.env.*.local
+# Keep example for developers
+!.env.example
+
+# Build
+dist/
+build/
+
+# Vite
+*.local
+
+# Logs and debug
+*.log
+npm-debug.log*
+
+# OS and IDE
+.DS_Store
+.idea/
+*.swp
+*.swo
+.vscode/
+
+# TypeScript and tooling
+*.tsbuildinfo
+
+# Test and coverage
+coverage/

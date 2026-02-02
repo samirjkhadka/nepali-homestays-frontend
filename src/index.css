@@ -1,0 +1,111 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 216 58% 16%;
+    --card: 0 0% 100%;
+    --card-foreground: 216 58% 16%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 216 58% 16%;
+
+    /* Logo primary: #0F233E (navy) */
+    --primary: 216 58% 16%;
+    --primary-foreground: 0 0% 100%;
+
+    /* Logo secondary: blue-gray */
+    --secondary: 216 20% 94%;
+    --secondary-foreground: 216 30% 25%;
+
+    /* Logo accent: #FB6F08 (orange) */
+    --accent: 26 97% 51%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 100%;
+    --muted: 216 20% 96%;
+    --muted-foreground: 216 15% 46%;
+    --border: 216 20% 90%;
+    --input: 216 20% 90%;
+    --ring: 216 58% 16%;
+    --radius: 0.5rem;
+  }
+
+  .dark {
+    --background: 216 40% 6%;
+    --foreground: 210 40% 98%;
+    --card: 216 40% 8%;
+    --card-foreground: 210 40% 98%;
+    --popover: 216 40% 8%;
+    --popover-foreground: 210 40% 98%;
+    --primary: 26 97% 51%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 216 30% 18%;
+    --secondary-foreground: 210 40% 98%;
+    --accent: 26 97% 51%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+    --muted: 216 30% 18%;
+    --muted-foreground: 215 20% 65%;
+    --border: 216 25% 20%;
+    --input: 216 25% 20%;
+    --ring: 26 97% 51%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: 'rlig' 1, 'calt' 1;
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  .bg-gradient-nepal {
+    background: linear-gradient(135deg, #0F233E 0%, #4A6286 50%, #FB6F08 100%);
+  }
+
+  .bg-gradient-hero {
+    background: linear-gradient(to right, rgba(15, 35, 62, 0.95), rgba(75, 98, 134, 0.85));
+  }
+
+  .bg-gradient-logo {
+    background: linear-gradient(135deg, #FF6F01 0%, #FF8B00 43%, #FEA501 100%);
+  }
+
+  .animate-fade-in {
+    animation: fadeIn 0.5s ease-in;
+  }
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  /* Range slider (min/max price on search) */
+  input[type='range'] {
+    @apply h-2 w-full cursor-pointer appearance-none rounded-lg bg-primary-200;
+  }
+  input[type='range']::-webkit-slider-thumb {
+    @apply h-4 w-4 cursor-pointer appearance-none rounded-full border-2 border-primary-600 bg-accent-500 shadow;
+  }
+  input[type='range']::-moz-range-thumb {
+    @apply h-4 w-4 cursor-pointer rounded-full border-2 border-primary-600 bg-accent-500 shadow;
+  }
+}

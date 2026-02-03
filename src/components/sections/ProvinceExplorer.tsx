@@ -1,53 +1,141 @@
 import { Link } from 'react-router-dom';
-import { Card, CardContent } from '@/components/ui/card';
-import { Mountain } from '@/components/icons';
+import { motion } from 'framer-motion';
+import { MapPin, ChevronRight } from 'lucide-react';
 import { PROVINCES, getProvinceSearchParam } from '@/data/provinces';
+import type { Province } from '@/data/provinces';
 
-/** Section header image (Nepal landscape); card fallback uses gradient + icon */
-const PROVINCES_HEADER_IMAGE = 'https://images.unsplash.com/photo-1563986768609-322da13575f3?w=1200&q=80';
+/** Nepal/region imagery - one per province (Unsplash) */
+const PROVINCE_IMAGES = [
+  'https://images.unsplash.com/photo-1563986768609-322da13575f3?w=800&q=80', // Kathmandu / Bagmati
+  'https://images.unsplash.com/photo-1544735716-392fe2489ffa?w=800&q=80',   // Annapurna / Gandaki
+  'https://images.unsplash.com/photo-1578645635730-3f9b1c4e4b5a?w=800&q=80', // Lumbini
+  'https://images.unsplash.com/photo-1506905925346-21bda3d1dfcd?w=800&q=80', // Mountains / Koshi
+  'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?w=800&q=80', // Terai / Madhesh
+  'https://images.unsplash.com/photo-1519681393784-d120267933ba?w=800&q=80', // Hills / Sudurpashchim
+  'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?w=800&q=80', // Karnali
+];
+
+const PROVINCE_COLORS: readonly string[] = [
+  'from-amber-500/80',
+  'from-cyan-500/80',
+  'from-orange-500/80',
+  'from-blue-500/80',
+  'from-green-500/80',
+  'from-rose-500/80',
+  'from-indigo-500/80',
+];
+
+function getProvinceStyle(index: number) {
+  return {
+    image: PROVINCE_IMAGES[index] ?? PROVINCE_IMAGES[0],
+    color: PROVINCE_COLORS[index] ?? 'from-primary-500/80',
+  };
+}
 
 export default function ProvinceExplorer() {
+  const topRow = PROVINCES.slice(0, 4);
+  const bottomRow = PROVINCES.slice(4, 7);
+
   return (
-    <section className="space-y-6">
-      <div className="relative overflow-hidden rounded-2xl border border-primary-200 shadow-md">
-        <img
-          src={PROVINCES_HEADER_IMAGE}
-          alt=""
-          className="h-48 w-full object-cover md:h-56"
-        />
-        <div className="absolute inset-0 bg-gradient-to-t from-primary-900/80 to-transparent" />
-        <div className="absolute inset-0 flex flex-col justify-end p-6 md:p-8">
-          <h2 className="text-3xl font-bold text-white drop-shadow md:text-4xl">Explore by Province</h2>
-          <p className="mt-2 text-white/95">
-            Discover homestays across Nepal&apos;s seven provinces
+    <section className="py-20 bg-muted/50">
+      <div className="container px-4">
+        {/* Section Header */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          className="text-center mb-12"
+        >
+          <span className="text-primary font-medium text-sm uppercase tracking-wider">
+            Explore by Region
+          </span>
+          <h2 className="font-serif text-4xl md:text-5xl font-bold text-foreground mt-2 mb-4">
+            Homestays by Province
+          </h2>
+          <p className="text-muted-foreground max-w-2xl mx-auto">
+            Nepal is divided into seven beautiful provinces, each offering unique cultural
+            experiences and breathtaking landscapes.
           </p>
+        </motion.div>
+
+        {/* Top Row: 4 tall cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          {topRow.map((province, index) => (
+            <ProvinceCard
+              key={province.id}
+              province={province}
+              index={index}
+              aspect="tall"
+            />
+          ))}
+        </div>
+
+        {/* Bottom Row: 3 wide cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mt-6">
+          {bottomRow.map((province, index) => (
+            <ProvinceCard
+              key={province.id}
+              province={province}
+              index={4 + index}
+              aspect="wide"
+            />
+          ))}
         </div>
       </div>
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-        {PROVINCES.map((province) => (
-          <Link
-            key={province.id}
-            to={`/search?${getProvinceSearchParam(province.slug)}`}
-            className="group block"
-          >
-            <Card className="overflow-hidden transition-all hover:shadow-lg hover:ring-2 hover:ring-accent-400">
-              <div className="flex h-32 items-center justify-center bg-gradient-to-br from-primary-100 to-primary-200 group-hover:from-primary-200 group-hover:to-primary-300">
-                <Mountain className="h-14 w-14 text-primary-600" />
-              </div>
-              <CardContent className="p-4">
-                <h3 className="font-semibold text-primary-800 group-hover:text-accent-600">
-                  {province.name}
-                </h3>
-                {province.description && (
-                  <p className="mt-1 text-sm text-muted-foreground line-clamp-2">
-                    {province.description}
-                  </p>
-                )}
-              </CardContent>
-            </Card>
-          </Link>
-        ))}
-      </div>
     </section>
+  );
+}
+
+type ProvinceCardProps = {
+  province: Province;
+  index: number;
+  aspect: 'tall' | 'wide';
+};
+
+function ProvinceCard({ province, index, aspect }: ProvinceCardProps) {
+  const { image, color } = getProvinceStyle(index);
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 30 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true }}
+      transition={{ delay: index * 0.1 }}
+      whileHover={{ y: -8 }}
+    >
+      <Link
+        to={`/search?${getProvinceSearchParam(province.slug)}`}
+        className={`group block relative overflow-hidden rounded-2xl cursor-pointer ${aspect === 'tall' ? 'aspect-[4/5]' : 'aspect-[16/10]'}`}
+      >
+        <img
+          src={image}
+          alt={province.name}
+          className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
+        />
+        <div className={`absolute inset-0 bg-gradient-to-t ${color} to-transparent opacity-90`} />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
+
+        <div className="absolute bottom-0 left-0 right-0 p-6">
+          {aspect === 'tall' && (
+            <div className="flex items-center gap-2 text-white/80 text-sm mb-2">
+              <MapPin className="w-4 h-4 shrink-0" />
+              <span>Explore homestays</span>
+            </div>
+          )}
+          <h3 className="font-serif text-2xl font-bold text-white mb-3">
+            {province.name} Province
+          </h3>
+          {aspect === 'tall' ? (
+            <span className="flex items-center gap-2 text-white font-medium opacity-0 -translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-300">
+              Explore <ChevronRight className="w-4 h-4" />
+            </span>
+          ) : (
+            <span className="flex items-center gap-2 text-white/90 text-sm">
+              Explore <ChevronRight className="w-4 h-4" />
+            </span>
+          )}
+        </div>
+      </Link>
+    </motion.div>
   );
 }

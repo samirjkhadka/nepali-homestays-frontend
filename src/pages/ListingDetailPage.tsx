@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
-import { Bed, MapPin, Users, User, Route, Heart, Star, Award, Languages } from 'lucide-react';
+import { useParams, useNavigate, useSearchParams, useLocation, Link } from 'react-router-dom';
+import { MapPin, Users, Heart, Star, Award, ArrowLeft, Share, MessageCircle, Calendar, Languages, BadgeCheck } from 'lucide-react';
+import { motion } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -8,9 +9,14 @@ import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { useAuth } from '@/lib/auth';
 import { api } from '@/lib/api';
+import { getImageDisplayUrl } from '@/lib/image-url';
 import { useToast } from '@/hooks/use-toast';
 import { useCurrency } from '@/lib/currency';
 import { ListingMap } from '@/components/ListingMap';
+import { PhotoGallery } from '@/components/PhotoGallery';
+import { BookingCard } from '@/components/BookingCard';
+import { ReviewsSection } from '@/components/ReviewsSection';
+import { AmenitiesList } from '@/components/AmenitiesList';
 
 type HostProfile = {
   id: number;
@@ -31,6 +37,7 @@ type Listing = {
   type: string;
   status?: string;
   category?: string | null;
+  badge?: string | null;
   location: string;
   price_per_night: string;
   max_guests: number;
@@ -45,23 +52,36 @@ type Listing = {
   sections?: Record<string, string>;
 };
 
-const SECTION_LABELS: Record<string, string> = {
-  owners_story: "Homestay owner's story",
-  history: 'History',
-  about_us: 'About us',
-  their_community: 'Their community',
-  whats_included_in_price: "What's included in the price",
-  place_history: 'Place history',
-  attractions: 'Attractions',
-  homestay_highlights: 'Homestay highlights',
-  things_to_do_nearby: 'Things to do near the homestay',
-  impact_in_community: 'Impact in the community',
-  how_to_get_there: 'How to get there',
-  nearby_homestays: 'Nearby homestays',
-  faqs: 'FAQs',
+/** Listing display settings from API (badge labels, section labels, highlights, trust badges, empty fallbacks) */
+type ListingDisplaySettings = {
+  badge_labels: Record<string, string>;
+  section_labels: Record<string, string>;
+  highlights: {
+    free_cancellation_title: string;
+    free_cancellation_description: string;
+    great_communication_title: string;
+    great_communication_description: string;
+    superhost_title: string;
+    superhost_description: string;
+  };
+  trust_badges: string[];
+  empty_fallbacks: { no_description: string; default_host_name: string; no_directions: string };
 };
 
-type TabId = 'overview' | 'amenities' | 'host' | 'location' | 'reviews';
+const DEFAULT_LISTING_DISPLAY: ListingDisplaySettings = {
+  badge_labels: { recommended: 'Recommended', featured: 'Featured', new: 'New' },
+  section_labels: { owners_story: "Homestay owner's story", history: 'History', about_us: 'About us', their_community: 'Their community', whats_included_in_price: "What's included in the price", place_history: 'Place history', attractions: 'Attractions', homestay_highlights: 'Homestay highlights', things_to_do_nearby: 'Things to do near the homestay', impact_in_community: 'Impact in the community', how_to_get_there: 'How to get there', nearby_homestays: 'Nearby homestays', faqs: 'FAQs' },
+  highlights: {
+    free_cancellation_title: 'Free cancellation for 48 hours',
+    free_cancellation_description: 'Get a full refund if you change your mind within 48 hours of booking.',
+    great_communication_title: 'Great communication',
+    great_communication_description: 'Our hosts are committed to responding quickly and helping you plan your stay.',
+    superhost_title: '{hostName} is a Superhost',
+    superhost_description: 'Superhosts are experienced, highly rated hosts committed to providing great stays.',
+  },
+  trust_badges: ['Free cancellation for 48 hours', 'Verified homestay host', 'Secure payment process'],
+  empty_fallbacks: { no_description: 'No description provided.', default_host_name: 'Host', no_directions: 'Directions not provided.' },
+};
 
 type ReviewRow = {
   id: number;
@@ -72,31 +92,23 @@ type ReviewRow = {
   created_at: string;
 };
 
-const TABS: { id: TabId; label: string; icon: typeof Bed }[] = [
-  { id: 'overview', label: 'Overview', icon: Bed },
-  { id: 'amenities', label: 'Amenities', icon: Users },
-  { id: 'host', label: 'Host', icon: User },
-  { id: 'location', label: 'Location & directions', icon: Route },
-  { id: 'reviews', label: 'Reviews', icon: Star },
-];
-
 export default function ListingDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
   const { user } = useAuth();
+  const backTo = (location.state as { from?: string } | null)?.from === 'admin' ? '/admin/dashboard?tab=listings' : '/search';
   const { toast } = useToast();
   const { format: formatPrice } = useCurrency();
   const reviewBookingId = searchParams.get('review');
   const [listing, setListing] = useState<Listing | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [blockedDates, setBlockedDates] = useState<string[]>([]);
-  const [selectedImageIndex, setSelectedImageIndex] = useState(0);
-  const [activeTab, setActiveTab] = useState<TabId>('overview');
   const [checkIn, setCheckIn] = useState('');
   const [checkOut, setCheckOut] = useState('');
   const [guests, setGuests] = useState(1);
-  const [message, setMessage] = useState('');
+  const [message] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [isFavorite, setIsFavorite] = useState(false);
   const [favoriteLoading, setFavoriteLoading] = useState(false);
@@ -108,10 +120,18 @@ export default function ListingDetailPage() {
   const [showRejectForm, setShowRejectForm] = useState(false);
   const [rejectRemarks, setRejectRemarks] = useState('');
   const [adminActionLoading, setAdminActionLoading] = useState(false);
+  const [listingDisplay, setListingDisplay] = useState<ListingDisplaySettings>(DEFAULT_LISTING_DISPLAY);
+
+  useEffect(() => {
+    api.get<ListingDisplaySettings>('/api/settings/listing-display')
+      .then((res) => setListingDisplay(res.data))
+      .catch(() => {});
+  }, []);
 
   const refetchListing = () => {
     if (!id) return;
-    api.get<Listing>(`/api/listings/${id}`).then((res) => setListing(res.data)).catch(() => setListing(null));
+    const url = user?.role?.toLowerCase() === 'admin' ? `/api/admin/listings/${id}` : `/api/listings/${id}`;
+    api.get<Listing>(url).then((res) => setListing(res.data)).catch(() => setListing(null));
   };
 
   const handleAdminApprove = () => {
@@ -146,11 +166,12 @@ export default function ListingDetailPage() {
       .catch(() => setBookingFee(null));
   }, []);
 
+  const listingUrl = user?.role?.toLowerCase() === 'admin' ? `/api/admin/listings/${id}` : `/api/listings/${id}`;
   useEffect(() => {
     if (!id) return;
     setLoaded(false);
     api
-      .get<Listing>(`/api/listings/${id}`)
+      .get<Listing>(listingUrl)
       .then((res) => setListing(res.data))
       .catch(() => setListing(null))
       .finally(() => setLoaded(true));
@@ -158,7 +179,7 @@ export default function ListingDetailPage() {
       .get<{ blocked_dates: string[] }>(`/api/listings/${id}/blocked-dates`)
       .then((res) => setBlockedDates(res.data.blocked_dates || []))
       .catch(() => setBlockedDates([]));
-  }, [id]);
+  }, [id, listingUrl]);
 
   useEffect(() => {
     if (!user || !id) {
@@ -172,7 +193,7 @@ export default function ListingDetailPage() {
   }, [user, id]);
 
   useEffect(() => {
-    if (!id || activeTab !== 'reviews') return;
+    if (!id) return;
     api
       .get<{ reviews: ReviewRow[]; total: number }>(`/api/listings/${id}/reviews`, { params: { limit: 50 } })
       .then((res) => {
@@ -180,7 +201,7 @@ export default function ListingDetailPage() {
         setReviewsTotal(res.data.total ?? 0);
       })
       .catch(() => { setReviews([]); setReviewsTotal(0); });
-  }, [id, activeTab]);
+  }, [id]);
 
   const handleSubmitReview = (e: React.FormEvent) => {
     e.preventDefault();
@@ -230,38 +251,6 @@ export default function ListingDetailPage() {
         .catch(() => toast({ title: 'Failed to add.', variant: 'destructive' }))
         .finally(() => setFavoriteLoading(false));
     }
-  };
-
-  const handleInquire = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!user) {
-      navigate('/login');
-      return;
-    }
-    if (!listing || !checkIn || !checkOut) {
-      toast({ title: 'Please select check-in and check-out dates.' });
-      return;
-    }
-    setSubmitting(true);
-    api
-      .post('/api/bookings', {
-        listing_id: listing.id,
-        check_in: checkIn,
-        check_out: checkOut,
-        guests,
-        message,
-      })
-      .then(() => {
-        toast({ title: 'Inquiry sent!' });
-        navigate('/dashboard/guest');
-      })
-      .catch((err) =>
-        toast({
-          title: err.response?.data?.message || 'Failed to send inquiry',
-          variant: 'destructive',
-        })
-      )
-      .finally(() => setSubmitting(false));
   };
 
   const handleMakePayment = (e: React.FormEvent) => {
@@ -332,413 +321,368 @@ export default function ListingDetailPage() {
         <p className="mt-2 text-muted-foreground">
           This homestay may have been removed or is not available.
         </p>
-        <Button className="mt-4" onClick={() => navigate('/search')}>
+        <Button className="mt-4" onClick={() => navigate(backTo)}>
           Browse homestays
         </Button>
       </div>
     );
 
   const listingData = listing as Listing;
-  const baseUrl = (import.meta.env.VITE_API_URL || api.defaults.baseURL || '').toString().trim().replace(/\/$/, '');
-  const images = listingData.images?.length ? listingData.images : [];
-  const imageUrl = (url: string) => {
-    if (url.startsWith('http')) return url;
-    if (!baseUrl) return url;
-    const path = url.startsWith('/') ? url : `/${url}`;
-    return baseUrl.replace(/\/$/, '') + path;
+  const images = listingData.images?.length ? listingData.images.map((i) => i.url) : [];
+  const imageUrl = (url: string) => getImageDisplayUrl(url);
+  const primaryHost =
+    (listingData.hosts?.length && listingData.hosts.find((h) => h.is_primary)) ||
+    listingData.hosts?.[0] ||
+    null;
+  const hostName =
+    primaryHost?.name ||
+    listingData.host?.name ||
+    listingDisplay.empty_fallbacks.default_host_name;
+  const hostBio = primaryHost?.brief_intro || primaryHost?.bio || null;
+  const hostLanguages = primaryHost?.languages_spoken?.trim() || null;
+  const isSuperhost = listingData.hosts?.some((h) => h.superhost) ?? false;
+  const isCulturalExpert = listingData.hosts?.some((h) => h.local_expert) ?? false;
+  const averageRating =
+    reviews.length > 0 ? reviews.reduce((s, r) => s + r.rating, 0) / reviews.length : 0;
+
+  const handleShare = () => {
+    if (navigator.share) {
+      navigator.share({ title: listingData.title, url: window.location.href }).catch(() => {});
+    } else {
+      navigator.clipboard.writeText(window.location.href);
+      toast({ title: 'Link copied to clipboard.' });
+    }
   };
-  const mainImage = images[selectedImageIndex]?.url
-    ? imageUrl(images[selectedImageIndex].url)
-    : null;
 
   return (
-    <div className="space-y-8">
-      {/* Image gallery */}
-      <div className="space-y-3">
-        <div className="aspect-video max-h-[420px] w-full overflow-hidden rounded-xl bg-primary-100 shadow-md">
-          {mainImage ? (
-            <img
-              src={mainImage}
-              alt={listingData.title}
-              className="h-full w-full object-cover"
-            />
-          ) : (
-            <div className="flex h-full items-center justify-center">
-              <Bed className="h-24 w-24 text-primary-300" />
-            </div>
-          )}
-        </div>
-        {images.length > 1 && (
-          <div className="flex gap-2 overflow-x-auto pb-1">
-            {images.slice(0, 6).map((img, i) => (
-              <button
-                key={i}
-                type="button"
-                onClick={() => setSelectedImageIndex(i)}
-                className={`h-20 w-28 shrink-0 overflow-hidden rounded-lg border-2 transition-all ${
-                  selectedImageIndex === i
-                    ? 'border-accent-500 ring-2 ring-accent-200'
-                    : 'border-transparent hover:border-primary-300'
-                }`}
-              >
-                <img
-                  src={imageUrl(img.url)}
-                  alt=""
-                  className="h-full w-full object-cover"
-                />
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
+    <main className="pt-6 pb-16 min-h-screen bg-background">
+      <div className="container mx-auto px-4">
+        {/* Header */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mb-6"
+        >
+          <Link
+            to={backTo}
+            className="inline-flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors mb-4"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            Back to homestays
+          </Link>
 
-      <div className="grid gap-8 lg:grid-cols-3">
-        {/* Main content: tabs */}
-        <div className="lg:col-span-2 space-y-6">
-          <div>
-            <div className="flex flex-wrap items-start justify-between gap-4">
-              <h1 className="text-3xl font-bold text-primary-800">
-                {listingData.title}
-              </h1>
+          <h1 className="font-display text-3xl md:text-4xl font-bold text-foreground mb-2">
+            {listingData.title}
+          </h1>
+
+          <div className="flex flex-wrap items-center gap-4 text-sm">
+            {(averageRating > 0 || reviewsTotal > 0) && (
+              <div className="flex items-center gap-1">
+                <Star className="w-4 h-4 fill-accent text-accent" />
+                <span className="font-medium">{averageRating.toFixed(1)}</span>
+                <span className="text-muted-foreground">({reviewsTotal} reviews)</span>
+              </div>
+            )}
+            {listingData.badge && listingDisplay.badge_labels[listingData.badge] && (
+              <div className="flex items-center gap-1 text-primary">
+                <Award className="w-4 h-4" />
+                <span>{listingDisplay.badge_labels[listingData.badge]}</span>
+              </div>
+            )}
+            <div className="flex items-center gap-1 text-muted-foreground">
+              <MapPin className="w-4 h-4" />
+              <span>{listingData.location}</span>
+            </div>
+
+            <div className="flex items-center gap-3 ml-auto">
+              <button
+                type="button"
+                onClick={handleShare}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg hover:bg-muted transition-colors"
+              >
+                <Share className="w-4 h-4" />
+                <span className="hidden sm:inline">Share</span>
+              </button>
               <Button
                 type="button"
-                variant="outline"
+                variant="ghost"
                 size="sm"
-                className={`shrink-0 border-primary-200 ${isFavorite ? 'bg-accent-50 text-accent-600 border-accent-200' : ''}`}
+                className={`flex items-center gap-2 ${isFavorite ? 'text-accent' : ''}`}
                 onClick={handleToggleFavorite}
                 disabled={favoriteLoading}
               >
-                <Heart className={`mr-1.5 h-4 w-4 ${isFavorite ? 'fill-current' : ''}`} />
-                {user ? (isFavorite ? 'Saved' : 'Save') : 'Log in to save'}
+                <Heart className={`w-4 h-4 ${isFavorite ? 'fill-current' : ''}`} />
+                <span className="hidden sm:inline">{user ? (isFavorite ? 'Saved' : 'Save') : 'Save'}</span>
               </Button>
             </div>
-            <div className="mt-2 flex flex-wrap items-center gap-3">
-              <span className="rounded-full bg-primary-100 px-3 py-1 text-sm font-medium capitalize text-primary-800">
-                {listingData.type.replace(/_/g, ' ')} homestay
-              </span>
-              {listingData.category && (
-                <span className="rounded-full bg-accent-100 px-3 py-1 text-sm font-medium capitalize text-accent-800">
-                  {listingData.category.replace(/_/g, ' ')}
-                </span>
-              )}
-              <span className="flex items-center gap-1 text-muted-foreground">
-                <MapPin className="h-4 w-4 text-accent-500" /> {listingData.location}
-              </span>
-              <span className="flex items-center gap-1 text-muted-foreground">
-                <Users className="h-4 w-4 text-accent-500" /> {listingData.max_guests} guests max
-              </span>
-            </div>
-            <p className="mt-3 text-2xl font-semibold text-accent-600">
-              {formatPrice(listingData.price_per_night)}
-              <span className="text-base font-normal text-muted-foreground">/night</span>
-            </p>
           </div>
+        </motion.div>
 
-          {/* Tab navigation */}
-          <div className="border-b border-primary-200">
-            <nav className="flex gap-1 overflow-x-auto">
-              {TABS.map((tab) => (
-                <button
-                  key={tab.id}
-                  type="button"
-                  onClick={() => setActiveTab(tab.id)}
-                  className={`flex items-center gap-2 whitespace-nowrap border-b-2 px-4 py-3 text-sm font-medium transition-colors ${
-                    activeTab === tab.id
-                      ? 'border-accent-500 text-accent-600'
-                      : 'border-transparent text-muted-foreground hover:border-primary-300 hover:text-primary-700'
-                  }`}
-                >
-                  <tab.icon className="h-4 w-4" />
-                  {tab.label}
-                </button>
-              ))}
-            </nav>
-          </div>
-
-          {/* Write review (when ?review=bookingId) */}
-          {user && reviewBookingId && (
-            <Card className="border-accent-200 bg-accent-50/30">
-              <CardHeader className="border-b border-accent-200">
-                <div className="flex items-center gap-2">
-                  <Star className="h-5 w-5 text-accent-600" />
-                  <h3 className="font-semibold text-primary-800">Write a review</h3>
-                </div>
-                <p className="text-sm text-muted-foreground">Share your experience at {listingData.title}</p>
-              </CardHeader>
-              <CardContent className="p-6">
-                <form onSubmit={handleSubmitReview} className="space-y-4">
-                  <div>
-                    <Label className="text-primary-800">Rating (1–5 stars)</Label>
-                    <select
-                      value={reviewForm.rating}
-                      onChange={(e) => setReviewForm((f) => ({ ...f, rating: Number(e.target.value) }))}
-                      className="mt-1 flex h-9 w-full max-w-[8rem] rounded-md border border-primary-200 bg-background px-3 py-1 text-sm"
-                    >
-                      {[5, 4, 3, 2, 1].map((r) => (
-                        <option key={r} value={r}>{r} star{r !== 1 ? 's' : ''}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <Label className="text-primary-800">Title (optional)</Label>
-                    <Input
-                      value={reviewForm.title}
-                      onChange={(e) => setReviewForm((f) => ({ ...f, title: e.target.value }))}
-                      placeholder="Summary of your stay"
-                      className="mt-1 border-primary-200"
-                    />
-                  </div>
-                  <div>
-                    <Label className="text-primary-800">Comment (optional)</Label>
-                    <Textarea
-                      value={reviewForm.comment}
-                      onChange={(e) => setReviewForm((f) => ({ ...f, comment: e.target.value }))}
-                      placeholder="Tell others about your experience..."
-                      className="mt-1 border-primary-200"
-                      rows={4}
-                    />
-                  </div>
-                  <Button type="submit" className="bg-accent-500 hover:bg-accent-600" disabled={reviewSubmitting}>
-                    {reviewSubmitting ? 'Submitting…' : 'Submit review'}
-                  </Button>
-                </form>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Tab panels */}
-          <Card className="border-primary-100">
-            <CardContent className="p-6">
-              {activeTab === 'overview' && (
-                <div className="space-y-6">
-                  <div>
-                    <h3 className="font-semibold text-primary-800">About this homestay</h3>
-                    <div className="prose prose-primary-800 mt-2 max-w-none">
-                      {listingData.description ? (
-                        <p className="whitespace-pre-wrap text-foreground">
-                          {listingData.description}
-                        </p>
-                      ) : (
-                        <p className="text-muted-foreground">No description provided.</p>
-                      )}
-                    </div>
-                  </div>
-                  {/* Dynamic sections (only if filled); how_to_get_there is shown in Location tab */}
-                  {listingData.sections &&
-                    Object.entries(listingData.sections).map(([key, content]) => {
-                      if (key === 'how_to_get_there' || !content?.trim()) return null;
-                      const label = SECTION_LABELS[key] ?? key.replace(/_/g, ' ');
-                      if (key === 'faqs') {
-                        try {
-                          const faqs = JSON.parse(content) as { q?: string; a?: string }[];
-                          if (!Array.isArray(faqs) || faqs.length === 0) return null;
-                          return (
-                            <div key={key}>
-                              <h3 className="font-semibold text-primary-800">{label}</h3>
-                              <dl className="mt-2 space-y-3">
-                                {faqs.map((faq, i) => (
-                                  <div key={i} className="border-b border-primary-100 pb-3 last:border-0 last:pb-0">
-                                    <dt className="font-medium text-primary-800">{faq.q}</dt>
-                                    <dd className="mt-1 text-sm text-muted-foreground">{faq.a}</dd>
-                                  </div>
-                                ))}
-                              </dl>
-                            </div>
-                          );
-                        } catch {
-                          return (
-                            <div key={key}>
-                              <h3 className="font-semibold text-primary-800">{label}</h3>
-                              <p className="mt-2 whitespace-pre-wrap text-foreground">{content}</p>
-                            </div>
-                          );
-                        }
-                      }
-                      return (
-                        <div key={key}>
-                          <h3 className="font-semibold text-primary-800">{label}</h3>
-                          <p className="mt-2 whitespace-pre-wrap text-foreground">{content}</p>
-                        </div>
-                      );
-                    })}
-                </div>
-              )}
-              {activeTab === 'amenities' && (
-                <div className="space-y-4">
-                  <h3 className="font-semibold text-primary-800">What this place offers</h3>
-                  {listingData.amenities?.length > 0 ? (
-                    <div className="flex flex-wrap gap-2">
-                      {listingData.amenities.map((a) => (
-                        <span
-                          key={a}
-                          className="rounded-full bg-primary-100 px-4 py-2 text-sm font-medium text-primary-800"
-                        >
-                          {a}
-                        </span>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-muted-foreground">No amenities listed.</p>
-                  )}
-                </div>
-              )}
-              {activeTab === 'host' && (
-                <div className="space-y-6">
-                  <h3 className="font-semibold text-primary-800">Your host{((listingData as Listing).hosts?.length ?? 0) > 1 ? 's' : ''}</h3>
-                  {((listingData as Listing).hosts?.length ?? 0) > 0
-                    ? (listingData as Listing).hosts!.map((h) => (
-                        <div key={h.id} className="flex items-start gap-4 rounded-lg border border-primary-100 p-4">
-                          {h.avatar_url ? (
-                            <img
-                              src={h.avatar_url.startsWith('http') ? h.avatar_url : baseUrl + h.avatar_url}
-                              alt={h.name}
-                              className="h-16 w-16 rounded-full object-cover"
-                            />
-                          ) : (
-                            <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-primary-200">
-                              <User className="h-8 w-8 text-primary-600" />
-                            </div>
-                          )}
-                          <div className="min-w-0 flex-1">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <h4 className="font-semibold text-primary-800">{h.name}</h4>
-                              {h.is_primary && (
-                                <span className="rounded bg-primary-100 px-2 py-0.5 text-xs font-medium text-primary-700">Primary host</span>
-                              )}
-                              {h.superhost && (
-                                <span className="inline-flex items-center gap-1 rounded bg-accent-100 px-2 py-0.5 text-xs font-medium text-accent-700">
-                                  <Award className="h-3.5 w-3.5" /> Superhost
-                                </span>
-                              )}
-                              {h.local_expert && (
-                                <span className="inline-flex items-center gap-1 rounded bg-primary-100 px-2 py-0.5 text-xs font-medium text-primary-700">
-                                  <Award className="h-3.5 w-3.5" /> Local expert
-                                </span>
-                              )}
-                            </div>
-                            {(h.brief_intro || h.bio) && (
-                              <p className="mt-2 text-sm text-muted-foreground">
-                                {h.brief_intro?.trim() || h.bio || ''}
-                              </p>
-                            )}
-                            {h.languages_spoken?.trim() && (
-                              <p className="mt-2 flex items-center gap-1.5 text-sm text-muted-foreground">
-                                <Languages className="h-4 w-4 text-primary-500" />
-                                {h.languages_spoken}
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                      ))
-                    : listingData.host ? (
-                        <div className="flex items-start gap-4">
-                          {listingData.host.avatar_url ? (
-                            <img
-                              src={
-                                listingData.host.avatar_url.startsWith('http')
-                                  ? listingData.host.avatar_url
-                                  : baseUrl + listingData.host.avatar_url
-                              }
-                              alt={listingData.host.name}
-                              className="h-16 w-16 rounded-full object-cover"
-                            />
-                          ) : (
-                            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary-200">
-                              <User className="h-8 w-8 text-primary-600" />
-                            </div>
-                          )}
-                          <div>
-                            <h3 className="font-semibold text-primary-800">{listingData.host.name}</h3>
-                            {listingData.host.bio && (
-                              <p className="mt-2 text-sm text-muted-foreground">{listingData.host.bio}</p>
-                            )}
-                          </div>
-                        </div>
-                      ) : (
-                        <p className="text-muted-foreground">Host information not available.</p>
-                      )}
-                </div>
-              )}
-              {activeTab === 'location' && (
-                <div className="space-y-4">
-                  <h4 className="font-medium text-primary-800">Map</h4>
-                  <ListingMap
-                    latitude={listingData.latitude}
-                    longitude={listingData.longitude}
-                    title={listingData.title}
-                    className="mt-4"
-                  />
-                  <h4 className="pt-4 font-medium text-primary-800">How to get there</h4>
-                  {(listingData.way_to_get_there || listingData.sections?.how_to_get_there) ? (
-                    <p className="whitespace-pre-wrap text-foreground">
-                      {listingData.sections?.how_to_get_there?.trim() || listingData.way_to_get_there || ''}
-                    </p>
-                  ) : (
-                    <p className="text-muted-foreground">Directions not provided.</p>
-                  )}
-                </div>
-              )}
-              {activeTab === 'reviews' && (
-                <div className="space-y-6">
-                  <div className="flex flex-wrap items-center gap-4">
-                    <div className="flex items-center gap-2">
-                      <Star className="h-6 w-6 fill-accent-500 text-accent-500" />
-                      <span className="text-2xl font-semibold text-primary-800">
-                        {reviews.length > 0
-                          ? (reviews.reduce((s, r) => s + r.rating, 0) / reviews.length).toFixed(1)
-                          : '—'}
-                      </span>
-                    </div>
-                    <span className="text-muted-foreground">
-                      {reviewsTotal} review{reviewsTotal !== 1 ? 's' : ''}
-                    </span>
-                  </div>
-                  {reviews.length === 0 ? (
-                    <p className="text-muted-foreground">No reviews yet. Be the first to review after your stay!</p>
-                  ) : (
-                    <ul className="space-y-6 border-t border-primary-100 pt-4">
-                      {reviews.map((r) => (
-                        <li key={r.id} className="border-b border-primary-50 pb-4 last:border-0 last:pb-0">
-                          <div className="flex items-center gap-2">
-                            <div className="flex gap-0.5">
-                              {[1, 2, 3, 4, 5].map((i) => (
-                                <Star
-                                  key={i}
-                                  className={`h-4 w-4 ${i <= r.rating ? 'fill-accent-500 text-accent-500' : 'text-primary-200'}`}
-                                />
-                              ))}
-                            </div>
-                            {r.reviewer_name && (
-                              <span className="font-medium text-primary-800">{r.reviewer_name}</span>
-                            )}
-                            <span className="text-sm text-muted-foreground">
-                              {r.created_at ? new Date(r.created_at).toLocaleDateString() : ''}
-                            </span>
-                          </div>
-                          {r.title && <p className="mt-1 font-medium text-primary-800">{r.title}</p>}
-                          {r.comment && <p className="mt-1 text-sm text-foreground">{r.comment}</p>}
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-              )}
-            </CardContent>
-          </Card>
+        {/* Photo Gallery */}
+        <div className="relative mb-10">
+          <PhotoGallery images={images} title={listingData.title} resolveUrl={imageUrl} />
         </div>
 
-        {/* Sticky sidebar: Admin actions (when admin + pending) or Book now (guests/hosts) */}
-        <div className="lg:col-span-1">
-          <div className="sticky top-24">
+        {/* Content Grid */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-12">
+          {/* Left Column - Details */}
+          <div className="lg:col-span-2 space-y-8">
+            {/* Host Info */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.1 }}
+              className="flex items-start gap-4 pb-8 border-b border-border"
+            >
+              <div className="w-14 h-14 rounded-full overflow-hidden bg-primary/20 flex-shrink-0 flex items-center justify-center text-primary font-display font-bold text-xl">
+                {primaryHost?.avatar_url ? (
+                  <img src={getImageDisplayUrl(primaryHost.avatar_url)} alt="" className="w-full h-full object-cover" />
+                ) : (
+                  hostName.charAt(0)
+                )}
+              </div>
+              <div className="min-w-0 flex-1">
+                <h2 className="font-display text-xl font-semibold text-foreground mb-1">
+                  Entire homestay hosted by {hostName}
+                </h2>
+                <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground mb-2">
+                  <span className="flex items-center gap-1">
+                    <Users className="w-4 h-4" />
+                    {listingData.max_guests} guests
+                  </span>
+                  {hostLanguages && (
+                    <span className="flex items-center gap-1">
+                      <Languages className="w-4 h-4" />
+                      {hostLanguages}
+                    </span>
+                  )}
+                </div>
+                {(isSuperhost || isCulturalExpert) && (
+                  <div className="flex flex-wrap gap-2 mb-2">
+                    {isSuperhost && (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-primary">
+                        <Award className="w-3.5 h-3.5" />
+                        Superhost
+                      </span>
+                    )}
+                    {isCulturalExpert && (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-accent/20 px-2.5 py-0.5 text-xs font-medium text-accent-foreground">
+                        <BadgeCheck className="w-3.5 h-3.5" />
+                        Cultural expert
+                      </span>
+                    )}
+                  </div>
+                )}
+                {hostBio && (
+                  <p className="text-sm text-foreground/80 leading-relaxed">
+                    {hostBio}
+                  </p>
+                )}
+              </div>
+            </motion.div>
+
+            {/* Highlights */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.2 }}
+              className="space-y-4 pb-8 border-b border-border"
+            >
+              {isSuperhost && (
+                <div className="flex gap-4">
+                  <Award className="w-6 h-6 text-primary flex-shrink-0" />
+                  <div>
+                    <h3 className="font-medium text-foreground">
+                      {listingDisplay.highlights.superhost_title.replace('{hostName}', hostName)}
+                    </h3>
+                    <p className="text-sm text-muted-foreground">
+                      {listingDisplay.highlights.superhost_description}
+                    </p>
+                  </div>
+                </div>
+              )}
+              <div className="flex gap-4">
+                <Calendar className="w-6 h-6 text-primary flex-shrink-0" />
+                <div>
+                  <h3 className="font-medium text-foreground">{listingDisplay.highlights.free_cancellation_title}</h3>
+                  <p className="text-sm text-muted-foreground">
+                    {listingDisplay.highlights.free_cancellation_description}
+                  </p>
+                </div>
+              </div>
+              <div className="flex gap-4">
+                <MessageCircle className="w-6 h-6 text-primary flex-shrink-0" />
+                <div>
+                  <h3 className="font-medium text-foreground">{listingDisplay.highlights.great_communication_title}</h3>
+                  <p className="text-sm text-muted-foreground">
+                    {listingDisplay.highlights.great_communication_description}
+                  </p>
+                </div>
+              </div>
+            </motion.div>
+
+            {/* Description */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.3 }}
+              className="pb-8 border-b border-border"
+            >
+              <h3 className="font-display text-2xl font-semibold text-foreground mb-4">
+                About this place
+              </h3>
+              <div className="text-foreground/80 leading-relaxed whitespace-pre-line">
+                {listingData.description || listingDisplay.empty_fallbacks.no_description}
+              </div>
+            </motion.div>
+
+            {/* Dynamic sections (except how_to_get_there) */}
+            {listingData.sections &&
+              Object.entries(listingData.sections).map(([key, content]) => {
+                if (key === 'how_to_get_there' || !content?.trim()) return null;
+                const label = listingDisplay.section_labels[key] ?? key.replace(/_/g, ' ');
+                if (key === 'faqs') {
+                  try {
+                    const faqs = JSON.parse(content) as { q?: string; a?: string }[];
+                    if (!Array.isArray(faqs) || faqs.length === 0) return null;
+                    return (
+                      <motion.div
+                        key={key}
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.35 }}
+                        className="pb-8 border-b border-border"
+                      >
+                        <h3 className="font-display text-2xl font-semibold text-foreground mb-4">{label}</h3>
+                        <dl className="space-y-3">
+                          {faqs.map((faq, i) => (
+                            <div key={i} className="border-b border-border/50 pb-3 last:border-0 last:pb-0">
+                              <dt className="font-medium text-foreground">{faq.q}</dt>
+                              <dd className="mt-1 text-sm text-muted-foreground">{faq.a}</dd>
+                            </div>
+                          ))}
+                        </dl>
+                      </motion.div>
+                    );
+                  } catch {
+                    return (
+                      <motion.div key={key} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }} className="pb-8 border-b border-border">
+                        <h3 className="font-display text-2xl font-semibold text-foreground mb-4">{label}</h3>
+                        <p className="text-foreground/80 whitespace-pre-line">{content}</p>
+                      </motion.div>
+                    );
+                  }
+                }
+                return (
+                  <motion.div
+                    key={key}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.35 }}
+                    className="pb-8 border-b border-border"
+                  >
+                    <h3 className="font-display text-2xl font-semibold text-foreground mb-4">{label}</h3>
+                    <p className="text-foreground/80 whitespace-pre-line">{content}</p>
+                  </motion.div>
+                );
+              })}
+
+            {/* Amenities */}
+            <AmenitiesList amenities={listingData.amenities || []} sections={listingData.sections} />
+
+            {/* Write review (when ?review=bookingId) */}
+            {user && reviewBookingId && (
+              <Card className="border-border bg-card">
+                <CardHeader className="border-b border-border">
+                  <div className="flex items-center gap-2">
+                    <Star className="h-5 w-5 text-accent" />
+                    <h3 className="font-semibold text-foreground">Write a review</h3>
+                  </div>
+                  <p className="text-sm text-muted-foreground">Share your experience at {listingData.title}</p>
+                </CardHeader>
+                <CardContent className="p-6">
+                  <form onSubmit={handleSubmitReview} className="space-y-4">
+                    <div>
+                      <Label>Rating (1–5 stars)</Label>
+                      <select
+                        value={reviewForm.rating}
+                        onChange={(e) => setReviewForm((f) => ({ ...f, rating: Number(e.target.value) }))}
+                        className="mt-1 flex h-9 w-full max-w-[8rem] rounded-md border border-border bg-background px-3 py-1 text-sm"
+                      >
+                        {[5, 4, 3, 2, 1].map((r) => (
+                          <option key={r} value={r}>{r} star{r !== 1 ? 's' : ''}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <Label>Title (optional)</Label>
+                      <Input
+                        value={reviewForm.title}
+                        onChange={(e) => setReviewForm((f) => ({ ...f, title: e.target.value }))}
+                        placeholder="Summary of your stay"
+                        className="mt-1"
+                      />
+                    </div>
+                    <div>
+                      <Label>Comment (optional)</Label>
+                      <Textarea
+                        value={reviewForm.comment}
+                        onChange={(e) => setReviewForm((f) => ({ ...f, comment: e.target.value }))}
+                        placeholder="Tell others about your experience..."
+                        className="mt-1"
+                        rows={4}
+                      />
+                    </div>
+                    <Button type="submit" className="bg-primary hover:bg-primary/90" disabled={reviewSubmitting}>
+                      {reviewSubmitting ? 'Submitting…' : 'Submit review'}
+                    </Button>
+                  </form>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Reviews */}
+            <ReviewsSection
+              reviews={reviews}
+              averageRating={averageRating}
+              totalReviews={reviewsTotal}
+            />
+
+            {/* Location & directions */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.4 }}
+              className="pb-8 border-t border-border pt-8"
+            >
+              <h3 className="font-display text-2xl font-semibold text-foreground mb-4">Location & directions</h3>
+              <ListingMap
+                latitude={listingData.latitude}
+                longitude={listingData.longitude}
+                title={listingData.title}
+                className="mb-4 rounded-xl overflow-hidden"
+              />
+              {(listingData.way_to_get_there || listingData.sections?.how_to_get_there) ? (
+                <p className="text-foreground/80 whitespace-pre-line">
+                  {listingData.sections?.how_to_get_there?.trim() || listingData.way_to_get_there || ''}
+                </p>
+              ) : (
+                <p className="text-muted-foreground">{listingDisplay.empty_fallbacks.no_directions}</p>
+              )}
+            </motion.div>
+          </div>
+
+          {/* Right Column - Booking Card or Admin */}
+          <div className="lg:col-span-1">
             {user?.role === 'admin' && listingData.status === 'pending' ? (
-              <Card className="border-primary-200 shadow-lg">
-                <CardHeader className="border-b border-primary-100 bg-primary-50/50">
-                  <h3 className="font-semibold text-primary-800">Moderate listing</h3>
+              <Card className="border-border shadow-lg">
+                <CardHeader className="border-b border-border bg-muted/30">
+                  <h3 className="font-semibold text-foreground">Moderate listing</h3>
                   <p className="text-sm text-muted-foreground">Approve or reject this pending listing</p>
                 </CardHeader>
                 <CardContent className="p-4 space-y-4">
                   <div className="flex gap-2">
-                    <Button className="flex-1 bg-accent-500 hover:bg-accent-600" onClick={handleAdminApprove} disabled={adminActionLoading}>
+                    <Button className="flex-1 bg-primary hover:bg-primary/90" onClick={handleAdminApprove} disabled={adminActionLoading}>
                       Approve
                     </Button>
                     <Button variant="destructive" className="flex-1" onClick={() => setShowRejectForm((v) => !v)} disabled={adminActionLoading}>
@@ -747,7 +691,7 @@ export default function ListingDetailPage() {
                   </div>
                   {showRejectForm && (
                     <div className="space-y-2 rounded-lg border border-destructive/30 bg-destructive/5 p-3">
-                      <Label className="text-primary-800">Remarks (optional)</Label>
+                      <Label>Remarks (optional)</Label>
                       <Textarea
                         value={rejectRemarks}
                         onChange={(e) => setRejectRemarks(e.target.value)}
@@ -763,113 +707,29 @@ export default function ListingDetailPage() {
                 </CardContent>
               </Card>
             ) : user?.role !== 'admin' && (
-              <Card className="border-primary-200 shadow-lg">
-                <CardHeader className="border-b border-primary-100 bg-primary-50/50">
-                  <h3 className="font-semibold text-primary-800">Book now</h3>
-                  <p className="text-sm text-muted-foreground">
-                    {formatPrice(listingData.price_per_night)}/night · {listingData.max_guests} guests max
-                  </p>
-                </CardHeader>
-                <CardContent className="p-4">
-                  <form onSubmit={handleMakePayment} className="space-y-4">
-                    <div>
-                      <Label>Check-in</Label>
-                      <Input
-                        type="date"
-                        value={checkIn}
-                        onChange={(e) => setCheckIn(e.target.value)}
-                        required
-                        className="mt-1"
-                      />
-                    </div>
-                    <div>
-                      <Label>Check-out</Label>
-                      <Input
-                        type="date"
-                        value={checkOut}
-                        onChange={(e) => setCheckOut(e.target.value)}
-                        required
-                        className="mt-1"
-                      />
-                    </div>
-                    {blockedDates.length > 0 && (
-                      <p className="text-xs text-muted-foreground">
-                        Blocked: {blockedDates.slice(0, 8).join(', ')}
-                        {blockedDates.length > 8 ? '…' : ''}
-                      </p>
-                    )}
-                    <div>
-                      <Label>Guests</Label>
-                      <Input
-                        type="number"
-                        min={1}
-                        max={listingData.max_guests}
-                        value={guests}
-                        onChange={(e) => setGuests(Number(e.target.value))}
-                        className="mt-1"
-                      />
-                    </div>
-                    <div>
-                      <Label>Message (optional)</Label>
-                      <Textarea
-                        value={message}
-                        onChange={(e) => setMessage(e.target.value)}
-                        placeholder="Introduce yourself..."
-                        className="mt-1"
-                        rows={3}
-                      />
-                    </div>
-                    {checkIn && checkOut && listingData && (() => {
-                      const cin = new Date(checkIn);
-                      const cout = new Date(checkOut);
-                      const nights = Math.ceil((cout.getTime() - cin.getTime()) / (24 * 60 * 60 * 1000));
-                      if (nights <= 0) return null;
-                      const pricePerNight = parseFloat(String(listingData.price_per_night));
-                      const subtotal = Math.round(pricePerNight * nights * 100) / 100;
-                      let feeAmount = 0;
-                      let feeLabel = '';
-                      if (bookingFee && bookingFee.value > 0) {
-                        const raw = bookingFee.kind === 'percent' ? (subtotal * bookingFee.value) / 100 : bookingFee.value;
-                        feeAmount = Math.round(raw * 100) / 100;
-                        if (bookingFee.type === 'discount') feeAmount = -feeAmount;
-                        feeLabel = bookingFee.type === 'service_charge'
-                          ? `Service charge (${bookingFee.kind === 'percent' ? bookingFee.value + '%' : 'fixed'})`
-                          : `Discount (${bookingFee.kind === 'percent' ? bookingFee.value + '%' : 'fixed'})`;
-                      }
-                      const total = Math.max(0, Math.round((subtotal + feeAmount) * 100) / 100);
-                      return (
-                        <div className="space-y-2 rounded-lg border border-primary-100 bg-primary-50/30 p-3 text-sm">
-                          <div className="flex justify-between text-primary-800">
-                            <span>{nights} night{nights !== 1 ? 's' : ''} × {formatPrice(String(pricePerNight))}</span>
-                            <span>{formatPrice(String(subtotal))}</span>
-                          </div>
-                          {feeAmount !== 0 && (
-                            <div className={`flex justify-between ${feeAmount > 0 ? 'text-primary-700' : 'text-accent-600'}`}>
-                              <span>{feeLabel}</span>
-                              <span>{feeAmount > 0 ? '+' : ''}{formatPrice(String(feeAmount))}</span>
-                            </div>
-                          )}
-                          <div className="flex justify-between border-t border-primary-200 pt-2 font-semibold text-primary-800">
-                            <span>Total</span>
-                            <span>{formatPrice(String(total))}</span>
-                          </div>
-                        </div>
-                      );
-                    })()}
-                    <Button
-                      type="submit"
-                      className="w-full bg-accent-500 hover:bg-accent-600"
-                      disabled={submitting}
-                    >
-                      {user ? (submitting ? 'Redirecting to payment…' : 'Make payment') : 'Log in to book'}
-                    </Button>
-                  </form>
-                </CardContent>
-              </Card>
+              <BookingCard
+                pricePerNight={listingData.price_per_night}
+                priceFormatted={formatPrice(listingData.price_per_night)}
+                rating={averageRating || undefined}
+                totalReviews={reviewsTotal}
+                maxGuests={listingData.max_guests}
+                checkIn={checkIn}
+                checkOut={checkOut}
+                onCheckInChange={setCheckIn}
+                onCheckOutChange={setCheckOut}
+                guests={guests}
+                onGuestsChange={setGuests}
+                blockedDates={blockedDates}
+                onSubmit={handleMakePayment}
+                submitting={submitting}
+                submitLabel="You won't be charged yet"
+                bookingFee={bookingFee}
+                trustBadges={listingDisplay.trust_badges}
+              />
             )}
           </div>
         </div>
       </div>
-    </div>
+    </main>
   );
 }

@@ -6,6 +6,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { api } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
+import { validatePassword, PASSWORD_HINT } from '@/lib/passwordValidation';
+import { KeyRound } from 'lucide-react';
 
 export default function ChangePasswordPage() {
   const navigate = useNavigate();
@@ -21,8 +23,9 @@ export default function ChangePasswordPage() {
       toast({ title: 'New passwords do not match.', variant: 'destructive' });
       return;
     }
-    if (newPassword.length < 6) {
-      toast({ title: 'New password must be at least 6 characters.', variant: 'destructive' });
+    const passwordCheck = validatePassword(newPassword);
+    if (!passwordCheck.valid) {
+      toast({ title: passwordCheck.errors.join('. '), variant: 'destructive' });
       return;
     }
     setLoading(true);
@@ -72,11 +75,11 @@ export default function ChangePasswordPage() {
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
                 required
-                minLength={6}
+                minLength={8}
                 className="mt-1"
                 autoComplete="new-password"
               />
-              <p className="mt-1 text-xs text-muted-foreground">At least 6 characters.</p>
+              <p className="mt-1 text-xs text-muted-foreground">{PASSWORD_HINT}</p>
             </div>
             <div>
               <Label htmlFor="confirm">Confirm new password</Label>
@@ -86,13 +89,14 @@ export default function ChangePasswordPage() {
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 required
-                minLength={6}
+                minLength={8}
                 className="mt-1"
                 autoComplete="new-password"
               />
             </div>
             <div className="flex gap-3 pt-2">
               <Button type="submit" disabled={loading}>
+                <KeyRound className="w-4 h-4 mr-2" />
                 {loading ? 'Updating…' : 'Update password'}
               </Button>
               <Button type="button" variant="outline" asChild>

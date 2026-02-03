@@ -6,7 +6,8 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { api } from '@/lib/api';
 import { assets } from '@/lib/design-tokens';
-import { KeyRound } from 'lucide-react';
+import { KeyRound, Key } from 'lucide-react';
+import { validatePassword, PASSWORD_HINT } from '@/lib/passwordValidation';
 
 export default function ResetPasswordPage() {
   const navigate = useNavigate();
@@ -25,8 +26,9 @@ export default function ResetPasswordPage() {
       setError('Passwords do not match.');
       return;
     }
-    if (newPassword.length < 6) {
-      setError('New password must be at least 6 characters.');
+    const passwordCheck = validatePassword(newPassword);
+    if (!passwordCheck.valid) {
+      setError(passwordCheck.errors.join('. '));
       return;
     }
     if (!email) {
@@ -115,10 +117,11 @@ export default function ResetPasswordPage() {
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
                 required
-                minLength={6}
-                placeholder="At least 6 characters"
+                minLength={8}
+                placeholder="Min 8 chars, upper, lower, number, special"
                 className="mt-1 border-primary-200"
               />
+              <p className="mt-1 text-xs text-muted-foreground">{PASSWORD_HINT}</p>
             </div>
             <div>
               <Label htmlFor="reset-confirm-password" className="text-primary-800">
@@ -131,7 +134,7 @@ export default function ResetPasswordPage() {
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 required
-                minLength={6}
+                minLength={8}
                 placeholder="Repeat new password"
                 className="mt-1 border-primary-200"
               />
@@ -146,6 +149,7 @@ export default function ResetPasswordPage() {
               className="w-full bg-accent-500 hover:bg-accent-600"
               disabled={loading || otp.length !== 6}
             >
+              <Key className="w-4 h-4 mr-2" />
               {loading ? 'Updating…' : 'Update password'}
             </Button>
           </form>

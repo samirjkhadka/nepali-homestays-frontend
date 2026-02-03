@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { useAuth } from '@/lib/auth';
 import { api } from '@/lib/api';
 import { assets } from '@/lib/design-tokens';
-import { Mail } from 'lucide-react';
+import { Mail, CheckCircle } from 'lucide-react';
 
 export default function VerifyPage() {
   const navigate = useNavigate();
@@ -98,6 +98,7 @@ export default function VerifyPage() {
               className="w-full bg-accent-500 hover:bg-accent-600"
               disabled={loading || otp.length !== 6}
             >
+              <CheckCircle className="w-4 h-4 mr-2" />
               {loading ? 'Verifying…' : 'Verify'}
             </Button>
             <div className="mt-4 flex items-center justify-between gap-2 border-t border-primary-100 pt-4">

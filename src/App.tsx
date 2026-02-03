@@ -2,7 +2,9 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from '@/components/ui/toaster';
 import { useAuth } from '@/lib/auth';
 import Layout from '@/components/Layout';
+import RouteTracker from '@/components/RouteTracker';
 import HomePage from '@/pages/HomePage';
+import VideosPage from '@/pages/VideosPage';
 import SearchPage from '@/pages/SearchPage';
 import ListingDetailPage from '@/pages/ListingDetailPage';
 import LoginPage from '@/pages/auth/LoginPage';
@@ -13,12 +15,18 @@ import ResetPasswordPage from '@/pages/auth/ResetPasswordPage';
 import GuestDashboard from '@/pages/dashboard/GuestDashboard';
 import HostDashboard from '@/pages/dashboard/HostDashboard';
 import AdminDashboard from '@/pages/admin/AdminDashboard';
+import AdminListingNew from '@/pages/admin/AdminListingNew';
+import AdminListingEdit from '@/pages/admin/AdminListingEdit';
 import HostListingNew from '@/pages/host/HostListingNew';
 import HostListingEdit from '@/pages/host/HostListingEdit';
 import PayBookingPage from '@/pages/booking/PayBookingPage';
 import BookingConfirmationPage from '@/pages/booking/BookingConfirmationPage';
 import ChangePasswordPage from '@/pages/profile/ChangePasswordPage';
 import DesignSystemTest from '@/pages/DesignSystemTest';
+import AboutPage from '@/pages/AboutPage';
+import ContactPage from '@/pages/ContactPage';
+import BlogsPage from '@/pages/BlogsPage';
+import CmsPage from '@/pages/CmsPage';
 
 function ProtectedRoute({ children, roles }: { children: React.ReactNode; roles: string[] }) {
   const { user, loading } = useAuth();
@@ -31,12 +39,18 @@ function ProtectedRoute({ children, roles }: { children: React.ReactNode; roles:
 export default function App() {
   return (
     <>
+      <RouteTracker />
       <Routes>
         <Route path="/" element={<Layout />}>
           <Route index element={<HomePage />} />
+          <Route path="videos" element={<VideosPage />} />
           <Route path="search" element={<SearchPage />} />
           <Route path="listings/:id" element={<ListingDetailPage />} />
           <Route path="design-system" element={<DesignSystemTest />} />
+          <Route path="about" element={<AboutPage />} />
+          <Route path="contact" element={<ContactPage />} />
+          <Route path="blogs" element={<BlogsPage />} />
+          <Route path="cms/:slug" element={<CmsPage />} />
           <Route path="login" element={<LoginPage />} />
           <Route path="signup" element={<SignupPage />} />
           <Route path="verify" element={<VerifyPage />} />
@@ -95,6 +109,22 @@ export default function App() {
             element={
               <ProtectedRoute roles={['admin']}>
                 <AdminDashboard />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="admin/listings/new"
+            element={
+              <ProtectedRoute roles={['admin']}>
+                <AdminListingNew />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="admin/listings/:id/edit"
+            element={
+              <ProtectedRoute roles={['admin']}>
+                <AdminListingEdit />
               </ProtectedRoute>
             }
           />

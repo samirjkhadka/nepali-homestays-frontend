@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { useAuth } from '@/lib/auth';
 import { api } from '@/lib/api';
 import { assets } from '@/lib/design-tokens';
+import { LogIn } from 'lucide-react';
 
 export default function LoginPage() {
   const navigate = useNavigate();
@@ -117,6 +118,7 @@ export default function LoginPage() {
               className="w-full bg-accent-500 hover:bg-accent-600"
               disabled={loading}
             >
+              <LogIn className="w-4 h-4 mr-2" />
               {loading ? 'Sending…' : 'Log in'}
             </Button>
           </form>

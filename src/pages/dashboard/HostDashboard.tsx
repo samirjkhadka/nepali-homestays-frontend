@@ -40,7 +40,7 @@ type Booking = {
   payment_amount?: number | null;
 };
 
-type Listing = { id: number; title: string; status: string };
+type Listing = { id: number; title: string; status: string; disabled_by_admin?: boolean };
 
 const BOOKING_STATUSES = ['all', 'pending', 'pending_payment', 'approved', 'paid', 'completed', 'declined', 'cancelled'] as const;
 
@@ -237,6 +237,23 @@ export default function HostDashboard() {
       toast({ title: 'Dates blocked.' });
       setBlockDates('');
     }).catch(() => toast({ title: 'Failed.', variant: 'destructive' }));
+  };
+
+  const handleListingStatusChange = (listingId: number, status: 'approved' | 'disabled') => {
+    api.patch(`/api/listings/${listingId}/status`, { status })
+      .then((res) => {
+        toast({ title: status === 'approved' ? 'Listing enabled.' : 'Listing disabled.' });
+        const updated = res.data?.listing as { id: number; status: string; disabled_by_admin?: boolean } | undefined;
+        if (updated && dashboard) {
+          setDashboard({
+            ...dashboard,
+            listings: dashboard.listings.map((l) =>
+              l.id === listingId ? { ...l, status: updated.status, disabled_by_admin: updated.disabled_by_admin } : l
+            ),
+          });
+        }
+      })
+      .catch(() => toast({ title: 'Failed to update status.', variant: 'destructive' }));
   };
 
   if (!dashboard) return <div className="py-8 text-muted-foreground">Loading…</div>;
@@ -480,21 +497,54 @@ export default function HostDashboard() {
             <Link to="/host/listings/new"><Plus className="mr-2 h-4 w-4" />Add listing</Link>
           </Button>
           <div className="grid gap-4 sm:grid-cols-2">
-            {dashboard.listings.map((l) => (
-              <Card key={l.id} className="border-primary-200">
-                <CardContent className="flex items-center justify-between p-6">
-                  <div>
-                    <p className="font-semibold text-primary-800">{l.title}</p>
-                    <span className={`mt-2 inline-block rounded-full px-3 py-1 text-xs font-medium ${l.status === 'approved' ? 'bg-primary-100 text-primary-800' : l.status === 'rejected' ? 'bg-destructive/10 text-destructive' : 'bg-accent-100 text-accent-800'}`}>
-                      {l.status}
-                    </span>
-                  </div>
-                  <Button variant="outline" size="sm" asChild>
-                    <Link to={`/host/listings/${l.id}/edit`}>Edit</Link>
-                  </Button>
-                </CardContent>
-              </Card>
-            ))}
+            {dashboard.listings.map((l) => {
+              const isApproved = l.status === 'approved';
+              const isDisabled = l.status === 'disabled';
+              const disabledByAdmin = Boolean(l.disabled_by_admin);
+              const canToggle = !disabledByAdmin && (isApproved || isDisabled);
+              return (
+                <Card key={l.id} className="border-primary-200">
+                  <CardContent className="p-6 space-y-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <p className="font-semibold text-primary-800">{l.title}</p>
+                        <div className="mt-2 flex flex-wrap items-center gap-2">
+                          <span className={`inline-block rounded-full px-3 py-1 text-xs font-medium ${isApproved ? 'bg-green-100 text-green-800' : isDisabled ? 'bg-muted text-muted-foreground' : l.status === 'rejected' ? 'bg-destructive/10 text-destructive' : 'bg-accent-100 text-accent-800'}`}>
+                            {l.status === 'pending' ? 'Pending review' : l.status === 'rejected' ? 'Rejected' : isApproved ? 'Enabled' : 'Disabled'}
+                          </span>
+                          {disabledByAdmin && (
+                            <span className="inline-block rounded-full px-3 py-1 text-xs font-medium bg-amber-100 text-amber-800">
+                              Disabled by admin
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      {canToggle && (
+                        isApproved ? (
+                          <Button variant="outline" size="sm" onClick={() => handleListingStatusChange(l.id, 'disabled')}>
+                            Disable
+                          </Button>
+                        ) : (
+                          <Button size="sm" className="bg-accent-500 hover:bg-accent-600" onClick={() => handleListingStatusChange(l.id, 'approved')}>
+                            Enable
+                          </Button>
+                        )
+                      )}
+                      <Button variant="outline" size="sm" asChild>
+                        <Link to={`/host/listings/${l.id}/edit`}>Edit</Link>
+                      </Button>
+                      {isApproved && (
+                        <Button variant="outline" size="sm" asChild>
+                          <Link to={`/listings/${l.id}`}>View</Link>
+                        </Button>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
           </div>
         </div>
       )}

@@ -3,7 +3,6 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
 const NEPAL_CENTER: [number, number] = [27.7172, 85.324];
-const DEFAULT_ZOOM = 12;
 
 type ListingMapProps = {
   latitude?: number | null;

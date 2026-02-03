@@ -1,12 +1,19 @@
 import { useState, useEffect } from 'react';
-import { Card, CardContent, CardFooter } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Newspaper, ExternalLink, Calendar, Loader2 } from 'lucide-react';
+import { motion } from 'framer-motion';
+import { Clock, ArrowRight, User, Loader2, Newspaper } from 'lucide-react';
 import { api } from '@/lib/api';
 import { HOMESTAY_NEWS, HOMESTAY_NEWS_SOURCE_URL, type NewsItem } from '@/data/homestayNews';
 
 /** Shape returned by GET /api/news/feed */
-type FeedItem = { id: string; title: string; excerpt: string; url: string; date: string; category?: string };
+type FeedItem = {
+  id: string;
+  title: string;
+  excerpt: string;
+  url: string;
+  date: string;
+  category?: string;
+  imageUrl?: string;
+};
 
 function formatNewsDate(iso: string): string {
   const d = new Date(iso);
@@ -21,53 +28,100 @@ function feedItemToNewsItem(f: FeedItem): NewsItem {
     category: f.category ?? 'News',
     date: f.date,
     url: f.url,
+    imageUrl: f.imageUrl,
   };
 }
 
-function NewsCard({ item }: { item: NewsItem }) {
+const DISPLAY_LIMIT = 6;
+const DEFAULT_READ_TIME = '2 min read';
+const DEFAULT_AUTHOR = 'Homestay Khabar';
+
+function BlogCard({
+  item,
+  index,
+}: {
+  item: NewsItem;
+  index: number;
+}) {
+  const imageUrl = item.imageUrl;
+
   return (
-    <Card className="flex h-full flex-col overflow-hidden border-primary-200 transition-shadow hover:shadow-lg">
-      <CardContent className="flex flex-1 flex-col p-5">
-        <div className="mb-2 flex flex-wrap items-center gap-2">
-          <span className="rounded-full bg-accent-100 px-2.5 py-1 text-xs font-medium text-accent-800">
+    <motion.article
+      initial={{ opacity: 0, y: 30 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true }}
+      transition={{ delay: index * 0.15 }}
+      whileHover={{ y: -8 }}
+      className="group bg-card rounded-2xl overflow-hidden shadow-md hover:shadow-lg transition-all duration-300 border border-border"
+    >
+      {/* Image or placeholder */}
+      <div className="relative aspect-[16/10] overflow-hidden bg-muted">
+        {imageUrl ? (
+          <img
+            src={imageUrl}
+            alt={item.title}
+            className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+          />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-primary/10 to-primary/5">
+            <Newspaper className="w-14 h-14 text-muted-foreground/50" aria-hidden />
+          </div>
+        )}
+        <div className="absolute top-4 left-4">
+          <span className="px-3 py-1 bg-primary text-primary-foreground text-xs font-semibold rounded-full">
             {item.category}
           </span>
-          <span className="flex items-center gap-1 text-xs text-muted-foreground">
-            <Calendar className="h-3.5 w-3.5" />
-            {formatNewsDate(item.date)}
+        </div>
+      </div>
+
+      {/* Content */}
+      <div className="p-6">
+        <div className="flex items-center gap-4 text-sm text-muted-foreground mb-3">
+          <span className="flex items-center gap-1">
+            <User className="w-4 h-4" />
+            {DEFAULT_AUTHOR}
+          </span>
+          <span className="flex items-center gap-1">
+            <Clock className="w-4 h-4" />
+            {DEFAULT_READ_TIME}
           </span>
         </div>
-        <h3 className="font-semibold text-primary-800 line-clamp-2">{item.title}</h3>
+
+        <h3 className="font-display text-xl font-semibold text-foreground mb-3 group-hover:text-primary transition-colors line-clamp-2">
+          {item.title}
+        </h3>
+
         {item.titleNe && (
-          <p className="mt-1 text-xs text-muted-foreground line-clamp-1" lang="ne">
+          <p className="text-muted-foreground text-sm line-clamp-1 mb-2" lang="ne">
             {item.titleNe}
           </p>
         )}
-        <p className="mt-3 flex-1 text-sm text-muted-foreground line-clamp-3">{item.excerpt}</p>
-      </CardContent>
-      <CardFooter className="border-t border-primary-100 p-3">
-        <Button
-          variant="outline"
-          size="sm"
-          className="w-full border-primary-200 text-accent-600 hover:bg-accent-50 hover:border-accent-200"
-          asChild
-        >
-          <a href={item.url} target="_blank" rel="noopener noreferrer">
-            <ExternalLink className="mr-1.5 h-4 w-4" />
-            Read on Homestay Khabar
+
+        <p className="text-muted-foreground text-sm line-clamp-2 mb-4">
+          {item.excerpt}
+        </p>
+
+        <div className="flex items-center justify-between">
+          <span className="text-sm text-muted-foreground">
+            {formatNewsDate(item.date)}
+          </span>
+          <a
+            href={item.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-primary font-medium text-sm flex items-center gap-1 hover:gap-2 transition-all"
+          >
+            Read More <ArrowRight className="w-4 h-4" />
           </a>
-        </Button>
-      </CardFooter>
-    </Card>
+        </div>
+      </div>
+    </motion.article>
   );
 }
-
-const DISPLAY_LIMIT = 6;
 
 export default function BlogsAndNews() {
   const [items, setItems] = useState<NewsItem[]>(HOMESTAY_NEWS.slice(0, DISPLAY_LIMIT));
   const [loading, setLoading] = useState(true);
-  const [fromFeed, setFromFeed] = useState(false);
 
   useEffect(() => {
     api
@@ -76,7 +130,6 @@ export default function BlogsAndNews() {
         const feedItems = res.data?.items ?? [];
         if (feedItems.length > 0) {
           setItems(feedItems.slice(0, DISPLAY_LIMIT).map(feedItemToNewsItem));
-          setFromFeed(true);
         }
       })
       .catch(() => {
@@ -85,39 +138,47 @@ export default function BlogsAndNews() {
       .finally(() => setLoading(false));
   }, []);
 
-  const displayItems = items;
-
   return (
-    <section className="space-y-6">
-      <div className="flex flex-col items-center text-center sm:flex-row sm:items-end sm:justify-between sm:gap-4">
-        <div>
-          <h2 className="text-3xl font-bold text-primary-800 md:text-4xl">Blogs & News</h2>
-          <p className="mt-2 text-muted-foreground">
-            {fromFeed
-              ? 'Latest from Homestay Khabar — homestay tourism, culture and community (updated daily)'
-              : 'Top stories from Homestay Khabar — homestay tourism, culture and community'}
-          </p>
-        </div>
-        <a
-          href={HOMESTAY_NEWS_SOURCE_URL}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="mt-4 inline-flex items-center gap-2 text-sm font-medium text-accent-600 hover:text-accent-700 sm:mt-0"
+    <section id="blogs" className="py-20 bg-background">
+      <div className="container mx-auto px-4">
+        {/* Section Header */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          className="flex flex-col md:flex-row md:items-end md:justify-between mb-12"
         >
-          <Newspaper className="h-4 w-4" />
-          Visit Homestay Khabar
-        </a>
-      </div>
-      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-        {loading ? (
-          <div className="col-span-full flex items-center justify-center py-12">
-            <Loader2 className="h-8 w-8 animate-spin text-accent-500" />
+          <div>
+            <span className="text-primary font-medium text-sm uppercase tracking-wider">
+              Latest Updates
+            </span>
+            <h2 className="font-display text-4xl md:text-5xl font-bold text-foreground mt-2">
+              Blogs & News
+            </h2>
           </div>
-        ) : (
-          displayItems.map((item) => (
-            <NewsCard key={item.id} item={item} />
-          ))
-        )}
+          <motion.a
+            href={HOMESTAY_NEWS_SOURCE_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            whileHover={{ x: 5 }}
+            className="flex items-center gap-2 text-primary font-medium mt-4 md:mt-0 hover:gap-3 transition-all"
+          >
+            View All Articles <ArrowRight className="w-4 h-4" />
+          </motion.a>
+        </motion.div>
+
+        {/* Blog Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+          {loading ? (
+            <div className="col-span-full flex items-center justify-center py-12">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            </div>
+          ) : (
+            items.map((item, index) => (
+              <BlogCard key={item.id} item={item} index={index} />
+            ))
+          )}
+        </div>
       </div>
     </section>
   );

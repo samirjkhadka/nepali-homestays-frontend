@@ -1,94 +1,119 @@
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { motion } from 'framer-motion';
+import { Search, MapPin, Calendar, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Search } from 'lucide-react';
-
-/** Optional section imagery (Nepal scenery); falls back to gradient if unavailable */
-const SEARCH_HERO_IMAGE = 'https://images.unsplash.com/photo-1544735716-392fe2489ffa?w=1200&q=80';
 
 export default function SearchSection() {
   const navigate = useNavigate();
+  const [location, setLocation] = useState('');
+  const [checkIn, setCheckIn] = useState('');
+  const [checkOut, setCheckOut] = useState('');
+  const [guests, setGuests] = useState('1');
 
-  const handleSearch = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    const form = e.currentTarget;
-    const location = (form.elements.namedItem('location') as HTMLInputElement)?.value ?? '';
-    const minPrice = (form.elements.namedItem('minPrice') as HTMLInputElement)?.value ?? '';
-    const maxPrice = (form.elements.namedItem('maxPrice') as HTMLInputElement)?.value ?? '';
-    const guests = (form.elements.namedItem('guests') as HTMLInputElement)?.value ?? '';
     const params = new URLSearchParams();
-    if (location) params.set('location', location);
-    if (minPrice) params.set('minPrice', minPrice);
-    if (maxPrice) params.set('maxPrice', maxPrice);
+    if (location.trim()) params.set('location', location.trim());
+    if (checkIn) params.set('check_in', checkIn);
+    if (checkOut) params.set('check_out', checkOut);
     if (guests) params.set('guests', guests);
     navigate(`/search?${params.toString()}`);
   };
 
   return (
-    <section className="relative overflow-hidden rounded-2xl border border-primary-200 shadow-lg">
-      <div className="absolute inset-0 bg-gradient-to-br from-primary-600 via-primary-700 to-primary-900" />
-      <img
-        src={SEARCH_HERO_IMAGE}
-        alt=""
-        className="absolute inset-0 h-full w-full object-cover opacity-40"
-      />
-      <div className="absolute inset-0 bg-primary-900/50" />
-      <div className="relative mx-auto max-w-4xl p-6 md:p-8">
-        <h2 className="text-xl font-semibold text-white drop-shadow md:text-2xl">Find your homestay</h2>
-        <p className="mt-1 text-white/90">Search by location, price, and guests</p>
-        <form
-          onSubmit={handleSearch}
-          className="mt-6 flex flex-wrap items-end gap-4 rounded-xl bg-white/95 p-4 shadow-lg backdrop-blur-sm md:gap-5 md:p-5"
-        >
-          <div className="min-w-[160px] flex-1">
-            <Label htmlFor="hero-location">Location</Label>
-            <Input
-              id="hero-location"
-              name="location"
-              placeholder="e.g. Kathmandu, Pokhara"
-              className="mt-1"
-            />
+    <section className="relative -mt-24 z-30 container mx-auto px-4">
+      <motion.div
+        initial={{ opacity: 0, y: 40 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true }}
+        transition={{ duration: 0.6 }}
+        className="bg-card rounded-2xl shadow-xl p-6 md:p-8 border border-border"
+      >
+        <form onSubmit={handleSearch}>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 md:gap-6">
+            {/* Location */}
+            <div className="space-y-2">
+              <label htmlFor="hero-location" className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                <MapPin className="w-4 h-4 text-primary" />
+                Location
+              </label>
+              <input
+                id="hero-location"
+                name="location"
+                type="text"
+                placeholder="Where do you want to go?"
+                value={location}
+                onChange={(e) => setLocation(e.target.value)}
+                className="w-full px-4 py-3 bg-muted rounded-xl border-0 focus:ring-2 focus:ring-primary outline-none transition-all"
+              />
+            </div>
+
+            {/* Check-in */}
+            <div className="space-y-2">
+              <label htmlFor="hero-check-in" className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                <Calendar className="w-4 h-4 text-primary" />
+                Check-in
+              </label>
+              <input
+                id="hero-check-in"
+                name="check_in"
+                type="date"
+                value={checkIn}
+                onChange={(e) => setCheckIn(e.target.value)}
+                className="w-full px-4 py-3 bg-muted rounded-xl border-0 focus:ring-2 focus:ring-primary outline-none transition-all"
+              />
+            </div>
+
+            {/* Check-out */}
+            <div className="space-y-2">
+              <label htmlFor="hero-check-out" className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                <Calendar className="w-4 h-4 text-primary" />
+                Check-out
+              </label>
+              <input
+                id="hero-check-out"
+                name="check_out"
+                type="date"
+                value={checkOut}
+                onChange={(e) => setCheckOut(e.target.value)}
+                className="w-full px-4 py-3 bg-muted rounded-xl border-0 focus:ring-2 focus:ring-primary outline-none transition-all"
+              />
+            </div>
+
+            {/* Guests */}
+            <div className="space-y-2">
+              <label htmlFor="hero-guests" className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                <Users className="w-4 h-4 text-primary" />
+                Guests
+              </label>
+              <select
+                id="hero-guests"
+                name="guests"
+                value={guests}
+                onChange={(e) => setGuests(e.target.value)}
+                className="w-full px-4 py-3 bg-muted rounded-xl border-0 focus:ring-2 focus:ring-primary outline-none transition-all"
+              >
+                <option value="1">1 Guest</option>
+                <option value="2">2 Guests</option>
+                <option value="3">3 Guests</option>
+                <option value="4">4+ Guests</option>
+              </select>
+            </div>
           </div>
-          <div className="w-28">
-            <Label htmlFor="hero-minPrice">Min price</Label>
-            <Input
-              id="hero-minPrice"
-              name="minPrice"
-              type="number"
-              placeholder="0"
-              min={0}
-              className="mt-1"
-            />
+
+          <div className="mt-6 flex justify-center">
+            <Button
+              type="submit"
+              size="lg"
+              className="px-8 py-6 text-lg font-semibold rounded-xl bg-primary hover:bg-primary/90 shadow-lg hover:shadow-xl transition-all hover:scale-105"
+            >
+              <Search className="w-5 h-5 mr-2" />
+              Search Homestays
+            </Button>
           </div>
-          <div className="w-28">
-            <Label htmlFor="hero-maxPrice">Max price</Label>
-            <Input
-              id="hero-maxPrice"
-              name="maxPrice"
-              type="number"
-              placeholder="500"
-              min={0}
-              className="mt-1"
-            />
-          </div>
-          <div className="w-24">
-            <Label htmlFor="hero-guests">Guests</Label>
-            <Input
-              id="hero-guests"
-              name="guests"
-              type="number"
-              placeholder="1"
-              min={1}
-              className="mt-1"
-            />
-          </div>
-          <Button type="submit" size="lg" className="bg-primary-600 hover:bg-primary-700">
-            <Search className="mr-2 h-4 w-4" />
-            Search
-          </Button>
         </form>
-      </div>
+      </motion.div>
     </section>
   );
 }

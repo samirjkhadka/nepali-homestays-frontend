@@ -1,11 +1,12 @@
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap');
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 216 58% 16%;
+    --background: 35 30% 97%;
+    --foreground: 25 30% 12%;
     --card: 0 0% 100%;
     --card-foreground: 216 58% 16%;
     --popover: 0 0% 100%;

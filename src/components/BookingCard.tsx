@@ -1,0 +1,251 @@
+import { useState } from 'react';
+import { motion } from 'framer-motion';
+import { Star, ChevronDown, ChevronUp, AlertCircle, Check } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { useCurrency } from '@/lib/currency';
+
+export interface BookingCardProps {
+  pricePerNight: string;
+  /** Formatted price for display (e.g. "NPR 2,500") */
+  priceFormatted?: string;
+  rating?: number | null;
+  totalReviews: number;
+  maxGuests: number;
+  checkIn: string;
+  checkOut: string;
+  onCheckInChange: (value: string) => void;
+  onCheckOutChange: (value: string) => void;
+  guests: number;
+  onGuestsChange: (n: number) => void;
+  blockedDates: string[];
+  onSubmit: (e: React.FormEvent) => void;
+  submitting: boolean;
+  /** Optional message text (e.g. "You won't be charged yet") */
+  submitLabel?: string;
+  /** Service charge or discount from API. For service_charge, applies_to controls who pays (guest = added to total, host = deducted from host payout). */
+  bookingFee?: { type: 'service_charge' | 'discount'; kind: 'percent' | 'fixed'; value: number; applies_to?: 'guest' | 'host' } | null;
+  /** Trust badge lines (from site settings). If omitted, shows default three. */
+  trustBadges?: string[];
+}
+
+export function BookingCard({
+  pricePerNight,
+  priceFormatted,
+  rating,
+  totalReviews,
+  maxGuests,
+  checkIn,
+  checkOut,
+  onCheckInChange,
+  onCheckOutChange,
+  guests,
+  onGuestsChange,
+  blockedDates,
+  onSubmit,
+  submitting,
+  submitLabel = "You won't be charged yet",
+  bookingFee,
+  trustBadges,
+}: BookingCardProps) {
+  const badges = trustBadges?.length ? trustBadges : ['Free cancellation for 48 hours', 'Verified homestay host', 'Secure payment process'];
+  const { format: formatPrice } = useCurrency();
+  const displayPrice = priceFormatted ?? formatPrice(pricePerNight);
+  const [showGuestPicker, setShowGuestPicker] = useState(false);
+
+  const priceNum = parseFloat(String(pricePerNight));
+  const checkInDate = checkIn ? new Date(checkIn) : null;
+  const checkOutDate = checkOut ? new Date(checkOut) : null;
+  const nights =
+    checkInDate && checkOutDate && checkOutDate > checkInDate
+      ? Math.ceil((checkOutDate.getTime() - checkInDate.getTime()) / (24 * 60 * 60 * 1000))
+      : 0;
+
+  const blockedSet = new Set(blockedDates);
+  const hasUnavailableInRange = (() => {
+    if (nights <= 0 || !checkInDate || !checkOutDate) return false;
+    const d = new Date(checkInDate.getTime());
+    while (d < checkOutDate) {
+      if (blockedSet.has(d.toISOString().slice(0, 10))) return true;
+      d.setDate(d.getDate() + 1);
+    }
+    return false;
+  })();
+
+  const subtotal = nights * priceNum;
+  let feeAmount = 0;
+  let feeLabel = '';
+  if (bookingFee && bookingFee.value > 0) {
+    const raw =
+      bookingFee.kind === 'percent' ? (subtotal * bookingFee.value) / 100 : bookingFee.value;
+    const rawRounded = Math.round(raw * 100) / 100;
+    if (bookingFee.type === 'discount') {
+      feeAmount = -rawRounded;
+      feeLabel = `Discount${bookingFee.kind === 'percent' ? ` (${bookingFee.value}%)` : ''}`;
+    } else if (bookingFee.applies_to === 'host') {
+      feeAmount = 0;
+      feeLabel = '';
+    } else {
+      feeAmount = rawRounded;
+      feeLabel = `Service fee${bookingFee.kind === 'percent' ? ` (${bookingFee.value}%)` : ''}`;
+    }
+  }
+  const total = Math.max(0, Math.round((subtotal + feeAmount) * 100) / 100);
+
+  const isDisabled = hasUnavailableInRange || !checkIn || !checkOut || nights <= 0;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="sticky top-24 bg-card rounded-2xl border border-border shadow-lg p-6"
+    >
+      {/* Price and Rating */}
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <span className="text-2xl font-bold text-foreground">{displayPrice}</span>
+          <span className="text-muted-foreground"> /night</span>
+        </div>
+        {(rating != null || totalReviews > 0) && (
+          <div className="flex items-center gap-1">
+            <Star className="w-4 h-4 fill-accent text-accent" />
+            <span className="font-medium">{rating != null ? rating.toFixed(1) : '—'}</span>
+            <span className="text-muted-foreground">({totalReviews})</span>
+          </div>
+        )}
+      </div>
+
+      {/* Date and Guest Selection */}
+      <form onSubmit={onSubmit} className="space-y-0">
+        <div className="border border-border rounded-xl overflow-hidden mb-4">
+          <div className="grid grid-cols-2 divide-x divide-border">
+            <div className="p-3 hover:bg-muted/50 transition-colors">
+              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide block">
+                Check-in
+              </label>
+              <input
+                type="date"
+                value={checkIn}
+                onChange={(e) => onCheckInChange(e.target.value)}
+                className="text-sm mt-1 flex items-center gap-2 w-full bg-transparent border-0 p-0 text-foreground focus:outline-none focus:ring-0"
+                min={new Date().toISOString().slice(0, 10)}
+              />
+            </div>
+            <div className="p-3 hover:bg-muted/50 transition-colors">
+              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide block">
+                Check-out
+              </label>
+              <input
+                type="date"
+                value={checkOut}
+                onChange={(e) => onCheckOutChange(e.target.value)}
+                className="text-sm mt-1 w-full bg-transparent border-0 p-0 text-foreground focus:outline-none focus:ring-0"
+                min={checkIn || new Date().toISOString().slice(0, 10)}
+              />
+            </div>
+          </div>
+
+          <div className="border-t border-border">
+            <button
+              type="button"
+              onClick={() => setShowGuestPicker(!showGuestPicker)}
+              className="w-full p-3 flex items-center justify-between hover:bg-muted/50 transition-colors"
+            >
+              <div>
+                <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide block">
+                  Guests
+                </span>
+                <span className="text-sm text-foreground">
+                  {guests} guest{guests > 1 ? 's' : ''}
+                </span>
+              </div>
+              {showGuestPicker ? (
+                <ChevronUp className="w-4 h-4 text-muted-foreground" />
+              ) : (
+                <ChevronDown className="w-4 h-4 text-muted-foreground" />
+              )}
+            </button>
+
+            {showGuestPicker && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: 'auto', opacity: 1 }}
+                className="border-t border-border p-4"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-foreground">Guests</span>
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => onGuestsChange(Math.max(1, guests - 1))}
+                      className="w-8 h-8 rounded-full border border-border flex items-center justify-center hover:bg-muted transition-colors disabled:opacity-50"
+                      disabled={guests <= 1}
+                    >
+                      -
+                    </button>
+                    <span className="w-8 text-center font-medium">{guests}</span>
+                    <button
+                      type="button"
+                      onClick={() => onGuestsChange(Math.min(maxGuests, guests + 1))}
+                      className="w-8 h-8 rounded-full border border-border flex items-center justify-center hover:bg-muted transition-colors disabled:opacity-50"
+                      disabled={guests >= maxGuests}
+                    >
+                      +
+                    </button>
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground mt-2">Maximum {maxGuests} guests</p>
+              </motion.div>
+            )}
+          </div>
+        </div>
+
+        {hasUnavailableInRange && (
+          <div className="flex items-center gap-2 text-destructive text-sm mb-4 p-3 bg-destructive/10 rounded-lg">
+            <AlertCircle className="w-4 h-4 flex-shrink-0" />
+            <span>Some dates in your selection are unavailable</span>
+          </div>
+        )}
+
+        <Button
+          type="submit"
+          disabled={isDisabled || submitting}
+          className="w-full py-6 text-lg font-semibold bg-primary hover:bg-primary/90 rounded-xl disabled:opacity-50"
+        >
+          {submitting ? 'Redirecting…' : 'Reserve Now'}
+        </Button>
+      </form>
+
+      <p className="text-center text-sm text-muted-foreground mt-3">{submitLabel}</p>
+
+      {nights > 0 && !hasUnavailableInRange && (
+        <div className="mt-6 pt-6 border-t border-border space-y-3">
+          <div className="flex justify-between text-foreground">
+            <span className="underline">
+              {displayPrice} × {nights} night{nights > 1 ? 's' : ''}
+            </span>
+            <span>{formatPrice(String(subtotal.toFixed(2)))}</span>
+          </div>
+          {feeAmount !== 0 && (
+            <div className="flex justify-between text-foreground">
+              <span className="underline">{feeLabel}</span>
+              <span>{feeAmount > 0 ? formatPrice(String(feeAmount.toFixed(2))) : `-${formatPrice(String(Math.abs(feeAmount).toFixed(2)))}`}</span>
+            </div>
+          )}
+          <div className="flex justify-between font-semibold text-foreground pt-3 border-t border-border">
+            <span>Total</span>
+            <span>{formatPrice(String(total.toFixed(2)))}</span>
+          </div>
+        </div>
+      )}
+
+      <div className="mt-6 pt-6 border-t border-border space-y-3">
+        {badges.map((line, i) => (
+          <div key={i} className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Check className="w-4 h-4 text-primary flex-shrink-0" />
+            <span>{line}</span>
+          </div>
+        ))}
+      </div>
+    </motion.div>
+  );
+}

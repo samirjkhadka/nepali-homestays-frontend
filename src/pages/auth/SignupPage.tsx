@@ -6,6 +6,8 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { api } from '@/lib/api';
 import { assets } from '@/lib/design-tokens';
+import { validatePassword, PASSWORD_HINT } from '@/lib/passwordValidation';
+import { UserPlus } from 'lucide-react';
 
 export default function SignupPage() {
   const navigate = useNavigate();
@@ -20,6 +22,11 @@ export default function SignupPage() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    const passwordCheck = validatePassword(password);
+    if (!passwordCheck.valid) {
+      setError(passwordCheck.errors.join('. '));
+      return;
+    }
     setLoading(true);
     api
       .post('/api/auth/signup', { name, email, phone, password, role })
@@ -96,11 +103,11 @@ export default function SignupPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
-                minLength={6}
+                minLength={8}
                 autoComplete="new-password"
                 className="mt-1 border-primary-200"
               />
-              <p className="mt-1 text-xs text-muted-foreground">At least 6 characters</p>
+              <p className="mt-1 text-xs text-muted-foreground">{PASSWORD_HINT}</p>
             </div>
             <div>
               <Label className="text-primary-800">I want to</Label>
@@ -137,6 +144,7 @@ export default function SignupPage() {
               className="w-full bg-accent-500 hover:bg-accent-600"
               disabled={loading}
             >
+              <UserPlus className="w-4 h-4 mr-2" />
               {loading ? 'Creating account…' : 'Sign up'}
             </Button>
           </form>

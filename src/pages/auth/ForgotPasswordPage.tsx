@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { api } from '@/lib/api';
 import { assets } from '@/lib/design-tokens';
-import { Mail } from 'lucide-react';
+import { Mail, Send } from 'lucide-react';
 
 export default function ForgotPasswordPage() {
   const navigate = useNavigate();
@@ -74,6 +74,7 @@ export default function ForgotPasswordPage() {
               className="w-full bg-accent-500 hover:bg-accent-600"
               disabled={loading}
             >
+              <Send className="w-4 h-4 mr-2" />
               {loading ? 'Sending…' : 'Send reset code'}
             </Button>
           </form>

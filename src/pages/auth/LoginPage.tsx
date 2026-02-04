@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { PasswordInput } from '@/components/ui/password-input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { useAuth } from '@/lib/auth';
@@ -99,9 +100,8 @@ export default function LoginPage() {
               <Label htmlFor="login-password" className="text-primary-800">
                 Password
               </Label>
-              <Input
+              <PasswordInput
                 id="login-password"
-                type="password"
                 autoComplete="current-password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}

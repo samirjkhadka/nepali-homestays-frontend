@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { PasswordInput } from '@/components/ui/password-input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { api } from '@/lib/api';
@@ -97,9 +98,8 @@ export default function SignupPage() {
               <Label htmlFor="signup-password" className="text-primary-800">
                 Password
               </Label>
-              <Input
+              <PasswordInput
                 id="signup-password"
-                type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required

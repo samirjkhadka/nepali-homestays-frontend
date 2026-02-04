@@ -4,6 +4,7 @@ import * as Dialog from '@radix-ui/react-dialog';
 import { jsPDF } from 'jspdf';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { PasswordInput } from '@/components/ui/password-input';
 import { Users, FileCheck, Calendar, CreditCard, BarChart3, FileText, Youtube, X, Download, Home, MessageSquare, Bell, Activity, AlertCircle, Mail, MousePointer, Building2, Plus } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line, CartesianGrid, Legend } from 'recharts';
 import { api } from '@/lib/api';
@@ -1793,8 +1794,7 @@ export default function AdminDashboard() {
               >
                 <div>
                   <label className="mb-1 block text-sm font-medium text-primary-800">Token</label>
-                  <input
-                    type="password"
+                  <PasswordInput
                     autoComplete="off"
                     value={sparrowSms.token}
                     onChange={(e) => setSparrowSms((s) => ({ ...s, token: e.target.value }))}

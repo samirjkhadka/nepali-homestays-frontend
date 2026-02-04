@@ -50,7 +50,13 @@ export default function LoginPage() {
         setError(res.data.message || 'Login failed. Please try again.');
       })
       .catch((err) => {
-        const message = err.response?.data?.message || err.message || 'Invalid email/mobile or password. Please check and try again.';
+        const apiMessage = err.response?.data?.message;
+        const isAuthError = err.response?.status === 401 || err.response?.status === 400;
+        const message =
+          apiMessage ||
+          (isAuthError ? 'Invalid email/mobile or password. Please check and try again.' : null) ||
+          err.message ||
+          'Invalid email/mobile or password. Please check and try again.';
         setError(message);
       })
       .finally(() => setLoading(false));

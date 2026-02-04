@@ -42,7 +42,7 @@ type Booking = {
 
 type Listing = { id: number; title: string; status: string; disabled_by_admin?: boolean };
 
-const BOOKING_STATUSES = ['all', 'pending', 'pending_payment', 'approved', 'paid', 'completed', 'declined', 'cancelled'] as const;
+const BOOKING_STATUSES = ['all', 'pending', 'pending_payment', 'approved', 'partial_paid', 'paid', 'completed', 'declined', 'cancelled'] as const;
 
 function formatBookingDateRange(checkIn: string, checkOut: string): string {
   const fmt = (d: string) => new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
@@ -52,6 +52,8 @@ function formatBookingDateRange(checkIn: string, checkOut: string): string {
 function statusBadgeClass(status: string): string {
   switch (status) {
     case 'pending_payment':
+      return 'bg-amber-100 text-amber-800';
+    case 'partial_paid':
       return 'bg-amber-100 text-amber-800';
     case 'paid':
     case 'completed':
@@ -85,7 +87,7 @@ const CHART_COLORS = [
 function buildBookingsByStatusData(bookings: Booking[]): { name: string; value: number }[] {
   const counts: Record<string, number> = {};
   for (const b of bookings) {
-    const label = b.status === 'pending_payment' ? 'Awaiting payment' : b.status.replace(/_/g, ' ');
+    const label = b.status === 'pending_payment' ? 'Awaiting payment' : b.status === 'partial_paid' ? 'Partial paid' : b.status.replace(/_/g, ' ');
     counts[label] = (counts[label] ?? 0) + 1;
   }
   return Object.entries(counts).map(([name, value]) => ({ name, value }));
@@ -197,6 +199,11 @@ export default function HostDashboard() {
     api.get<{ messages: typeof threadMessages }>(`/api/messages/${selectedConversation.booking_id}?mark_read=1`).then((res) => setThreadMessages(res.data.messages || [])).catch(() => setThreadMessages([]));
   }, [selectedConversation?.booking_id]);
 
+  /** Messaging allowed only when payment is done and booking is active (not completed/cancelled). */
+  const canMessageConversation = (bookingId: number) =>
+    dashboard?.bookings?.some((b) => b.id === bookingId && ['pending_payment', 'approved', 'partial_paid', 'paid'].includes(b.status)) ?? false;
+  const selectedCanMessage = selectedConversation ? canMessageConversation(selectedConversation.booking_id) : false;
+
   const handleSendMessage = (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedConversation || !messageText.trim()) return;
@@ -223,6 +230,13 @@ export default function HostDashboard() {
       toast({ title: 'Booking declined.' });
       setDashboard((d) => d ? { ...d, bookings: d.bookings.map((b) => b.id === id ? { ...b, status: 'declined' } : b) } : null);
     }).catch(() => toast({ title: 'Failed.', variant: 'destructive' }));
+  };
+
+  const handleMarkAsPaid = (id: number) => {
+    api.patch(`/api/bookings/${id}`, { status: 'paid' }).then(() => {
+      toast({ title: 'Booking marked as paid.' });
+      setDashboard((d) => d ? { ...d, bookings: d.bookings.map((b) => b.id === id ? { ...b, status: 'paid' } : b) } : null);
+    }).catch((err) => toast({ title: err.response?.data?.message || 'Failed to mark as paid.', variant: 'destructive' }));
   };
 
   const handleBlockDates = (e: React.FormEvent) => {
@@ -363,7 +377,7 @@ export default function HostDashboard() {
                 <div className="rounded-lg border border-primary-200 bg-primary-50/30 p-4">
                   <p className="text-sm text-muted-foreground">Upcoming / active bookings</p>
                   <p className="text-2xl font-bold text-primary-800">
-                    {dashboard.bookings.filter((b) => ['pending', 'pending_payment', 'approved', 'paid'].includes(b.status)).length}
+                    {dashboard.bookings.filter((b) => ['pending', 'pending_payment', 'approved', 'partial_paid', 'paid'].includes(b.status)).length}
                   </p>
                   <p className="text-xs text-muted-foreground mt-1">Need your attention</p>
                 </div>
@@ -618,8 +632,13 @@ export default function HostDashboard() {
                                 </p>
                               )}
                               <Badge className={`mt-2 ${statusBadgeClass(b.status)}`}>
-                                {b.status === 'pending_payment' ? 'Awaiting payment' : b.status}
+                                {b.status === 'pending_payment' ? 'Awaiting payment' : b.status === 'partial_paid' ? 'Partial paid' : b.status}
                               </Badge>
+                              {(b.status === 'pending_payment' || b.status === 'partial_paid') && (
+                                <Button size="sm" className="mt-2 bg-primary hover:bg-primary/90" onClick={() => handleMarkAsPaid(b.id)}>
+                                  Mark as paid (guest paid at checkout)
+                                </Button>
+                              )}
                             </div>
                           </CardContent>
                         </Card>
@@ -751,6 +770,11 @@ export default function HostDashboard() {
                       <p className="text-sm text-muted-foreground">With {selectedConversation.other_name}</p>
                     </CardHeader>
                     <CardContent className="p-0">
+                      {!selectedCanMessage && (
+                        <p className="text-sm text-amber-800 bg-amber-50 border-b border-amber-200 p-3 mx-4 mt-2 rounded-lg">
+                          Messaging is only available for active bookings after payment. This conversation is closed.
+                        </p>
+                      )}
                       <div className="max-h-[320px] overflow-y-auto p-4 space-y-3">
                         {threadMessages.map((m) => (
                           <div key={m.id} className="rounded-lg p-3 bg-primary-50/50">
@@ -760,10 +784,14 @@ export default function HostDashboard() {
                           </div>
                         ))}
                       </div>
-                      <form onSubmit={handleSendMessage} className="flex gap-2 border-t border-primary-200 p-4">
-                        <Input value={messageText} onChange={(e) => setMessageText(e.target.value)} placeholder="Type a message..." className="flex-1 border-primary-200" disabled={sendingMessage} />
-                        <Button type="submit" className="bg-accent-500 hover:bg-accent-600" disabled={sendingMessage || !messageText.trim()}>Send</Button>
-                      </form>
+                      {selectedCanMessage ? (
+                        <form onSubmit={handleSendMessage} className="flex gap-2 border-t border-primary-200 p-4">
+                          <Input value={messageText} onChange={(e) => setMessageText(e.target.value)} placeholder="Type a message..." className="flex-1 border-primary-200" disabled={sendingMessage} />
+                          <Button type="submit" className="bg-accent-500 hover:bg-accent-600" disabled={sendingMessage || !messageText.trim()}>Send</Button>
+                        </form>
+                      ) : (
+                        <p className="text-muted-foreground text-sm border-t border-primary-200 p-4">You can no longer send messages for this booking.</p>
+                      )}
                     </CardContent>
                   </>
                 )}

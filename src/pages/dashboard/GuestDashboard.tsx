@@ -20,6 +20,8 @@ type Booking = {
   check_in: string;
   check_out: string;
   status: string;
+  total_amount?: number | null;
+  amount_paid?: number | null;
 };
 
 type Profile = {
@@ -32,7 +34,7 @@ type Profile = {
 const GUEST_TABS = ['profile', 'bookings', 'wishlist', 'messages', 'payment-history'] as const;
 type GuestTabType = (typeof GUEST_TABS)[number];
 
-const BOOKING_STATUSES = ['all', 'upcoming', 'pending', 'pending_payment', 'approved', 'paid', 'completed', 'declined', 'cancelled'] as const;
+const BOOKING_STATUSES = ['all', 'upcoming', 'pending', 'pending_payment', 'approved', 'partial_paid', 'paid', 'completed', 'declined', 'cancelled'] as const;
 
 function formatBookingDateRange(checkIn: string, checkOut: string): string {
   const fmt = (d: string) => {
@@ -45,6 +47,8 @@ function formatBookingDateRange(checkIn: string, checkOut: string): string {
 function statusBadgeClass(status: string): string {
   switch (status) {
     case 'pending_payment':
+      return 'bg-amber-100 text-amber-800';
+    case 'partial_paid':
       return 'bg-amber-100 text-amber-800';
     case 'paid':
     case 'completed':
@@ -153,8 +157,13 @@ export default function GuestDashboard() {
       : statusFilter === 'upcoming'
         ? bookings.filter((b) => ['pending', 'pending_payment', 'approved', 'paid'].includes(b.status))
         : bookings.filter((b) => b.status === statusFilter);
-  const upcomingCount = bookings.filter((b) => ['pending', 'pending_payment', 'approved', 'paid'].includes(b.status)).length;
+  const upcomingCount = bookings.filter((b) => ['pending', 'pending_payment', 'approved', 'partial_paid', 'paid'].includes(b.status)).length;
   const paidBookings = bookings.filter((b) => b.status === 'paid' || b.status === 'completed');
+
+  /** Messaging allowed only when payment is done and booking is active (not completed/cancelled). */
+  const canMessageConversation = (bookingId: number) =>
+    bookings.some((b) => b.id === bookingId && ['pending_payment', 'approved', 'partial_paid', 'paid'].includes(b.status));
+  const selectedCanMessage = selectedConversation ? canMessageConversation(selectedConversation.booking_id) : false;
 
   return (
     <div>
@@ -253,11 +262,16 @@ export default function GuestDashboard() {
                           </p>
                         )}
                         <Badge className={`mt-2 ${statusBadgeClass(b.status)}`}>
-                          {b.status === 'pending_payment' ? 'Awaiting payment' : b.status}
+                          {b.status === 'pending_payment' ? 'Awaiting payment' : b.status === 'partial_paid' ? 'Partial paid' : b.status}
                         </Badge>
+                        {b.status === 'partial_paid' && b.total_amount != null && b.amount_paid != null && (
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            Total: {formatPrice(String(b.total_amount))} · Paid: {formatPrice(String(b.amount_paid))} · Remaining: {formatPrice(String(Math.max(0, (b.total_amount ?? 0) - (b.amount_paid ?? 0))))}
+                          </p>
+                        )}
                       </div>
                       <div className="mt-4 flex flex-wrap gap-2">
-                        {b.status === 'pending_payment' && (
+                        {(b.status === 'pending_payment' || b.status === 'partial_paid') && (
                           <Button
                             size="sm"
                             className="bg-accent-500 hover:bg-accent-600"
@@ -287,7 +301,7 @@ export default function GuestDashboard() {
                             }}
                           >
                             <CreditCard className="mr-1 h-4 w-4" />
-                            Complete payment
+                            {b.status === 'partial_paid' ? 'Pay remaining' : 'Complete payment'}
                           </Button>
                         )}
                         {b.status === 'approved' && (
@@ -393,6 +407,11 @@ export default function GuestDashboard() {
                 <p className="text-muted-foreground">Select a conversation.</p>
               ) : (
                 <>
+                  {!selectedCanMessage && (
+                    <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4">
+                      Messaging is only available for active bookings after payment. This conversation is closed.
+                    </p>
+                  )}
                   <div className="mb-4 max-h-80 space-y-3 overflow-y-auto">
                     {threadMessages.map((m) => (
                       <div key={m.id} className={`rounded-lg p-3 ${m.sender_id === selectedConversation.other_user_id ? 'bg-primary-100 ml-0 mr-8' : 'bg-accent-100 ml-8 mr-0'}`}>
@@ -402,10 +421,14 @@ export default function GuestDashboard() {
                       </div>
                     ))}
                   </div>
-                  <form onSubmit={handleSendMessage} className="flex gap-2">
-                    <Input value={messageText} onChange={(e) => setMessageText(e.target.value)} placeholder="Type a message..." className="flex-1" />
-                    <Button type="submit" disabled={sendingMessage || !messageText.trim()}>Send</Button>
-                  </form>
+                  {selectedCanMessage ? (
+                    <form onSubmit={handleSendMessage} className="flex gap-2">
+                      <Input value={messageText} onChange={(e) => setMessageText(e.target.value)} placeholder="Type a message..." className="flex-1" />
+                      <Button type="submit" disabled={sendingMessage || !messageText.trim()}>Send</Button>
+                    </form>
+                  ) : (
+                    <p className="text-muted-foreground text-sm">You can no longer send messages for this booking.</p>
+                  )}
                 </>
               )}
             </CardContent>

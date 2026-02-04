@@ -1,8 +1,33 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { motion } from 'framer-motion';
-import { Star, ChevronDown, ChevronUp, AlertCircle, Check } from 'lucide-react';
+import { Star, ChevronDown, ChevronUp, AlertCircle, Check, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useCurrency } from '@/lib/currency';
+
+const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+function getCalendarDays(year: number, month: number): { date: Date; dateStr: string; isCurrentMonth: boolean }[] {
+  const first = new Date(year, month, 1);
+  const last = new Date(year, month + 1, 0);
+  const startPad = first.getDay();
+  const daysInMonth = last.getDate();
+  const result: { date: Date; dateStr: string; isCurrentMonth: boolean }[] = [];
+  const pad = (d: Date) => d.toISOString().slice(0, 10);
+  for (let i = 0; i < startPad; i++) {
+    const d = new Date(year, month, 1 - (startPad - i));
+    result.push({ date: d, dateStr: pad(d), isCurrentMonth: false });
+  }
+  for (let day = 1; day <= daysInMonth; day++) {
+    const d = new Date(year, month, day);
+    result.push({ date: d, dateStr: pad(d), isCurrentMonth: true });
+  }
+  const remaining = 42 - result.length;
+  for (let i = 1; i <= remaining; i++) {
+    const d = new Date(year, month + 1, i);
+    result.push({ date: d, dateStr: pad(d), isCurrentMonth: false });
+  }
+  return result;
+}
 
 export interface BookingCardProps {
   pricePerNight: string;
@@ -26,6 +51,12 @@ export interface BookingCardProps {
   bookingFee?: { type: 'service_charge' | 'discount'; kind: 'percent' | 'fixed'; value: number; applies_to?: 'guest' | 'host' } | null;
   /** Trust badge lines (from site settings). If omitted, shows default three. */
   trustBadges?: string[];
+  /** When 'partial', no discount applies; guest pays at least min % now, rest at checkout. */
+  paymentType?: 'full' | 'partial';
+  partialPercent?: number;
+  partialPaymentMinPercent?: number;
+  onPaymentTypeChange?: (type: 'full' | 'partial') => void;
+  onPartialPercentChange?: (percent: number) => void;
 }
 
 export function BookingCard({
@@ -46,11 +77,29 @@ export function BookingCard({
   submitLabel = "You won't be charged yet",
   bookingFee,
   trustBadges,
+  paymentType = 'full',
+  partialPercent = 25,
+  partialPaymentMinPercent = 25,
+  onPaymentTypeChange,
+  onPartialPercentChange,
 }: BookingCardProps) {
   const badges = trustBadges?.length ? trustBadges : ['Free cancellation for 48 hours', 'Verified homestay host', 'Secure payment process'];
   const { format: formatPrice } = useCurrency();
   const displayPrice = priceFormatted ?? formatPrice(pricePerNight);
   const [showGuestPicker, setShowGuestPicker] = useState(false);
+  const today = useMemo(() => new Date(), []);
+  const todayStr = today.toISOString().slice(0, 10);
+  const [calendarMonth, setCalendarMonth] = useState(() => {
+    if (checkIn) {
+      const d = new Date(checkIn);
+      return new Date(d.getFullYear(), d.getMonth(), 1);
+    }
+    return new Date(today.getFullYear(), today.getMonth(), 1);
+  });
+  const calendarDays = useMemo(
+    () => getCalendarDays(calendarMonth.getFullYear(), calendarMonth.getMonth()),
+    [calendarMonth]
+  );
 
   const priceNum = parseFloat(String(pricePerNight));
   const checkInDate = checkIn ? new Date(checkIn) : null;
@@ -72,9 +121,10 @@ export function BookingCard({
   })();
 
   const subtotal = nights * priceNum;
+  const isPartial = paymentType === 'partial';
   let feeAmount = 0;
   let feeLabel = '';
-  if (bookingFee && bookingFee.value > 0) {
+  if (!isPartial && bookingFee && bookingFee.value > 0) {
     const raw =
       bookingFee.kind === 'percent' ? (subtotal * bookingFee.value) / 100 : bookingFee.value;
     const rawRounded = Math.round(raw * 100) / 100;
@@ -90,6 +140,8 @@ export function BookingCard({
     }
   }
   const total = Math.max(0, Math.round((subtotal + feeAmount) * 100) / 100);
+  const payNowAmount = isPartial ? Math.round((subtotal * Math.min(99, Math.max(partialPaymentMinPercent, partialPercent))) / 100 * 100) / 100 : total;
+  const payNowPercent = nights > 0 && subtotal > 0 ? Math.round((payNowAmount / subtotal) * 100) : partialPercent;
 
   const isDisabled = hasUnavailableInRange || !checkIn || !checkOut || nights <= 0;
 
@@ -142,6 +194,91 @@ export function BookingCard({
                 min={checkIn || new Date().toISOString().slice(0, 10)}
               />
             </div>
+          </div>
+
+          {/* Calendar grid: blocked dates are disabled and visually marked */}
+          <div className="border-t border-border p-3">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                {calendarMonth.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })}
+              </span>
+              <div className="flex items-center gap-0">
+                <button
+                  type="button"
+                  aria-label="Previous month"
+                  onClick={() => setCalendarMonth((m) => new Date(m.getFullYear(), m.getMonth() - 1, 1))}
+                  className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </button>
+                <button
+                  type="button"
+                  aria-label="Next month"
+                  onClick={() => setCalendarMonth((m) => new Date(m.getFullYear(), m.getMonth() + 1, 1))}
+                  className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground"
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+            <div className="grid grid-cols-7 gap-0.5 text-center">
+              {WEEKDAYS.map((wd) => (
+                <div key={wd} className="text-[10px] font-medium text-muted-foreground py-1">
+                  {wd}
+                </div>
+              ))}
+              {calendarDays.map(({ date, dateStr, isCurrentMonth }) => {
+                const isPast = dateStr < todayStr;
+                const isBlocked = blockedSet.has(dateStr);
+                const disabled = isPast || isBlocked;
+                const isCheckIn = dateStr === checkIn;
+                const isCheckOut = dateStr === checkOut;
+                const inRange =
+                  checkIn &&
+                  checkOut &&
+                  dateStr > checkIn &&
+                  dateStr < checkOut;
+                return (
+                  <button
+                    key={dateStr}
+                    type="button"
+                    disabled={disabled}
+                    onClick={() => {
+                      if (disabled) return;
+                      if (!checkIn || dateStr <= checkIn) {
+                        onCheckInChange(dateStr);
+                        onCheckOutChange('');
+                      } else {
+                        const from = new Date(checkIn);
+                        const to = new Date(dateStr);
+                        for (let d = new Date(from); d < to; d.setDate(d.getDate() + 1)) {
+                          if (blockedSet.has(d.toISOString().slice(0, 10))) return;
+                        }
+                        onCheckOutChange(dateStr);
+                      }
+                    }}
+                    className={`
+                      min-w-[28px] h-7 text-xs rounded-md transition-colors
+                      ${!isCurrentMonth ? 'text-muted-foreground/60' : ''}
+                      ${disabled ? 'cursor-not-allowed' : 'hover:bg-muted cursor-pointer'}
+                      ${isBlocked ? 'bg-muted/80 text-muted-foreground line-through' : ''}
+                      ${isPast && !isBlocked ? 'opacity-50' : ''}
+                      ${!disabled && (isCheckIn || isCheckOut) ? 'bg-primary text-primary-foreground font-semibold' : ''}
+                      ${!disabled && inRange ? 'bg-primary/20 text-primary-foreground' : ''}
+                    `}
+                    title={isBlocked ? 'Unavailable' : disabled ? 'Past' : undefined}
+                  >
+                    {date.getDate()}
+                  </button>
+                );
+              })}
+            </div>
+            {blockedDates.length > 0 && (
+              <p className="text-[10px] text-muted-foreground mt-2 flex items-center gap-1">
+                <span className="inline-block w-3 h-3 rounded bg-muted/80 border border-border" />
+                Unavailable dates
+              </p>
+            )}
           </div>
 
           <div className="border-t border-border">
@@ -199,6 +336,48 @@ export function BookingCard({
           </div>
         </div>
 
+        {onPaymentTypeChange && nights > 0 && !hasUnavailableInRange && (
+          <div className="mb-4 p-3 rounded-xl border border-border bg-muted/30 space-y-3">
+            <p className="text-sm font-medium text-foreground">Payment at reservation</p>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => onPaymentTypeChange('full')}
+                className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-colors ${paymentType === 'full' ? 'bg-primary text-primary-foreground' : 'bg-background border border-border text-muted-foreground hover:bg-muted/50'}`}
+              >
+                Pay in full now
+              </button>
+              <button
+                type="button"
+                onClick={() => onPaymentTypeChange('partial')}
+                className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-colors ${paymentType === 'partial' ? 'bg-primary text-primary-foreground' : 'bg-background border border-border text-muted-foreground hover:bg-muted/50'}`}
+              >
+                Pay partial now
+              </button>
+            </div>
+            {isPartial && (
+              <>
+                <p className="text-xs text-muted-foreground">No discount when paying partial. Rest at checkout.</p>
+                {onPartialPercentChange && (
+                  <div>
+                    <label className="text-xs font-medium text-foreground block mb-1">
+                      Pay now: {payNowPercent}% (min {partialPaymentMinPercent}%)
+                    </label>
+                    <input
+                      type="range"
+                      min={partialPaymentMinPercent}
+                      max={99}
+                      value={Math.max(partialPaymentMinPercent, Math.min(99, partialPercent))}
+                      onChange={(e) => onPartialPercentChange(Number(e.target.value))}
+                      className="w-full h-2 rounded-lg appearance-none bg-muted accent-primary"
+                    />
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        )}
+
         {hasUnavailableInRange && (
           <div className="flex items-center gap-2 text-destructive text-sm mb-4 p-3 bg-destructive/10 rounded-lg">
             <AlertCircle className="w-4 h-4 flex-shrink-0" />
@@ -211,11 +390,13 @@ export function BookingCard({
           disabled={isDisabled || submitting}
           className="w-full py-6 text-lg font-semibold bg-primary hover:bg-primary/90 rounded-xl disabled:opacity-50"
         >
-          {submitting ? 'Redirecting…' : 'Reserve Now'}
+          {submitting ? 'Redirecting…' : isPartial ? `Pay ${formatPrice(String(payNowAmount.toFixed(2)))} now (${payNowPercent}%)` : 'Reserve Now'}
         </Button>
       </form>
 
-      <p className="text-center text-sm text-muted-foreground mt-3">{submitLabel}</p>
+      <p className="text-center text-sm text-muted-foreground mt-3">
+        {isPartial ? 'Rest to be paid at checkout. Host will mark as paid.' : submitLabel}
+      </p>
 
       {nights > 0 && !hasUnavailableInRange && (
         <div className="mt-6 pt-6 border-t border-border space-y-3">
@@ -231,10 +412,22 @@ export function BookingCard({
               <span>{feeAmount > 0 ? formatPrice(String(feeAmount.toFixed(2))) : `-${formatPrice(String(Math.abs(feeAmount).toFixed(2)))}`}</span>
             </div>
           )}
+          {isPartial && (
+            <div className="flex justify-between text-muted-foreground text-sm">
+              <span>No discount (partial payment)</span>
+              <span>—</span>
+            </div>
+          )}
           <div className="flex justify-between font-semibold text-foreground pt-3 border-t border-border">
             <span>Total</span>
             <span>{formatPrice(String(total.toFixed(2)))}</span>
           </div>
+          {isPartial && total > payNowAmount && (
+            <div className="flex justify-between text-sm text-foreground">
+              <span>Pay now ({payNowPercent}%)</span>
+              <span>{formatPrice(String(payNowAmount.toFixed(2)))}</span>
+            </div>
+          )}
         </div>
       )}
 

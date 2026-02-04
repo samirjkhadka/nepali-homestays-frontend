@@ -117,6 +117,9 @@ export default function ListingDetailPage() {
   const [reviews, setReviews] = useState<ReviewRow[]>([]);
   const [reviewsTotal, setReviewsTotal] = useState(0);
   const [bookingFee, setBookingFee] = useState<{ type: 'service_charge' | 'discount'; kind: 'percent' | 'fixed'; value: number } | null>(null);
+  const [partialPaymentMinPercent, setPartialPaymentMinPercent] = useState(25);
+  const [paymentType, setPaymentType] = useState<'full' | 'partial'>('full');
+  const [partialPercent, setPartialPercent] = useState(25);
   const [showRejectForm, setShowRejectForm] = useState(false);
   const [rejectRemarks, setRejectRemarks] = useState('');
   const [adminActionLoading, setAdminActionLoading] = useState(false);
@@ -161,10 +164,18 @@ export default function ListingDetailPage() {
   };
 
   useEffect(() => {
-    api.get<{ booking_fee: { type: 'service_charge' | 'discount'; kind: 'percent' | 'fixed'; value: number } | null }>('/api/settings/booking-fee')
-      .then((res) => setBookingFee(res.data.booking_fee ?? null))
+    if (!id) return;
+    api.get<{ booking_fee: { type: 'service_charge' | 'discount'; kind: 'percent' | 'fixed'; value: number } | null; partial_payment_min_percent?: number }>(`/api/listings/${id}/booking-fee`)
+      .then((res) => {
+        setBookingFee(res.data.booking_fee ?? null);
+        const min = res.data.partial_payment_min_percent;
+        if (typeof min === 'number' && min >= 1 && min <= 100) {
+          setPartialPaymentMinPercent(min);
+          setPartialPercent(min);
+        }
+      })
       .catch(() => setBookingFee(null));
-  }, []);
+  }, [id]);
 
   const listingUrl = user?.role?.toLowerCase() === 'admin' ? `/api/admin/listings/${id}` : `/api/listings/${id}`;
   useEffect(() => {
@@ -264,6 +275,15 @@ export default function ListingDetailPage() {
       return;
     }
     setSubmitting(true);
+    const payload = {
+      listing_id: listing.id,
+      check_in: checkIn,
+      check_out: checkOut,
+      guests,
+      message: message || undefined,
+      payment_type: paymentType,
+      ...(paymentType === 'partial' ? { partial_percent: Math.max(partialPaymentMinPercent, Math.min(99, partialPercent)) } : {}),
+    };
     api
       .post<{
         redirect_url?: string;
@@ -271,13 +291,7 @@ export default function ListingDetailPage() {
         booking_id: number;
         payment_id: number;
         reference: string;
-      }>('/api/bookings/initiate-payment', {
-        listing_id: listing.id,
-        check_in: checkIn,
-        check_out: checkOut,
-        guests,
-        message: message || undefined,
-      })
+      }>('/api/bookings/initiate-payment', payload)
       .then((res) => {
         if (res.data?.redirect_url) {
           window.location.href = res.data.redirect_url;
@@ -725,6 +739,11 @@ export default function ListingDetailPage() {
                 submitLabel="You won't be charged yet"
                 bookingFee={bookingFee}
                 trustBadges={listingDisplay.trust_badges}
+                paymentType={paymentType}
+                partialPercent={partialPercent}
+                partialPaymentMinPercent={partialPaymentMinPercent}
+                onPaymentTypeChange={setPaymentType}
+                onPartialPercentChange={setPartialPercent}
               />
             )}
           </div>

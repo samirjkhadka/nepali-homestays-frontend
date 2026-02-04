@@ -5,10 +5,11 @@ import { jsPDF } from 'jspdf';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { PasswordInput } from '@/components/ui/password-input';
-import { Users, FileCheck, Calendar, CreditCard, BarChart3, FileText, Youtube, X, Download, Home, MessageSquare, Bell, Activity, AlertCircle, Mail, MousePointer, Building2, Plus } from 'lucide-react';
+import { Users, FileCheck, Calendar, CreditCard, BarChart3, FileText, Youtube, X, Download, Home, MessageSquare, Bell, Activity, AlertCircle, Mail, MousePointer, Building2, Plus, RefreshCw, Newspaper } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line, CartesianGrid, Legend } from 'recharts';
 import { api } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
+import { HOMESTAY_CATEGORIES } from '@/data/districts';
 
 type Listing = { id: number; title: string; host_id: number; status: string; created_at: string; badge?: string | null };
 type ApprovedListing = { id: number; title: string; location: string; badge: string | null };
@@ -99,9 +100,19 @@ export default function AdminDashboard() {
   const [youtubeVideoUrlsSaving, setYoutubeVideoUrlsSaving] = useState(false);
   const [newVideoUrl, setNewVideoUrl] = useState('');
   const [newVideoTitle, setNewVideoTitle] = useState('');
+  const [youtubeChannelId, setYoutubeChannelId] = useState('');
+  const [youtubeChannelIdSaving, setYoutubeChannelIdSaving] = useState(false);
+  const [newsSyncLoading, setNewsSyncLoading] = useState(false);
+  const [videosSyncLoading, setVideosSyncLoading] = useState(false);
   const [_bookingFee, setBookingFee] = useState<{ type: 'service_charge' | 'discount'; kind: 'percent' | 'fixed'; value: number } | null>(null);
   const [bookingFeeSaving, setBookingFeeSaving] = useState(false);
   const [bookingFeeForm, setBookingFeeForm] = useState({ type: 'service_charge' as 'service_charge' | 'discount', kind: 'percent' as 'percent' | 'fixed', value: '', applies_to: 'guest' as 'guest' | 'host' });
+  const [partialPaymentMinPercent, setPartialPaymentMinPercent] = useState(25);
+  const [partialPaymentMinSaving, setPartialPaymentMinSaving] = useState(false);
+  type FeeRule = { type: 'service_charge' | 'discount'; kind: 'percent' | 'fixed'; value: number; applies_to?: 'guest' | 'host' };
+  const [bookingFeeByCategory, setBookingFeeByCategory] = useState<Record<string, FeeRule>>({});
+  const [bookingFeeByListing, setBookingFeeByListing] = useState<Record<string, FeeRule>>({});
+  const [feeRulesSaving, setFeeRulesSaving] = useState(false);
   const [_listingDisplay, setListingDisplay] = useState<ListingDisplaySettings | null>(null);
   const [listingDisplaySaving, setListingDisplaySaving] = useState(false);
   const [listingDisplayForm, setListingDisplayForm] = useState<ListingDisplaySettings | null>(null);
@@ -230,10 +241,11 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     if (tab !== 'content') return;
-    api.get<{ landing_youtube_url?: string | null; youtube_video_urls?: VideoEntry[] }>('/api/admin/settings').then((res) => {
+    api.get<{ landing_youtube_url?: string | null; youtube_video_urls?: VideoEntry[]; youtube_channel_id?: string }>('/api/admin/settings').then((res) => {
       setLandingYoutubeUrl(res.data.landing_youtube_url || '');
       setYoutubeVideoUrls(Array.isArray(res.data.youtube_video_urls) ? res.data.youtube_video_urls : []);
-    }).catch(() => { setLandingYoutubeUrl(''); setYoutubeVideoUrls([]); });
+      setYoutubeChannelId(res.data.youtube_channel_id ?? '');
+    }).catch(() => { setLandingYoutubeUrl(''); setYoutubeVideoUrls([]); setYoutubeChannelId(''); });
   }, [tab]);
 
   useEffect(() => {
@@ -249,6 +261,9 @@ export default function AdminDashboard() {
     Promise.all([
       api.get<{
         booking_fee?: { type: 'service_charge' | 'discount'; kind: 'percent' | 'fixed'; value: number; applies_to?: 'guest' | 'host' } | null;
+        booking_fee_by_category?: Record<string, { type: 'service_charge' | 'discount'; kind: 'percent' | 'fixed'; value: number; applies_to?: 'guest' | 'host' }>;
+        booking_fee_by_listing?: Record<string, { type: 'service_charge' | 'discount'; kind: 'percent' | 'fixed'; value: number; applies_to?: 'guest' | 'host' }>;
+        partial_payment_min_percent?: number;
         listing_display?: ListingDisplaySettings;
         sparrow_sms?: SparrowSmsSettings;
         notification_settings?: NotificationSettings;
@@ -260,6 +275,10 @@ export default function AdminDashboard() {
       const bf = res.booking_fee ?? null;
       setBookingFee(bf);
       setBookingFeeForm(bf ? { type: bf.type, kind: bf.kind, value: String(bf.value), applies_to: bf.applies_to ?? 'guest' } : { type: 'service_charge', kind: 'percent', value: '', applies_to: 'guest' });
+      const minPct = res.partial_payment_min_percent;
+      setPartialPaymentMinPercent(typeof minPct === 'number' && minPct >= 1 && minPct <= 100 ? minPct : 25);
+      setBookingFeeByCategory(res.booking_fee_by_category ?? {});
+      setBookingFeeByListing(res.booking_fee_by_listing ?? {});
       const ld = res.listing_display ?? null;
       setListingDisplay(ld);
       const form = ld ? JSON.parse(JSON.stringify(ld)) : null;
@@ -272,6 +291,8 @@ export default function AdminDashboard() {
     }).catch(() => {
       setBookingFee(null);
       setBookingFeeForm({ type: 'service_charge', kind: 'percent', value: '', applies_to: 'guest' });
+      setBookingFeeByCategory({});
+      setBookingFeeByListing({});
       setListingDisplay(null);
       setListingDisplayForm(null);
       setSectionLabelsJson('{}');
@@ -385,6 +406,36 @@ export default function AdminDashboard() {
 
   const handleRemoveYoutubeVideo = (index: number) => {
     setYoutubeVideoUrls((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleSyncNews = () => {
+    setNewsSyncLoading(true);
+    api.post<{ count: number }>('/api/admin/news/sync')
+      .then((res) => {
+        toast({ title: `Synced ${res.data?.count ?? 0} news/blogs from Homestay Khabar.` });
+      })
+      .catch((err) => toast({ title: err.response?.data?.message || 'Sync failed', variant: 'destructive' }))
+      .finally(() => setNewsSyncLoading(false));
+  };
+
+  const handleSyncVideos = () => {
+    setVideosSyncLoading(true);
+    api.post<{ count: number; videos?: VideoEntry[] }>('/api/admin/videos/sync')
+      .then((res) => {
+        const count = res.data?.count ?? 0;
+        if (Array.isArray(res.data?.videos)) setYoutubeVideoUrls(res.data.videos);
+        toast({ title: `Synced ${count} videos from YouTube channel.` });
+      })
+      .catch((err) => toast({ title: err.response?.data?.message || 'Sync failed', variant: 'destructive' }))
+      .finally(() => setVideosSyncLoading(false));
+  };
+
+  const handleSaveYoutubeChannelId = () => {
+    setYoutubeChannelIdSaving(true);
+    api.patch('/api/admin/settings', { youtube_channel_id: youtubeChannelId.trim() || '' })
+      .then(() => toast({ title: 'YouTube channel ID saved.' }))
+      .catch(() => toast({ title: 'Failed to save.', variant: 'destructive' }))
+      .finally(() => setYoutubeChannelIdSaving(false));
   };
 
   const handleApprove = (id: number) => {
@@ -1084,12 +1135,47 @@ export default function AdminDashboard() {
           <Card className="border-primary-200">
             <CardHeader className="border-b border-primary-100 bg-primary-50/50">
               <div className="flex items-center gap-2">
+                <Newspaper className="h-5 w-5 text-accent-500" />
+                <h2 className="font-semibold text-primary-800">Blogs & News</h2>
+              </div>
+              <p className="text-sm text-muted-foreground">Blogs and news are fetched from Homestay Khabar. Click Sync to pull the latest articles and save them; the homepage Blogs section will show these synced items.</p>
+            </CardHeader>
+            <CardContent className="p-6">
+              <Button type="button" size="sm" className="bg-accent-500 hover:bg-accent-600" disabled={newsSyncLoading} onClick={handleSyncNews}>
+                {newsSyncLoading ? <RefreshCw className="h-4 w-4 animate-spin mr-2" /> : <RefreshCw className="h-4 w-4 mr-2" />}
+                {newsSyncLoading ? 'Syncing…' : 'Sync news & blogs'}
+              </Button>
+            </CardContent>
+          </Card>
+          <Card className="border-primary-200">
+            <CardHeader className="border-b border-primary-100 bg-primary-50/50">
+              <div className="flex items-center gap-2">
                 <Youtube className="h-5 w-5 text-accent-500" />
                 <h2 className="font-semibold text-primary-800">YouTube video gallery (Video Stories)</h2>
               </div>
-              <p className="text-sm text-muted-foreground">Video URLs shown on the homepage &quot;Video Stories&quot; section and on the View all videos page. Add YouTube watch URLs (e.g. https://www.youtube.com/watch?v=...). Optional title per video.</p>
+              <p className="text-sm text-muted-foreground">Video URLs shown on the homepage &quot;Video Stories&quot; section and on the View all videos page. Set the channel URL or ID below (default: Homestay Khabar) and click &quot;Sync videos&quot; to pull latest videos (no API key), or add URLs manually.</p>
             </CardHeader>
             <CardContent className="p-6 space-y-4">
+              <div className="flex flex-wrap items-end gap-3 p-3 rounded-lg bg-primary-50/50 border border-primary-100">
+                <div className="min-w-[200px] flex-1">
+                  <label htmlFor="youtube-channel-id" className="block text-sm font-medium text-primary-800">YouTube channel URL or ID</label>
+                  <input
+                    id="youtube-channel-id"
+                    type="text"
+                    value={youtubeChannelId}
+                    onChange={(e) => setYoutubeChannelId(e.target.value)}
+                    placeholder="https://www.youtube.com/@homestaykhabar"
+                    className="mt-1 w-full rounded-md border border-primary-200 bg-background px-3 py-2 text-sm"
+                  />
+                </div>
+                <Button type="button" size="sm" variant="outline" disabled={youtubeChannelIdSaving} onClick={handleSaveYoutubeChannelId}>
+                  {youtubeChannelIdSaving ? 'Saving…' : 'Save channel'}
+                </Button>
+                <Button type="button" size="sm" className="bg-accent-500 hover:bg-accent-600" disabled={videosSyncLoading} onClick={handleSyncVideos}>
+                  {videosSyncLoading ? <RefreshCw className="h-4 w-4 animate-spin mr-2" /> : <RefreshCw className="h-4 w-4 mr-2" />}
+                  {videosSyncLoading ? 'Syncing…' : 'Sync videos from channel'}
+                </Button>
+              </div>
               <form onSubmit={handleAddYoutubeVideo} className="flex flex-wrap items-end gap-3">
                 <div className="min-w-[200px] flex-1">
                   <label htmlFor="new-video-url" className="block text-sm font-medium text-primary-800">Video URL</label>
@@ -1340,9 +1426,9 @@ export default function AdminDashboard() {
             <CardHeader className="border-b border-primary-100 bg-primary-50/50">
               <div className="flex items-center gap-2">
                 <CreditCard className="h-5 w-5 text-accent-500" />
-                <h2 className="font-semibold text-primary-800">Booking fee (service charge or discount)</h2>
+                <h2 className="font-semibold text-primary-800">Default booking fee (service charge or discount)</h2>
               </div>
-              <p className="text-sm text-muted-foreground">Add a service charge (e.g. 5%) or discount (e.g. 10% or fixed amount) applied to all bookings. Leave value empty to have no fee.</p>
+              <p className="text-sm text-muted-foreground">Default applied when no category or listing-specific rule matches. Add a service charge (e.g. 5%) or discount (e.g. 10% or fixed). Leave value empty for no fee.</p>
             </CardHeader>
             <CardContent className="p-6">
               <form
@@ -1428,6 +1514,165 @@ export default function AdminDashboard() {
                 </div>
                 <Button type="submit" disabled={bookingFeeSaving} className="bg-accent-500 hover:bg-accent-600">
                   {bookingFeeSaving ? 'Saving…' : 'Save booking fee'}
+                </Button>
+              </form>
+            </CardContent>
+          </Card>
+
+          {/* Service charge by category (homestay category) */}
+          <Card className="border-primary-200">
+            <CardHeader className="border-b border-primary-100 bg-primary-50/50">
+              <h2 className="font-semibold text-primary-800">Service charge by category</h2>
+              <p className="text-sm text-muted-foreground">Assign a service charge or discount to all homestays in a category (e.g. Rural 5%, Eco 10%). Overrides the default above. Uses the same homestay categories as listings: Rural, Urban, Eco, Cultural, Farmstay.</p>
+            </CardHeader>
+            <CardContent className="p-6">
+              <div className="space-y-3">
+                {Object.entries(bookingFeeByCategory).map(([category, fee]) => {
+                  const categoryOptions = [...new Set([...HOMESTAY_CATEGORIES, category as string].filter(Boolean))];
+                  return (
+                  <div key={category || '__empty__'} className="flex flex-wrap items-end gap-2 rounded-lg border border-border p-3">
+                    <div className="min-w-[140px]">
+                      <label className="mb-1 block text-xs font-medium text-muted-foreground">Category</label>
+                      <select
+                        value={category}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          if (v === category) return;
+                          setBookingFeeByCategory((prev) => {
+                            const next = { ...prev };
+                            delete next[category];
+                            if (v) next[v] = fee;
+                            return next;
+                          });
+                        }}
+                        className="flex h-9 w-full rounded-md border border-primary-200 bg-background px-2 text-sm"
+                      >
+                        <option value="">Select category…</option>
+                        {categoryOptions.map((c) => (
+                          <option key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <select value={fee.type} onChange={(e) => setBookingFeeByCategory((prev) => ({ ...prev, [category]: { ...prev[category], type: e.target.value as 'service_charge' | 'discount' } }))} className="h-9 rounded-md border border-primary-200 bg-background px-2 text-sm">
+                      <option value="service_charge">Service charge</option>
+                      <option value="discount">Discount</option>
+                    </select>
+                    <select value={fee.kind} onChange={(e) => setBookingFeeByCategory((prev) => ({ ...prev, [category]: { ...prev[category], kind: e.target.value as 'percent' | 'fixed' } }))} className="h-9 rounded-md border border-primary-200 bg-background px-2 text-sm">
+                      <option value="percent">%</option>
+                      <option value="fixed">NPR flat</option>
+                    </select>
+                    <input type="number" min={0} step={fee.kind === 'percent' ? 0.5 : 1} value={fee.value} onChange={(e) => setBookingFeeByCategory((prev) => ({ ...prev, [category]: { ...prev[category], value: Number(e.target.value) || 0 } }))} className="h-9 w-20 rounded-md border border-primary-200 bg-background px-2 text-sm" />
+                    {fee.type === 'service_charge' && (
+                      <select value={fee.applies_to ?? 'guest'} onChange={(e) => setBookingFeeByCategory((prev) => ({ ...prev, [category]: { ...prev[category], applies_to: e.target.value as 'guest' | 'host' } }))} className="h-9 rounded-md border border-primary-200 bg-background px-2 text-sm">
+                        <option value="guest">Guest</option>
+                        <option value="host">Host</option>
+                      </select>
+                    )}
+                    <Button type="button" variant="ghost" size="sm" className="text-destructive" onClick={() => setBookingFeeByCategory((prev) => { const next = { ...prev }; delete next[category]; return next; })}>Remove</Button>
+                  </div>
+                  );
+                })}
+                <Button type="button" variant="outline" size="sm" onClick={() => setBookingFeeByCategory((prev) => ({ ...prev, ['']: { type: 'service_charge', kind: 'percent', value: 0, applies_to: 'guest' } }))}>Add category rule</Button>
+              </div>
+              <Button className="mt-4 bg-accent-500 hover:bg-accent-600" disabled={feeRulesSaving} onClick={() => {
+                const cleaned: Record<string, FeeRule> = {};
+                for (const [cat, fee] of Object.entries(bookingFeeByCategory)) {
+                  if (cat.trim() && typeof fee.value === 'number' && fee.value >= 0) cleaned[cat.trim()] = fee;
+                }
+                setFeeRulesSaving(true);
+                api.patch('/api/admin/settings', { booking_fee_by_category: cleaned, booking_fee_by_listing: Object.fromEntries(Object.entries(bookingFeeByListing).filter(([k, f]) => /^\d+$/.test(k) && typeof f.value === 'number' && f.value >= 0)) })
+                  .then((res) => { setBookingFeeByCategory(res.data?.booking_fee_by_category ?? {}); setBookingFeeByListing(res.data?.booking_fee_by_listing ?? {}); toast({ title: 'Fee rules saved.' }); })
+                  .catch(() => toast({ title: 'Failed to save.', variant: 'destructive' }))
+                  .finally(() => setFeeRulesSaving(false));
+              }}>{feeRulesSaving ? 'Saving…' : 'Save category & listing rules'}</Button>
+            </CardContent>
+          </Card>
+
+          {/* Service charge by listing (single homestay) */}
+          <Card className="border-primary-200">
+            <CardHeader className="border-b border-primary-100 bg-primary-50/50">
+              <h2 className="font-semibold text-primary-800">Service charge by listing</h2>
+              <p className="text-sm text-muted-foreground">Assign a service charge or discount to a single homestay (overrides category and default). E.g. Homestay 4 = Rs 10 flat, Homestay 5 = 2.3%.</p>
+            </CardHeader>
+            <CardContent className="p-6">
+              <div className="space-y-3">
+                {Object.entries(bookingFeeByListing).map(([listingId, fee]) => (
+                  <div key={listingId} className="flex flex-wrap items-end gap-2 rounded-lg border border-border p-3">
+                    <div className="min-w-[200px]">
+                      <label className="mb-1 block text-xs font-medium text-muted-foreground">Homestay</label>
+                      <select
+                        value={listingId}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          if (!v) return;
+                          setBookingFeeByListing((prev) => { const next = { ...prev }; delete next[listingId]; next[v] = fee; return next; });
+                        }}
+                        className="flex h-9 w-full rounded-md border border-primary-200 bg-background px-2 text-sm"
+                      >
+                        <option value="">Select…</option>
+                        {settingsApprovedListings.map((l) => (
+                          <option key={l.id} value={String(l.id)}>{l.id} – {l.title}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <select value={fee.type} onChange={(e) => setBookingFeeByListing((prev) => ({ ...prev, [listingId]: { ...prev[listingId], type: e.target.value as 'service_charge' | 'discount' } }))} className="h-9 rounded-md border border-primary-200 bg-background px-2 text-sm">
+                      <option value="service_charge">Service charge</option>
+                      <option value="discount">Discount</option>
+                    </select>
+                    <select value={fee.kind} onChange={(e) => setBookingFeeByListing((prev) => ({ ...prev, [listingId]: { ...prev[listingId], kind: e.target.value as 'percent' | 'fixed' } }))} className="h-9 rounded-md border border-primary-200 bg-background px-2 text-sm">
+                      <option value="percent">%</option>
+                      <option value="fixed">NPR flat</option>
+                    </select>
+                    <input type="number" min={0} step={fee.kind === 'percent' ? 0.1 : 1} value={fee.value} onChange={(e) => setBookingFeeByListing((prev) => ({ ...prev, [listingId]: { ...prev[listingId], value: Number(e.target.value) || 0 } }))} className="h-9 w-20 rounded-md border border-primary-200 bg-background px-2 text-sm" />
+                    {fee.type === 'service_charge' && (
+                      <select value={fee.applies_to ?? 'guest'} onChange={(e) => setBookingFeeByListing((prev) => ({ ...prev, [listingId]: { ...prev[listingId], applies_to: e.target.value as 'guest' | 'host' } }))} className="h-9 rounded-md border border-primary-200 bg-background px-2 text-sm">
+                        <option value="guest">Guest</option>
+                        <option value="host">Host</option>
+                      </select>
+                    )}
+                    <Button type="button" variant="ghost" size="sm" className="text-destructive" onClick={() => setBookingFeeByListing((prev) => { const next = { ...prev }; delete next[listingId]; return next; })}>Remove</Button>
+                  </div>
+                ))}
+                <Button type="button" variant="outline" size="sm" onClick={() => setBookingFeeByListing((prev) => ({ ...prev, ['']: { type: 'service_charge', kind: 'percent', value: 0, applies_to: 'guest' } }))}>Add listing rule</Button>
+              </div>
+              <p className="mt-2 text-xs text-muted-foreground">Save using the &quot;Save category &amp; listing rules&quot; button above.</p>
+            </CardContent>
+          </Card>
+
+          <Card className="border-primary-200">
+            <CardHeader className="border-b border-primary-100 bg-primary-50/50">
+              <h2 className="font-semibold text-primary-800">Partial payment (min %)</h2>
+              <p className="text-sm text-muted-foreground">Minimum percent of total that guests must pay when choosing &quot;Pay partial now&quot; (e.g. 25). No discount applies when paying partial. Rest is paid at checkout; host marks as paid.</p>
+            </CardHeader>
+            <CardContent className="p-6">
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  const val = Math.max(1, Math.min(100, Math.round(Number(partialPaymentMinPercent))));
+                  setPartialPaymentMinSaving(true);
+                  api.patch('/api/admin/settings', { partial_payment_min_percent: val })
+                    .then((res) => {
+                      setPartialPaymentMinPercent(res.data?.partial_payment_min_percent ?? val);
+                      toast({ title: 'Minimum partial payment % saved.' });
+                    })
+                    .catch(() => toast({ title: 'Failed to save.', variant: 'destructive' }))
+                    .finally(() => setPartialPaymentMinSaving(false));
+                }}
+                className="flex flex-wrap items-end gap-4"
+              >
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-primary-800">Minimum partial payment (%)</label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={100}
+                    value={partialPaymentMinPercent}
+                    onChange={(e) => setPartialPaymentMinPercent(Number(e.target.value) || 25)}
+                    className="flex h-9 w-24 rounded-md border border-primary-200 bg-background px-3 py-1 text-sm"
+                  />
+                </div>
+                <Button type="submit" disabled={partialPaymentMinSaving} className="bg-accent-500 hover:bg-accent-600">
+                  {partialPaymentMinSaving ? 'Saving…' : 'Save'}
                 </Button>
               </form>
             </CardContent>

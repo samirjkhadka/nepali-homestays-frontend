@@ -14,6 +14,7 @@ import {
   Home,
   Handshake,
   X,
+  Eye,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/lib/auth';
@@ -87,6 +88,7 @@ export default function Footer() {
   const [partnerSubmitting, setPartnerSubmitting] = useState(false);
   const [partnerMessage, setPartnerMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [contactInfo, setContactInfo] = useState(defaultContact);
+  const [visitorCount, setVisitorCount] = useState<number>(0);
 
   useEffect(() => {
     api
@@ -101,6 +103,13 @@ export default function Footer() {
         });
       })
       .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    api
+      .get<{ count: number }>('/api/stats/visitors')
+      .then((res) => setVisitorCount(res.data?.count ?? 0))
+      .catch(() => setVisitorCount(0));
   }, []);
 
   const handleListYourHomestay = () => {
@@ -311,9 +320,20 @@ export default function Footer() {
       <div className="border-t border-border">
         <div className={`${sectionContainerClass} py-6`}>
           <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-            <p className="text-muted-foreground text-sm">
-              © 2026 Nepali Homestays. All rights reserved.
-            </p>
+            <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
+              <p className="text-muted-foreground text-sm">
+                © 2026 Nepali Homestays. All rights reserved.
+              </p>
+              <p
+                className="flex items-center gap-1.5 text-sm text-foreground"
+                title="Total home page visits"
+                data-visitor-count
+              >
+                <Eye className="w-4 h-4 text-muted-foreground shrink-0" aria-hidden />
+                <span className="font-semibold tabular-nums">{visitorCount.toLocaleString()}</span>
+                <span className="text-muted-foreground">visitors</span>
+              </p>
+            </div>
 
             {/* Social Links */}
             <div className="flex items-center gap-4">

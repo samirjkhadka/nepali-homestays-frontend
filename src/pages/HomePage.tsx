@@ -32,6 +32,10 @@ export default function HomePage() {
   const [listingsError, setListingsError] = useState<string | null>(null);
 
   useEffect(() => {
+    api.post('/api/stats/visitor-hit').catch(() => {});
+  }, []);
+
+  useEffect(() => {
     setLoading(true);
     setListingsError(null);
     Promise.all([

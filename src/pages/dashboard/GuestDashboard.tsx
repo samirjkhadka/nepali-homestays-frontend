@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { CreditCard, Heart, Star } from 'lucide-react';
+import { CreditCard, Heart, Star, Home } from 'lucide-react';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { api } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
 import { useCurrency } from '@/lib/currency';
+import { useAuth } from '@/lib/auth';
 
 type Booking = {
   id: number;
@@ -66,6 +67,7 @@ function statusBadgeClass(status: string): string {
 export default function GuestDashboard() {
   const { toast } = useToast();
   const { format: formatPrice } = useCurrency();
+  const { user, logout } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const tabFromUrl = searchParams.get('tab') as GuestTabType | null;
   const [tab, setTab] = useState<GuestTabType>(GUEST_TABS.includes(tabFromUrl as GuestTabType) ? tabFromUrl! : 'profile');
@@ -80,6 +82,7 @@ export default function GuestDashboard() {
   const [messageText, setMessageText] = useState('');
   const [sendingMessage, setSendingMessage] = useState(false);
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [becomingHost, setBecomingHost] = useState(false);
 
   useEffect(() => {
     const t = searchParams.get('tab') as GuestTabType | null;
@@ -209,6 +212,32 @@ export default function GuestDashboard() {
                 {saving ? 'Saving…' : 'Save'}
               </Button>
             </form>
+            {user?.role === 'guest' && (
+              <div className="mt-6 pt-6 border-t border-primary-200">
+                <p className="text-sm text-muted-foreground mb-2">Want to list your homestay?</p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="border-accent-500 text-accent-600 hover:bg-accent-50"
+                  disabled={becomingHost}
+                  onClick={() => {
+                    setBecomingHost(true);
+                    api.post<{ message: string }>('/api/profile/become-host')
+                      .then(() => {
+                        toast({ title: 'You are now a host. Please log in again to access the Host Dashboard.' });
+                        logout('/login?became=host');
+                      })
+                      .catch((err) => {
+                        setBecomingHost(false);
+                        toast({ title: err.response?.data?.message || 'Failed to become a host.', variant: 'destructive' });
+                      });
+                  }}
+                >
+                  <Home className="mr-2 h-4 w-4" />
+                  {becomingHost ? 'Upgrading…' : 'Become a host'}
+                </Button>
+              </div>
+            )}
           </CardContent>
         </Card>
       )}

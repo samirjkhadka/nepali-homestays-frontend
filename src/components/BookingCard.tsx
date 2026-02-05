@@ -6,13 +6,20 @@ import { useCurrency } from '@/lib/currency';
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
+function toLocalDateStr(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
 function getCalendarDays(year: number, month: number): { date: Date; dateStr: string; isCurrentMonth: boolean }[] {
   const first = new Date(year, month, 1);
   const last = new Date(year, month + 1, 0);
   const startPad = first.getDay();
   const daysInMonth = last.getDate();
   const result: { date: Date; dateStr: string; isCurrentMonth: boolean }[] = [];
-  const pad = (d: Date) => d.toISOString().slice(0, 10);
+  const pad = (d: Date) => toLocalDateStr(d);
   for (let i = 0; i < startPad; i++) {
     const d = new Date(year, month, 1 - (startPad - i));
     result.push({ date: d, dateStr: pad(d), isCurrentMonth: false });
@@ -88,10 +95,9 @@ export function BookingCard({
   const displayPrice = priceFormatted ?? formatPrice(pricePerNight);
   const [showGuestPicker, setShowGuestPicker] = useState(false);
   const today = useMemo(() => new Date(), []);
-  const todayStr = today.toISOString().slice(0, 10);
   const [calendarMonth, setCalendarMonth] = useState(() => {
     if (checkIn) {
-      const d = new Date(checkIn);
+      const d = new Date(checkIn + 'T12:00:00');
       return new Date(d.getFullYear(), d.getMonth(), 1);
     }
     return new Date(today.getFullYear(), today.getMonth(), 1);
@@ -100,6 +106,7 @@ export function BookingCard({
     () => getCalendarDays(calendarMonth.getFullYear(), calendarMonth.getMonth()),
     [calendarMonth]
   );
+  const todayStr = toLocalDateStr(today);
 
   const priceNum = parseFloat(String(pricePerNight));
   const checkInDate = checkIn ? new Date(checkIn) : null;
@@ -114,7 +121,7 @@ export function BookingCard({
     if (nights <= 0 || !checkInDate || !checkOutDate) return false;
     const d = new Date(checkInDate.getTime());
     while (d < checkOutDate) {
-      if (blockedSet.has(d.toISOString().slice(0, 10))) return true;
+      if (blockedSet.has(toLocalDateStr(d))) return true;
       d.setDate(d.getDate() + 1);
     }
     return false;
@@ -252,7 +259,7 @@ export function BookingCard({
                         const from = new Date(checkIn);
                         const to = new Date(dateStr);
                         for (let d = new Date(from); d < to; d.setDate(d.getDate() + 1)) {
-                          if (blockedSet.has(d.toISOString().slice(0, 10))) return;
+                          if (blockedSet.has(toLocalDateStr(d))) return;
                         }
                         onCheckOutChange(dateStr);
                       }

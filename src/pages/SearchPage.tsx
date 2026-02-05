@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card';
+import { ListingBadges } from '@/components/ListingBadges';
 import { api } from '@/lib/api';
 import { PROVINCES, getProvinceBySlug } from '@/data/provinces';
 import type { ProvinceSlug } from '@/data/provinces';
@@ -27,6 +28,7 @@ type Listing = {
   max_guests: number;
   image_url?: string | null;
   amenities?: string[];
+  badge?: string | null;
 };
 
 export default function SearchPage() {
@@ -341,8 +343,13 @@ export default function SearchPage() {
                   )}
                 </div>
                 <CardHeader className="pb-2">
-                  <CardContent className="p-0">
-                    <h3 className="font-semibold text-primary-800">{listing.title}</h3>
+                  <CardContent className="p-0 space-y-1.5">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h3 className="font-semibold text-primary-800">{listing.title}</h3>
+                      {listing.badge && (
+                        <ListingBadges badge={listing.badge} compact className="shrink-0" />
+                      )}
+                    </div>
                     <p className="text-sm text-muted-foreground">{listing.location}</p>
                   </CardContent>
                 </CardHeader>

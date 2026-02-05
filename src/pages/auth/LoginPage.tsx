@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Link, useNavigate, useLocation } from 'react-router-dom';
+import { Link, useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { PasswordInput } from '@/components/ui/password-input';
@@ -13,12 +13,14 @@ import { LogIn } from 'lucide-react';
 export default function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
+  const [searchParams] = useSearchParams();
   const { login } = useAuth();
   const [emailOrPhone, setEmailOrPhone] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
+  const becameHost = searchParams.get('became') === 'host';
   const successMessage = (location.state as { message?: string })?.message;
   useEffect(() => {
     if (successMessage) setError('');
@@ -45,7 +47,7 @@ export default function LoginPage() {
         }
         if (res.data.token && res.data.user) {
           login(res.data.token, res.data.user);
-          navigate('/');
+          navigate(res.data.user.role === 'host' ? '/dashboard/host' : '/');
           return;
         }
         setError(res.data.message || 'Login failed. Please try again.');
@@ -109,7 +111,12 @@ export default function LoginPage() {
                 className="mt-1 border-primary-200"
               />
             </div>
-            {successMessage && (
+            {becameHost && (
+              <div className="rounded-lg border border-primary-500/50 bg-primary-500/10 px-3 py-2 text-sm text-primary-700">
+                You are now a host. Log in to access the Host Dashboard.
+              </div>
+            )}
+            {successMessage && !becameHost && (
               <div className="rounded-lg border border-green-500/50 bg-green-500/10 px-3 py-2 text-sm text-green-700">
                 {successMessage}
               </div>

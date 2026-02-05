@@ -7,6 +7,7 @@ import { useCurrency } from '@/lib/currency';
 import { useI18n } from '@/lib/i18n';
 import { Button } from '@/components/ui/button';
 import { api } from '@/lib/api';
+import { useToast } from '@/hooks/use-toast';
 import { assets } from '@/lib/design-tokens';
 import type { CurrencyCode } from '@/lib/currency';
 
@@ -50,6 +51,8 @@ export default function Layout() {
   const currentLang = languages.find((l) => l.code === locale) ?? languages[0];
   const [showLangDropdown, setShowLangDropdown] = useState(false);
   const [showUserDropdown, setShowUserDropdown] = useState(false);
+  const [becomingHost, setBecomingHost] = useState(false);
+  const { toast } = useToast();
   const dropdownRef = useRef<HTMLDivElement>(null);
   const langDropdownRef = useRef<HTMLDivElement>(null);
 
@@ -222,6 +225,29 @@ export default function Layout() {
                               <Receipt className="h-4 w-4" />
                               Payment history
                             </Link>
+                            {user.role === 'guest' && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setBecomingHost(true);
+                                  api.post<{ message: string }>('/api/profile/become-host')
+                                    .then(() => {
+                                      setShowUserDropdown(false);
+                                      toast({ title: 'You are now a host. Please log in again to access the Host Dashboard.' });
+                                      logout('/login?became=host');
+                                    })
+                                    .catch((err) => {
+                                      setBecomingHost(false);
+                                      toast({ title: err.response?.data?.message || 'Failed to become a host.', variant: 'destructive' });
+                                    });
+                                }}
+                                disabled={becomingHost}
+                                className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-foreground hover:bg-muted"
+                              >
+                                <PlusCircle className="h-4 w-4" />
+                                {becomingHost ? 'Upgrading…' : 'Become a host'}
+                              </button>
+                            )}
                           </>
                         )}
                         {user.role === 'host' && (

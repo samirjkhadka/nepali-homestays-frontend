@@ -160,10 +160,21 @@ export default function HostDashboard() {
     bookings: Booking[];
   } | null>(null);
   const [coHostListingId, setCoHostListingId] = useState<number | null>(null);
-  const [coHostEmail, setCoHostEmail] = useState('');
+  const [coHostForm, setCoHostForm] = useState({
+    email: '',
+    name: '',
+    phone: '',
+    bio: '',
+    brief_intro: '',
+    languages_spoken: '',
+  });
+  const [coHostFormAvatarFile, setCoHostFormAvatarFile] = useState<File | null>(null);
+  const [coHostFormAvatarPreview, setCoHostFormAvatarPreview] = useState<string | null>(null);
   const [coHostAdding, setCoHostAdding] = useState(false);
   const [blockListingId, setBlockListingId] = useState('');
   const [blockDates, setBlockDates] = useState('');
+  const [currentBlockedDates, setCurrentBlockedDates] = useState<string[]>([]);
+  const [currentBlockedDatesLoading, setCurrentBlockedDatesLoading] = useState(false);
   const blockDatesSelected = useMemo(() => {
     const parts = blockDates.split(/[\s,]+/).filter(Boolean);
     return parts.map((p) => {
@@ -261,6 +272,19 @@ export default function HostDashboard() {
     }).catch((err) => toast({ title: err.response?.data?.message || 'Failed to mark as paid.', variant: 'destructive' }));
   };
 
+  useEffect(() => {
+    if (!blockListingId || !dashboard?.listings?.length) {
+      setCurrentBlockedDates([]);
+      return;
+    }
+    setCurrentBlockedDatesLoading(true);
+    api
+      .get<{ blocked_dates: string[] }>(`/api/listings/${blockListingId}/blocked-dates`)
+      .then((res) => setCurrentBlockedDates((res.data?.blocked_dates || []).map((d) => (typeof d === 'string' ? d : String(d)).slice(0, 10))))
+      .catch(() => setCurrentBlockedDates([]))
+      .finally(() => setCurrentBlockedDatesLoading(false));
+  }, [blockListingId, dashboard?.listings?.length]);
+
   const handleBlockDates = (e: React.FormEvent) => {
     e.preventDefault();
     const listingId = Number(blockListingId);
@@ -269,10 +293,12 @@ export default function HostDashboard() {
       toast({ title: 'Select a listing and enter dates (YYYY-MM-DD).', variant: 'destructive' });
       return;
     }
-    api.post('/api/blocked-dates', { listing_id: listingId, dates }).then(() => {
+    api.post('/api/blocked-dates', { listing_id: listingId, dates }).then((res) => {
+      const updated = (res.data?.blocked_dates as string[] | undefined) || [];
+      setCurrentBlockedDates(updated.map((d) => (typeof d === 'string' ? d : String(d)).slice(0, 10)));
       toast({ title: 'Dates blocked.' });
       setBlockDates('');
-    }).catch(() => toast({ title: 'Failed.', variant: 'destructive' }));
+    }).catch((err) => toast({ title: err.response?.data?.message || 'Failed to block dates.', variant: 'destructive' }));
   };
 
   const handleListingStatusChange = (listingId: number, status: 'approved' | 'disabled') => {
@@ -295,20 +321,43 @@ export default function HostDashboard() {
   const currentUserId = dashboard?.current_user_id;
   const isPrimaryHost = (listing: Listing) => currentUserId != null && listing.host_id === currentUserId;
 
-  const handleAddCoHost = (e: React.FormEvent) => {
+  const handleAddCoHost = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (coHostListingId == null || !coHostEmail.trim()) return;
+    if (coHostListingId == null || !coHostForm.email.trim()) return;
     setCoHostAdding(true);
-    api.post(`/api/host/listings/${coHostListingId}/hosts`, { email: coHostEmail.trim() })
-      .then(() => {
-        toast({ title: 'Co-host added.' });
-        setCoHostListingId(null);
-        setCoHostEmail('');
-        return api.get('/api/host/dashboard');
-      })
-      .then((res) => setDashboard(res.data))
-      .catch((err) => toast({ title: err.response?.data?.message || 'Failed to add co-host.', variant: 'destructive' }))
-      .finally(() => setCoHostAdding(false));
+    let avatarUrl: string | undefined;
+    try {
+      if (coHostFormAvatarFile) {
+        const formData = new FormData();
+        formData.append('images', coHostFormAvatarFile);
+        const uploadRes = await api.post<{ urls: string[] }>('/api/listings/images', formData, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        });
+        avatarUrl = uploadRes.data?.urls?.[0];
+      }
+      const payload = {
+        email: coHostForm.email.trim(),
+        name: coHostForm.name.trim() || undefined,
+        phone: coHostForm.phone.trim() || undefined,
+        bio: coHostForm.bio.trim() || undefined,
+        brief_intro: coHostForm.brief_intro.trim() || undefined,
+        languages_spoken: coHostForm.languages_spoken.trim() || undefined,
+        avatar_url: avatarUrl,
+      };
+      await api.post(`/api/host/listings/${coHostListingId}/hosts`, payload);
+      toast({ title: 'Co-host added.' });
+      setCoHostListingId(null);
+      setCoHostForm({ email: '', name: '', phone: '', bio: '', brief_intro: '', languages_spoken: '' });
+      setCoHostFormAvatarFile(null);
+      setCoHostFormAvatarPreview((p) => { if (p) URL.revokeObjectURL(p); return null; });
+      const dashRes = await api.get('/api/host/dashboard');
+      setDashboard(dashRes.data);
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Failed to add co-host.';
+      toast({ title: msg, variant: 'destructive' });
+    } finally {
+      setCoHostAdding(false);
+    }
   };
 
   const handleRemoveCoHost = (listingId: number, userId: number) => {
@@ -637,7 +686,7 @@ export default function HostDashboard() {
                     {isPrimaryHost(l) && (
                       <>
                         {l.hosts && l.hosts.filter((h) => !h.is_primary).length > 0 && (
-                          <div className="mt-2 text-sm text-muted-foreground">
+                          <div className="w-full text-sm text-muted-foreground">
                             Co-hosts: {l.hosts.filter((h) => !h.is_primary).map((h) => (
                               <span key={h.id} className="mr-2 inline-flex items-center gap-1">
                                 {h.name}
@@ -646,7 +695,7 @@ export default function HostDashboard() {
                             ))}
                           </div>
                         )}
-                        <Button variant="outline" size="sm" className="mt-2" onClick={() => { setCoHostListingId(l.id); setCoHostEmail(''); }}>
+                        <Button variant="outline" size="sm" onClick={() => { setCoHostListingId(l.id); setCoHostForm({ email: '', name: '', phone: '', bio: '', brief_intro: '', languages_spoken: '' }); setCoHostFormAvatarFile(null); setCoHostFormAvatarPreview((prev) => { if (prev) URL.revokeObjectURL(prev); return null; }); }}>
                           Add co-host
                         </Button>
                       </>
@@ -658,18 +707,73 @@ export default function HostDashboard() {
             })}
           </div>
 
-          <Dialog.Root open={coHostListingId != null} onOpenChange={(open) => !open && setCoHostListingId(null)}>
+          <Dialog.Root open={coHostListingId != null} onOpenChange={(open) => {
+            if (!open) {
+              setCoHostListingId(null);
+              setCoHostFormAvatarFile(null);
+              setCoHostFormAvatarPreview((p) => { if (p) URL.revokeObjectURL(p); return null; });
+            }
+          }}>
             <Dialog.Portal>
               <Dialog.Overlay className="fixed inset-0 bg-black/50" />
-              <Dialog.Content className="fixed left-1/2 top-1/2 z-50 w-full max-w-sm -translate-x-1/2 -translate-y-1/2 rounded-lg border border-primary-200 bg-background p-6 shadow-lg">
+              <Dialog.Content className="fixed left-1/2 top-1/2 z-50 w-full max-w-md -translate-x-1/2 -translate-y-1/2 max-h-[90vh] overflow-y-auto rounded-lg border border-primary-200 bg-background p-6 shadow-lg">
                 <Dialog.Title className="text-lg font-semibold text-primary-800">Add co-host</Dialog.Title>
-                <p className="mt-1 text-sm text-muted-foreground">They can log in and manage this listing.</p>
-                <form onSubmit={handleAddCoHost} className="mt-4 space-y-3">
-                  <Label className="text-primary-800">Email</Label>
-                  <Input type="email" value={coHostEmail} onChange={(e) => setCoHostEmail(e.target.value)} placeholder="cohost@example.com" className="border-primary-200" required />
+                <p className="mt-1 text-sm text-muted-foreground">They can log in and manage this listing. Use the same fields as the primary host profile.</p>
+                <form onSubmit={handleAddCoHost} className="mt-4 space-y-4">
+                  <div>
+                    <Label className="text-primary-800">Photo</Label>
+                    <div className="mt-1 flex items-center gap-4">
+                      {coHostFormAvatarPreview && (
+                        <div className="relative">
+                          <img src={coHostFormAvatarPreview} alt="Preview" className="h-20 w-20 rounded-full object-cover border border-primary-200" />
+                          <button type="button" aria-label="Remove photo" onClick={() => { setCoHostFormAvatarFile(null); setCoHostFormAvatarPreview((p) => { if (p) URL.revokeObjectURL(p); return null; }); }} className="absolute -top-1 -right-1 rounded-full bg-destructive text-destructive-foreground p-0.5 text-xs">×</button>
+                        </div>
+                      )}
+                      <div className="flex-1">
+                        <input
+                          type="file"
+                          accept="image/jpeg,image/png,image/webp"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0] ?? null;
+                            setCoHostFormAvatarFile(file);
+                            setCoHostFormAvatarPreview((p) => { if (p) URL.revokeObjectURL(p); return file ? URL.createObjectURL(file) : null; });
+                          }}
+                          className="block w-full text-sm text-muted-foreground file:mr-2 file:rounded-md file:border-0 file:bg-primary-100 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-primary-800 hover:file:bg-primary-200"
+                        />
+                        <p className="text-xs text-muted-foreground mt-0.5">JPEG, PNG or WebP. Optional.</p>
+                      </div>
+                    </div>
+                  </div>
+                  <div>
+                    <Label className="text-primary-800">Name</Label>
+                    <Input value={coHostForm.name} onChange={(e) => setCoHostForm((f) => ({ ...f, name: e.target.value }))} className="mt-1 border-primary-200" placeholder="Full name" />
+                  </div>
+                  <div>
+                    <Label className="text-primary-800">Phone</Label>
+                    <Input value={coHostForm.phone} onChange={(e) => setCoHostForm((f) => ({ ...f, phone: e.target.value }))} className="mt-1 border-primary-200" placeholder="Phone number" />
+                  </div>
+                  <div>
+                    <Label className="text-primary-800">Email</Label>
+                    <Input type="email" value={coHostForm.email} onChange={(e) => setCoHostForm((f) => ({ ...f, email: e.target.value }))} placeholder="cohost@example.com" className="mt-1 border-primary-200" required />
+                  </div>
+                  <div>
+                    <Label className="text-primary-800">Bio</Label>
+                    <Textarea value={coHostForm.bio} onChange={(e) => setCoHostForm((f) => ({ ...f, bio: e.target.value }))} className="mt-1 border-primary-200" rows={3} placeholder="Short bio" />
+                  </div>
+                  <div>
+                    <Label className="text-primary-800 flex items-center gap-2">
+                      <Languages className="h-4 w-4" />
+                      Brief intro (for hosts)
+                    </Label>
+                    <Textarea value={coHostForm.brief_intro} onChange={(e) => setCoHostForm((f) => ({ ...f, brief_intro: e.target.value }))} className="mt-1 border-primary-200" rows={2} placeholder="Short intro shown on listings" />
+                  </div>
+                  <div>
+                    <Label className="text-primary-800">Languages spoken</Label>
+                    <Input value={coHostForm.languages_spoken} onChange={(e) => setCoHostForm((f) => ({ ...f, languages_spoken: e.target.value }))} className="mt-1 border-primary-200" placeholder="e.g. Nepali, English, Hindi" />
+                  </div>
                   <div className="flex gap-2 justify-end">
                     <Button type="button" variant="outline" onClick={() => setCoHostListingId(null)}>Cancel</Button>
-                    <Button type="submit" className="bg-accent-500 hover:bg-accent-600" disabled={coHostAdding}>Add</Button>
+                    <Button type="submit" className="bg-accent-500 hover:bg-accent-600" disabled={coHostAdding}>Add co-host</Button>
                   </div>
                 </form>
               </Dialog.Content>
@@ -855,6 +959,37 @@ export default function HostDashboard() {
               </div>
               <Button type="submit" className="bg-accent-500 hover:bg-accent-600">Block dates</Button>
             </form>
+
+            {/* Currently blocked dates for selected listing */}
+            {blockListingId && (
+              <div className="mt-8 pt-6 border-t border-primary-200">
+                <h4 className="font-semibold text-primary-800 mb-2">Currently blocked dates</h4>
+                <p className="text-sm text-muted-foreground mb-3">
+                  These dates are unavailable for guests when they book this listing.
+                </p>
+                {currentBlockedDatesLoading ? (
+                  <p className="text-sm text-muted-foreground">Loading…</p>
+                ) : currentBlockedDates.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No dates blocked for this listing.</p>
+                ) : (
+                  <div className="flex flex-col gap-2">
+                    <div className="flex flex-wrap gap-2">
+                      {[...currentBlockedDates].sort().map((d) => (
+                        <span
+                          key={d}
+                          className="inline-flex items-center rounded-md bg-muted px-2.5 py-1 text-sm font-medium text-muted-foreground border border-border"
+                        >
+                          {new Date(d + 'T12:00:00').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}
+                        </span>
+                      ))}
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {currentBlockedDates.length} date{currentBlockedDates.length !== 1 ? 's' : ''} blocked
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
           </CardContent>
         </Card>
       )}

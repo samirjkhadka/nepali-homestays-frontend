@@ -189,7 +189,10 @@ export default function ListingDetailPage() {
       .finally(() => setLoaded(true));
     api
       .get<{ blocked_dates: string[] }>(`/api/listings/${id}/blocked-dates`)
-      .then((res) => setBlockedDates(res.data.blocked_dates || []))
+      .then((res) => {
+        const raw = res.data?.blocked_dates ?? [];
+        setBlockedDates(raw.map((d) => (typeof d === 'string' ? d : String(d)).slice(0, 10)));
+      })
       .catch(() => setBlockedDates([]));
   }, [id, listingUrl]);
 
@@ -495,6 +498,48 @@ export default function ListingDetailPage() {
                 )}
               </div>
             </motion.div>
+
+            {/* Co-hosts */}
+            {listingData.hosts && listingData.hosts.filter((h) => !h.is_primary).length > 0 && (
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.15 }}
+                className="space-y-4 pb-8 border-b border-border"
+              >
+                <h3 className="font-display text-lg font-semibold text-foreground mb-3">Co-hosts</h3>
+                <p className="text-sm text-muted-foreground mb-4">
+                  Other hosts who help manage this homestay.
+                </p>
+                <div className="space-y-4">
+                  {[...listingData.hosts.filter((h) => !h.is_primary)].sort((a, b) => a.sort_order - b.sort_order).map((cohost) => (
+                    <div key={cohost.id} className="flex items-start gap-4">
+                      <div className="w-12 h-12 rounded-full overflow-hidden bg-primary/20 flex-shrink-0 flex items-center justify-center text-primary font-display font-semibold text-lg">
+                        {cohost.avatar_url ? (
+                          <img src={getImageDisplayUrl(cohost.avatar_url)} alt="" className="w-full h-full object-cover" />
+                        ) : (
+                          (cohost.name || '?').charAt(0)
+                        )}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="font-medium text-foreground">{cohost.name}</p>
+                        {cohost.languages_spoken?.trim() && (
+                          <p className="text-sm text-muted-foreground flex items-center gap-1 mt-0.5">
+                            <Languages className="w-3.5 h-3.5" />
+                            {cohost.languages_spoken.trim()}
+                          </p>
+                        )}
+                        {(cohost.brief_intro || cohost.bio) && (
+                          <p className="text-sm text-foreground/80 leading-relaxed mt-1">
+                            {cohost.brief_intro || cohost.bio}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </motion.div>
+            )}
 
             {/* Highlights */}
             <motion.div

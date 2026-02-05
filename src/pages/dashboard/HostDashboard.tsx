@@ -1,12 +1,15 @@
-import { useState, useEffect } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { useState, useEffect, useMemo } from 'react';
+import { Link, useSearchParams, useNavigate, useLocation } from 'react-router-dom';
+import * as Dialog from '@radix-ui/react-dialog';
+import { DayPicker } from 'react-day-picker';
+import 'react-day-picker/style.css';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
-import { Bed, DollarSign, Home, Plus, Calendar, BarChart3, Star, MessageSquare, Languages, ChevronRight } from 'lucide-react';
+import { Bed, DollarSign, Home, Plus, Calendar, BarChart3, Star, MessageSquare, Languages, ChevronRight, ArrowLeft } from 'lucide-react';
 import {
   BarChart,
   Bar,
@@ -40,7 +43,14 @@ type Booking = {
   payment_amount?: number | null;
 };
 
-type Listing = { id: number; title: string; status: string; disabled_by_admin?: boolean };
+/** Title case for status/labels (e.g. approved → Approved, pending_payment → Pending Payment) */
+function formatLabel(s: string): string {
+  if (!s) return '';
+  return s.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+type HostProfile = { id: number; name: string; is_primary: boolean };
+type Listing = { id: number; host_id: number; title: string; status: string; disabled_by_admin?: boolean; location?: string; price_per_night?: string | number; category?: string | null; hosts?: HostProfile[] };
 
 const BOOKING_STATUSES = ['all', 'pending', 'pending_payment', 'approved', 'partial_paid', 'paid', 'completed', 'declined', 'cancelled'] as const;
 
@@ -87,7 +97,7 @@ const CHART_COLORS = [
 function buildBookingsByStatusData(bookings: Booking[]): { name: string; value: number }[] {
   const counts: Record<string, number> = {};
   for (const b of bookings) {
-    const label = b.status === 'pending_payment' ? 'Awaiting payment' : b.status === 'partial_paid' ? 'Partial paid' : b.status.replace(/_/g, ' ');
+    const label = b.status === 'pending_payment' ? 'Awaiting Payment' : b.status === 'partial_paid' ? 'Partial Paid' : formatLabel(b.status);
     counts[label] = (counts[label] ?? 0) + 1;
   }
   return Object.entries(counts).map(([name, value]) => ({ name, value }));
@@ -96,7 +106,7 @@ function buildBookingsByStatusData(bookings: Booking[]): { name: string; value: 
 function buildListingsByStatusData(listings: Listing[]): { name: string; value: number }[] {
   const counts: Record<string, number> = {};
   for (const l of listings) {
-    const label = l.status.charAt(0).toUpperCase() + l.status.slice(1);
+    const label = formatLabel(l.status);
     counts[label] = (counts[label] ?? 0) + 1;
   }
   return Object.entries(counts).map(([name, value]) => ({ name, value }));
@@ -128,6 +138,8 @@ function buildBookingsByMonthData(bookings: Booking[]): { month: string; booking
 export default function HostDashboard() {
   const { toast } = useToast();
   const { format: formatPrice } = useCurrency();
+  const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
   const tabFromUrl = searchParams.get('tab') as TabType | null;
   const [tab, setTab] = useState<TabType>(TABS.includes(tabFromUrl as TabType) ? tabFromUrl! : 'overview');
@@ -139,6 +151,7 @@ export default function HostDashboard() {
   const [messageText, setMessageText] = useState('');
   const [sendingMessage, setSendingMessage] = useState(false);
   const [dashboard, setDashboard] = useState<{
+    current_user_id?: number;
     listings_count: number;
     bookings_count: number;
     earnings: number;
@@ -146,17 +159,27 @@ export default function HostDashboard() {
     listings: Listing[];
     bookings: Booking[];
   } | null>(null);
+  const [coHostListingId, setCoHostListingId] = useState<number | null>(null);
+  const [coHostEmail, setCoHostEmail] = useState('');
+  const [coHostAdding, setCoHostAdding] = useState(false);
   const [blockListingId, setBlockListingId] = useState('');
   const [blockDates, setBlockDates] = useState('');
+  const blockDatesSelected = useMemo(() => {
+    const parts = blockDates.split(/[\s,]+/).filter(Boolean);
+    return parts.map((p) => {
+      const d = new Date(p);
+      return Number.isNaN(d.getTime()) ? null : d;
+    }).filter((d): d is Date => d != null);
+  }, [blockDates]);
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [profileForm, setProfileForm] = useState({
     name: '',
     phone: '',
     bio: '',
     brief_intro: '',
-    superhost: false,
     languages_spoken: '',
   });
+  const [selectedBookingDetail, setSelectedBookingDetail] = useState<Booking | null>(null);
 
   useEffect(() => {
     const t = searchParams.get('tab') as TabType | null;
@@ -166,13 +189,12 @@ export default function HostDashboard() {
   useEffect(() => {
     api.get('/api/host/dashboard').then((res) => setDashboard(res.data)).catch(() => setDashboard(null));
     api.get('/api/profile').then((res) => {
-      const p = res.data as { name?: string; phone?: string; bio?: string; brief_intro?: string; superhost?: boolean; languages_spoken?: string };
+      const p = res.data as { name?: string; phone?: string; bio?: string; brief_intro?: string; languages_spoken?: string };
       setProfileForm({
         name: p.name ?? '',
         phone: p.phone ?? '',
         bio: p.bio ?? '',
         brief_intro: p.brief_intro ?? '',
-        superhost: Boolean(p.superhost),
         languages_spoken: p.languages_spoken ?? '',
       });
     }).catch(() => {});
@@ -270,12 +292,49 @@ export default function HostDashboard() {
       .catch(() => toast({ title: 'Failed to update status.', variant: 'destructive' }));
   };
 
+  const currentUserId = dashboard?.current_user_id;
+  const isPrimaryHost = (listing: Listing) => currentUserId != null && listing.host_id === currentUserId;
+
+  const handleAddCoHost = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (coHostListingId == null || !coHostEmail.trim()) return;
+    setCoHostAdding(true);
+    api.post(`/api/host/listings/${coHostListingId}/hosts`, { email: coHostEmail.trim() })
+      .then(() => {
+        toast({ title: 'Co-host added.' });
+        setCoHostListingId(null);
+        setCoHostEmail('');
+        return api.get('/api/host/dashboard');
+      })
+      .then((res) => setDashboard(res.data))
+      .catch((err) => toast({ title: err.response?.data?.message || 'Failed to add co-host.', variant: 'destructive' }))
+      .finally(() => setCoHostAdding(false));
+  };
+
+  const handleRemoveCoHost = (listingId: number, userId: number) => {
+    api.delete(`/api/host/listings/${listingId}/hosts/${userId}`)
+      .then(() => {
+        toast({ title: 'Co-host removed.' });
+        return api.get('/api/host/dashboard');
+      })
+      .then((res) => setDashboard(res.data))
+      .catch((err) => toast({ title: err.response?.data?.message || 'Failed to remove.', variant: 'destructive' }));
+  };
+
   if (!dashboard) return <div className="py-8 text-muted-foreground">Loading…</div>;
 
   return (
     <div>
-      <h1 className="text-3xl font-bold text-primary-800">Host dashboard</h1>
-      <p className="mt-1 text-muted-foreground">Manage your listings and bookings</p>
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <Button variant="ghost" size="sm" className="mb-2 -ml-2 text-muted-foreground hover:text-primary-800" onClick={() => (location.key !== 'default' ? navigate(-1) : navigate('/'))}>
+            <ArrowLeft className="mr-1.5 h-4 w-4" />
+            Back
+          </Button>
+          <h1 className="text-3xl font-bold text-primary-800">Host dashboard</h1>
+          <p className="mt-1 text-muted-foreground">Manage your listings and bookings</p>
+        </div>
+      </div>
       <div className="mt-6 flex flex-wrap gap-2 border-b border-primary-200">
         {TABS.map((t) => (
           <button
@@ -367,27 +426,39 @@ export default function HostDashboard() {
             </CardHeader>
             <CardContent className="p-6">
               <div className="grid gap-4 sm:grid-cols-3">
-                <div className="rounded-lg border border-primary-200 bg-primary-50/30 p-4">
+                <button
+                  type="button"
+                  onClick={() => { setTab('listings'); setSearchParams({ tab: 'listings' }); }}
+                  className="rounded-lg border border-primary-200 bg-primary-50/30 p-4 text-left transition-colors hover:border-primary-300 hover:bg-primary-50/50 focus:outline-none focus:ring-2 focus:ring-accent-500"
+                >
                   <p className="text-sm text-muted-foreground">Active listings</p>
                   <p className="text-2xl font-bold text-primary-800">
                     {dashboard.listings.filter((l) => l.status === 'approved').length}
                   </p>
-                  <p className="text-xs text-muted-foreground mt-1">Ready for guests</p>
-                </div>
-                <div className="rounded-lg border border-primary-200 bg-primary-50/30 p-4">
+                  <p className="text-xs text-muted-foreground mt-1">Ready for guests — click to open Listings</p>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setTab('bookings'); setSearchParams({ tab: 'bookings' }); setStatusFilter('all'); }}
+                  className="rounded-lg border border-primary-200 bg-primary-50/30 p-4 text-left transition-colors hover:border-primary-300 hover:bg-primary-50/50 focus:outline-none focus:ring-2 focus:ring-accent-500"
+                >
                   <p className="text-sm text-muted-foreground">Upcoming / active bookings</p>
                   <p className="text-2xl font-bold text-primary-800">
                     {dashboard.bookings.filter((b) => ['pending', 'pending_payment', 'approved', 'partial_paid', 'paid'].includes(b.status)).length}
                   </p>
-                  <p className="text-xs text-muted-foreground mt-1">Need your attention</p>
-                </div>
-                <div className="rounded-lg border border-primary-200 bg-primary-50/30 p-4">
+                  <p className="text-xs text-muted-foreground mt-1">Need your attention — click to open Bookings</p>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setTab('bookings'); setSearchParams({ tab: 'bookings' }); setStatusFilter('paid'); }}
+                  className="rounded-lg border border-primary-200 bg-primary-50/30 p-4 text-left transition-colors hover:border-primary-300 hover:bg-primary-50/50 focus:outline-none focus:ring-2 focus:ring-accent-500"
+                >
                   <p className="text-sm text-muted-foreground">Paid bookings</p>
                   <p className="text-2xl font-bold text-primary-800">
                     {dashboard.bookings.filter((b) => b.status === 'paid' || b.status === 'completed').length}
                   </p>
-                  <p className="text-xs text-muted-foreground mt-1">Confirmed & completed</p>
-                </div>
+                  <p className="text-xs text-muted-foreground mt-1">Confirmed & completed — click to open Bookings</p>
+                </button>
               </div>
             </CardContent>
           </Card>
@@ -522,7 +593,16 @@ export default function HostDashboard() {
                     <div className="flex items-start justify-between gap-2">
                       <div>
                         <p className="font-semibold text-primary-800">{l.title}</p>
+                        {(l.location != null && l.location !== '') && (
+                          <p className="mt-1 text-sm text-muted-foreground">{l.location}</p>
+                        )}
                         <div className="mt-2 flex flex-wrap items-center gap-2">
+                          {l.price_per_night != null && (
+                            <span className="text-sm font-medium text-accent-600">{formatPrice(String(l.price_per_night))}/night</span>
+                          )}
+                          {l.category != null && l.category !== '' && (
+                            <span className="text-sm text-muted-foreground">{formatLabel(l.category)}</span>
+                          )}
                           <span className={`inline-block rounded-full px-3 py-1 text-xs font-medium ${isApproved ? 'bg-green-100 text-green-800' : isDisabled ? 'bg-muted text-muted-foreground' : l.status === 'rejected' ? 'bg-destructive/10 text-destructive' : 'bg-accent-100 text-accent-800'}`}>
                             {l.status === 'pending' ? 'Pending review' : l.status === 'rejected' ? 'Rejected' : isApproved ? 'Enabled' : 'Disabled'}
                           </span>
@@ -550,16 +630,51 @@ export default function HostDashboard() {
                         <Link to={`/host/listings/${l.id}/edit`}>Edit</Link>
                       </Button>
                       {isApproved && (
-                        <Button variant="outline" size="sm" asChild>
-                          <Link to={`/listings/${l.id}`}>View</Link>
+                      <Button variant="outline" size="sm" asChild>
+                        <Link to={`/listings/${l.id}`}>View</Link>
+                      </Button>
+                    )}
+                    {isPrimaryHost(l) && (
+                      <>
+                        {l.hosts && l.hosts.filter((h) => !h.is_primary).length > 0 && (
+                          <div className="mt-2 text-sm text-muted-foreground">
+                            Co-hosts: {l.hosts.filter((h) => !h.is_primary).map((h) => (
+                              <span key={h.id} className="mr-2 inline-flex items-center gap-1">
+                                {h.name}
+                                <button type="button" className="text-destructive hover:underline" onClick={() => handleRemoveCoHost(l.id, h.id)} aria-label={`Remove ${h.name}`}>×</button>
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                        <Button variant="outline" size="sm" className="mt-2" onClick={() => { setCoHostListingId(l.id); setCoHostEmail(''); }}>
+                          Add co-host
                         </Button>
-                      )}
+                      </>
+                    )}
                     </div>
                   </CardContent>
                 </Card>
               );
             })}
           </div>
+
+          <Dialog.Root open={coHostListingId != null} onOpenChange={(open) => !open && setCoHostListingId(null)}>
+            <Dialog.Portal>
+              <Dialog.Overlay className="fixed inset-0 bg-black/50" />
+              <Dialog.Content className="fixed left-1/2 top-1/2 z-50 w-full max-w-sm -translate-x-1/2 -translate-y-1/2 rounded-lg border border-primary-200 bg-background p-6 shadow-lg">
+                <Dialog.Title className="text-lg font-semibold text-primary-800">Add co-host</Dialog.Title>
+                <p className="mt-1 text-sm text-muted-foreground">They can log in and manage this listing.</p>
+                <form onSubmit={handleAddCoHost} className="mt-4 space-y-3">
+                  <Label className="text-primary-800">Email</Label>
+                  <Input type="email" value={coHostEmail} onChange={(e) => setCoHostEmail(e.target.value)} placeholder="cohost@example.com" className="border-primary-200" required />
+                  <div className="flex gap-2 justify-end">
+                    <Button type="button" variant="outline" onClick={() => setCoHostListingId(null)}>Cancel</Button>
+                    <Button type="submit" className="bg-accent-500 hover:bg-accent-600" disabled={coHostAdding}>Add</Button>
+                  </div>
+                </form>
+              </Dialog.Content>
+            </Dialog.Portal>
+          </Dialog.Root>
         </div>
       )}
 
@@ -574,7 +689,7 @@ export default function HostDashboard() {
             >
               <option value="all">All</option>
               {BOOKING_STATUSES.filter((s) => s !== 'all').map((s) => (
-                <option key={s} value={s}>{s.replace(/_/g, ' ')}</option>
+                <option key={s} value={s}>{formatLabel(s)}</option>
               ))}
             </select>
           </div>
@@ -591,14 +706,16 @@ export default function HostDashboard() {
                   <>
                     <h3 className="font-semibold text-primary-800">Pending requests (accept/decline)</h3>
                     {pendingBookings.map((b) => (
-                      <Card key={b.id} className="border-primary-200">
+                      <Card key={b.id} className="border-primary-200 cursor-pointer transition-colors hover:border-primary-300" onClick={() => setSelectedBookingDetail(b)}>
                         <CardContent className="p-6">
                           <p className="font-semibold text-primary-800">{b.listing_title}</p>
-                          <p className="text-sm text-muted-foreground">{b.guest_name} · {formatBookingDateRange(b.check_in, b.check_out)} · {b.guests} guests</p>
+                          {b.listing_location && <p className="text-sm text-muted-foreground">{b.listing_location}</p>}
+                          <p className="text-sm text-muted-foreground">{b.guest_name} · {b.guest_email} · {formatBookingDateRange(b.check_in, b.check_out)} · {b.guests} guests</p>
                           {b.message && <p className="mt-2 text-sm">{b.message}</p>}
-                          <div className="mt-4 flex gap-2">
-                            <Button size="sm" className="bg-accent-500 hover:bg-accent-600" onClick={() => handleApprove(b.id)}>Accept</Button>
-                            <Button size="sm" variant="destructive" onClick={() => handleDecline(b.id)}>Decline</Button>
+                          <div className="mt-4 flex flex-wrap gap-2">
+                            <Button size="sm" className="bg-accent-500 hover:bg-accent-600" onClick={(e) => { e.stopPropagation(); handleApprove(b.id); }}>Accept</Button>
+                            <Button size="sm" variant="destructive" onClick={(e) => { e.stopPropagation(); handleDecline(b.id); }}>Decline</Button>
+                            <Button size="sm" variant="outline" onClick={(e) => { e.stopPropagation(); setSelectedBookingDetail(b); }}>View details</Button>
                           </div>
                         </CardContent>
                       </Card>
@@ -618,27 +735,29 @@ export default function HostDashboard() {
                           ? b.payment_amount
                           : nights * pricePerNight;
                       return (
-                        <Card key={b.id} className="border-primary-200">
+                        <Card key={b.id} className="border-primary-200 cursor-pointer transition-colors hover:border-primary-300" onClick={() => setSelectedBookingDetail(b)}>
                           <CardContent className="flex flex-wrap items-center justify-between gap-4 p-4">
                             <div>
                               <p className="font-medium text-primary-800">{b.listing_title}</p>
+                              {b.listing_location && <p className="text-sm text-muted-foreground">{b.listing_location}</p>}
                               <p className="text-sm text-muted-foreground">
-                                {b.guest_name} · {formatBookingDateRange(b.check_in, b.check_out)}
+                                {b.guest_name} · {b.guest_email} · {formatBookingDateRange(b.check_in, b.check_out)} · {b.guests} guest{b.guests !== 1 ? 's' : ''} · {nights} night{nights !== 1 ? 's' : ''}
                               </p>
                               {nights > 0 && (displayAmount > 0 || b.payment_amount != null) && (
                                 <p className="mt-1 text-sm font-medium text-accent-600">
                                   {formatPrice(String(displayAmount))}
-                                  {(b.status === 'paid' || b.status === 'completed') && b.payment_amount != null && ' (paid)'}
+                                  {(b.status === 'paid' || b.status === 'completed') && b.payment_amount != null && ' (Paid)'}
                                 </p>
                               )}
                               <Badge className={`mt-2 ${statusBadgeClass(b.status)}`}>
-                                {b.status === 'pending_payment' ? 'Awaiting payment' : b.status === 'partial_paid' ? 'Partial paid' : b.status}
+                                {b.status === 'pending_payment' ? 'Awaiting Payment' : b.status === 'partial_paid' ? 'Partial Paid' : formatLabel(b.status)}
                               </Badge>
                               {(b.status === 'pending_payment' || b.status === 'partial_paid') && (
-                                <Button size="sm" className="mt-2 bg-primary hover:bg-primary/90" onClick={() => handleMarkAsPaid(b.id)}>
+                                <Button size="sm" className="mt-2 bg-primary hover:bg-primary/90" onClick={(e) => { e.stopPropagation(); handleMarkAsPaid(b.id); }}>
                                   Mark as paid (guest paid at checkout)
                                 </Button>
                               )}
+                              <Button size="sm" variant="outline" className="mt-2 ml-2" onClick={(e) => { e.stopPropagation(); setSelectedBookingDetail(b); }}>View details</Button>
                             </div>
                           </CardContent>
                         </Card>
@@ -648,12 +767,48 @@ export default function HostDashboard() {
                 )}
                 {filtered.length === 0 && (
                   <p className="text-muted-foreground">
-                    {statusFilter === 'all' ? 'No bookings yet.' : `No ${statusFilter.replace(/_/g, ' ')} bookings.`}
+                    {statusFilter === 'all' ? 'No bookings yet.' : `No ${formatLabel(statusFilter)} bookings.`}
                   </p>
                 )}
               </>
             );
           })()}
+
+          <Dialog.Root open={!!selectedBookingDetail} onOpenChange={(open) => !open && setSelectedBookingDetail(null)}>
+            <Dialog.Portal>
+              <Dialog.Overlay className="fixed inset-0 bg-black/50" />
+              <Dialog.Content className="fixed left-1/2 top-1/2 z-50 w-full max-w-lg -translate-x-1/2 -translate-y-1/2 max-h-[90vh] overflow-y-auto rounded-lg border border-primary-200 bg-background p-6 shadow-lg" onClick={(e) => e.stopPropagation()}>
+                <Dialog.Title className="text-lg font-semibold text-primary-800">Booking details</Dialog.Title>
+                {selectedBookingDetail && (() => {
+                  const b = selectedBookingDetail;
+                  const nights = Math.ceil((new Date(b.check_out).getTime() - new Date(b.check_in).getTime()) / (24 * 60 * 60 * 1000));
+                  const pricePerNight = b.listing_price != null ? parseFloat(b.listing_price) : 0;
+                  const displayAmount = b.payment_amount != null && (b.status === 'paid' || b.status === 'completed') ? b.payment_amount : nights * pricePerNight;
+                  return (
+                    <div className="mt-4 space-y-3 text-sm">
+                      <p><span className="font-medium text-muted-foreground">Listing:</span> {b.listing_title}</p>
+                      {b.listing_location && <p><span className="font-medium text-muted-foreground">Location:</span> {b.listing_location}</p>}
+                      <p><span className="font-medium text-muted-foreground">Guest:</span> {b.guest_name}</p>
+                      <p><span className="font-medium text-muted-foreground">Email:</span> {b.guest_email}</p>
+                      <p><span className="font-medium text-muted-foreground">Dates:</span> {formatBookingDateRange(b.check_in, b.check_out)}</p>
+                      <p><span className="font-medium text-muted-foreground">Guests:</span> {b.guests} · {nights} night{nights !== 1 ? 's' : ''}</p>
+                      {(displayAmount > 0 || b.payment_amount != null) && (
+                        <p><span className="font-medium text-muted-foreground">Amount:</span> {formatPrice(String(displayAmount))}{(b.status === 'paid' || b.status === 'completed') && b.payment_amount != null ? ' (Paid)' : ''}</p>
+                      )}
+                      <p><span className="font-medium text-muted-foreground">Status:</span> <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${statusBadgeClass(b.status)}`}>{b.status === 'pending_payment' ? 'Awaiting Payment' : b.status === 'partial_paid' ? 'Partial Paid' : formatLabel(b.status)}</span></p>
+                      {b.message && <p><span className="font-medium text-muted-foreground">Message:</span> {b.message}</p>}
+                      {(b.status === 'pending_payment' || b.status === 'partial_paid') && (
+                        <Button size="sm" className="mt-2 bg-primary hover:bg-primary/90" onClick={() => { handleMarkAsPaid(b.id); setSelectedBookingDetail(null); }}>Mark as paid</Button>
+                      )}
+                    </div>
+                  );
+                })()}
+                <div className="mt-4 flex justify-end">
+                  <Button variant="outline" onClick={() => setSelectedBookingDetail(null)}>Close</Button>
+                </div>
+              </Dialog.Content>
+            </Dialog.Portal>
+          </Dialog.Root>
         </div>
       )}
 
@@ -676,8 +831,27 @@ export default function HostDashboard() {
                 </select>
               </div>
               <div>
-                <Label className="text-primary-800">Dates (YYYY-MM-DD, comma separated)</Label>
-                <Input value={blockDates} onChange={(e) => setBlockDates(e.target.value)} placeholder="2026-02-01, 2026-02-02" className="mt-1 border-primary-200" />
+                <Label className="text-primary-800">Dates</Label>
+                <div className="mt-1 flex flex-col gap-2">
+                  <Input
+                    value={blockDates}
+                    onChange={(e) => setBlockDates(e.target.value)}
+                    placeholder="2026-02-01, 2026-02-02 or pick below"
+                    className="border-primary-200"
+                  />
+                  <div className="rounded-md border border-primary-200 bg-background p-2 [&_.rdp]:m-0">
+                    <DayPicker
+                      mode="multiple"
+                      selected={blockDatesSelected}
+                      onSelect={(dates) => {
+                        if (dates == null) setBlockDates('');
+                        else setBlockDates(dates.map((d) => d.toISOString().slice(0, 10)).join(', '));
+                      }}
+                      defaultMonth={new Date()}
+                      disabled={{ before: new Date(new Date().setHours(0, 0, 0, 0)) }}
+                    />
+                  </div>
+                </div>
               </div>
               <Button type="submit" className="bg-accent-500 hover:bg-accent-600">Block dates</Button>
             </form>
@@ -818,7 +992,6 @@ export default function HostDashboard() {
                     phone: profileForm.phone,
                     bio: profileForm.bio,
                     brief_intro: profileForm.brief_intro || undefined,
-                    superhost: profileForm.superhost,
                     languages_spoken: profileForm.languages_spoken || undefined,
                   })
                   .then(() => toast({ title: 'Saved.' }))
@@ -850,18 +1023,7 @@ export default function HostDashboard() {
                   placeholder="Short intro shown on your listings"
                 />
               </div>
-              <div className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  id="superhost"
-                  checked={profileForm.superhost}
-                  onChange={(e) => setProfileForm((f) => ({ ...f, superhost: e.target.checked }))}
-                  className="h-4 w-4 rounded border-primary-300"
-                />
-                <Label htmlFor="superhost" className="text-primary-800 cursor-pointer">
-                  Superhost (display badge on listings)
-                </Label>
-              </div>
+              <p className="text-xs text-muted-foreground">Superhost and other badges are assigned by admin only.</p>
               <div>
                 <Label className="text-primary-800">Languages spoken</Label>
                 <Input

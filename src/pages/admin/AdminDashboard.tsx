@@ -14,7 +14,7 @@ import { HOMESTAY_CATEGORIES } from '@/data/districts';
 type Listing = { id: number; title: string; host_id: number; status: string; created_at: string; badge?: string | null };
 type ApprovedListing = { id: number; title: string; location: string; badge: string | null };
 type LiveListing = { id: number; title: string; location: string; badge: string | null; status: string };
-type User = { id: number; name: string; email: string; phone: string | null; role: string; created_at?: string; blocked?: boolean };
+type User = { id: number; name: string; email: string; phone: string | null; role: string; created_at?: string; blocked?: boolean; host_listing_id?: number | null; host_listing_title?: string | null };
 type VideoEntry = { url: string; title?: string };
 type ChargeableAmenity = { id: number; listing_id: number; name: string; price_npr: number; charge_type: 'per_night' | 'one_time' };
 type AdminBooking = { id: number; listing_id: number; listing_title: string; guest_name: string; guest_email: string; check_in: string; check_out: string; guests: number; status: string; created_at: string; corporate_name?: string | null; subtotal_npr?: number | null; total_amount?: number | null; amenity_charges_json?: string | null; listing_price_per_night?: number | null };
@@ -819,6 +819,7 @@ export default function AdminDashboard() {
                         <th className="p-3 text-left text-sm font-medium text-primary-800">Mobile</th>
                         <th className="p-3 text-left text-sm font-medium text-primary-800">Created</th>
                         <th className="p-3 text-left text-sm font-medium text-primary-800">Role</th>
+                        <th className="p-3 text-left text-sm font-medium text-primary-800">Host listing</th>
                         <th className="p-3 text-left text-sm font-medium text-primary-800">Change role</th>
                         <th className="p-3 text-left text-sm font-medium text-primary-800">Actions</th>
                       </tr>
@@ -833,9 +834,16 @@ export default function AdminDashboard() {
                           <td className="p-3 text-sm text-muted-foreground">{u.created_at ? formatDateOnly(u.created_at) : '—'}</td>
                           <td className="p-3">
                             <span className={`rounded-full px-2 py-1 text-xs font-medium ${u.role === 'admin' ? 'bg-accent-100 text-accent-800' : u.role === 'host' ? 'bg-primary-100 text-primary-800' : 'bg-secondary-200 text-secondary-800'}`}>
-                              {u.role}
+                              {u.role === 'admin' ? 'Admin' : u.role === 'host' ? 'Host' : 'Guest'}
                             </span>
                             {u.blocked && <span className="ml-1 rounded-full bg-red-100 px-2 py-0.5 text-xs text-red-800">Blocked</span>}
+                          </td>
+                          <td className="p-3 text-sm text-muted-foreground">
+                            {u.host_listing_id != null && u.host_listing_title != null ? (
+                              <span title={u.host_listing_title}>#{u.host_listing_id} – {u.host_listing_title}</span>
+                            ) : (
+                              '—'
+                            )}
                           </td>
                           <td className="p-3">
                             <select
@@ -843,9 +851,9 @@ export default function AdminDashboard() {
                               onChange={(e) => handleRoleChange(u.id, e.target.value)}
                               className="rounded-md border border-primary-200 bg-background px-2 py-1.5 text-sm"
                             >
-                              <option value="guest">guest</option>
-                              <option value="host">host</option>
-                              <option value="admin">admin</option>
+                              <option value="guest">Guest</option>
+                              <option value="host">Host</option>
+                              <option value="admin">Admin</option>
                             </select>
                           </td>
                           <td className="p-3">
@@ -879,7 +887,7 @@ export default function AdminDashboard() {
                     <p><span className="font-medium text-muted-foreground">Name:</span> {selectedUserDetail.name}</p>
                     <p><span className="font-medium text-muted-foreground">Email:</span> {selectedUserDetail.email}</p>
                     <p><span className="font-medium text-muted-foreground">Mobile:</span> {selectedUserDetail.phone ?? '—'}</p>
-                    <p><span className="font-medium text-muted-foreground">Role:</span> {selectedUserDetail.role}</p>
+                    <p><span className="font-medium text-muted-foreground">Role:</span> {selectedUserDetail.role === 'admin' ? 'Admin' : selectedUserDetail.role === 'host' ? 'Host' : 'Guest'}</p>
                     <p><span className="font-medium text-muted-foreground">Created:</span> {selectedUserDetail.created_at ? formatDateOnly(selectedUserDetail.created_at) : '—'}</p>
                     {selectedUserDetail.blocked && <p className="text-red-600 font-medium">Blocked</p>}
                   </div>

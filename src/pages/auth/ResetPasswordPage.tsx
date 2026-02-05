@@ -20,6 +20,9 @@ export default function ResetPasswordPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
+  const newPasswordValidation = validatePassword(newPassword);
+  const confirmMismatch = confirmPassword.length > 0 && newPassword !== confirmPassword;
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -122,6 +125,13 @@ export default function ResetPasswordPage() {
                 className="mt-1 border-primary-200"
               />
               <p className="mt-1 text-xs text-muted-foreground">{PASSWORD_HINT}</p>
+              {newPassword.length > 0 && !newPasswordValidation.valid && (
+                <ul className="mt-1 list-inside list-disc text-xs text-destructive">
+                  {newPasswordValidation.errors.map((err) => (
+                    <li key={err}>{err}</li>
+                  ))}
+                </ul>
+              )}
             </div>
             <div>
               <Label htmlFor="reset-confirm-password" className="text-primary-800">
@@ -137,6 +147,7 @@ export default function ResetPasswordPage() {
                 placeholder="Repeat new password"
                 className="mt-1 border-primary-200"
               />
+              {confirmMismatch && <p className="mt-1 text-xs text-destructive">Passwords do not match.</p>}
             </div>
             {error && (
               <div className="rounded-lg border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive">

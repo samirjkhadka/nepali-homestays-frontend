@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { Star, MapPin, Heart, Bed } from 'lucide-react';
 import { useCurrency } from '@/lib/currency';
 import { getImageDisplayUrl } from '@/lib/image-url';
+import { ListingBadges } from '@/components/ListingBadges';
 
 type Listing = {
   id: number;
@@ -126,10 +127,10 @@ export default function FeaturedHomestays({ listings, loading, error }: Props) {
                     >
                       <span className="text-sm">No image</span>
                     </div>
-                    {listing.badge && BADGE_LABELS[listing.badge] && (
-                      <span className="absolute top-3 left-3 rounded-full bg-primary px-3 py-1 text-xs font-medium text-primary-foreground">
-                        {BADGE_LABELS[listing.badge]}
-                      </span>
+                    {listing.badge && (
+                      <div className="absolute top-3 left-3 flex flex-wrap gap-1.5">
+                        <ListingBadges badge={listing.badge} badgeLabels={BADGE_LABELS} compact />
+                      </div>
                     )}
                     <button
                       type="button"

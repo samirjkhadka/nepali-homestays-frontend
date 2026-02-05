@@ -17,6 +17,7 @@ import { PhotoGallery } from '@/components/PhotoGallery';
 import { BookingCard } from '@/components/BookingCard';
 import { ReviewsSection } from '@/components/ReviewsSection';
 import { AmenitiesList } from '@/components/AmenitiesList';
+import { ListingBadges } from '@/components/ListingBadges';
 
 type HostProfile = {
   id: number;
@@ -397,10 +398,10 @@ export default function ListingDetailPage() {
                 <span className="text-muted-foreground">({reviewsTotal} reviews)</span>
               </div>
             )}
-            {listingData.badge && listingDisplay.badge_labels[listingData.badge] && (
-              <div className="flex items-center gap-1 text-primary">
-                <Award className="w-4 h-4" />
-                <span>{listingDisplay.badge_labels[listingData.badge]}</span>
+            {listingData.badge && (
+              <div className="flex items-center gap-2">
+                <Award className="w-4 h-4 shrink-0 text-primary" />
+                <ListingBadges badge={listingData.badge} badgeLabels={listingDisplay.badge_labels} />
               </div>
             )}
             <div className="flex items-center gap-1 text-muted-foreground">

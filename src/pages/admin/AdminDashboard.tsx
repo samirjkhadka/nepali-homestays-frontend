@@ -14,10 +14,11 @@ import { HOMESTAY_CATEGORIES } from '@/data/districts';
 type Listing = { id: number; title: string; host_id: number; status: string; created_at: string; badge?: string | null };
 type ApprovedListing = { id: number; title: string; location: string; badge: string | null };
 type LiveListing = { id: number; title: string; location: string; badge: string | null; status: string };
-type User = { id: number; name: string; email: string; phone: string | null; role: string };
+type User = { id: number; name: string; email: string; phone: string | null; role: string; created_at?: string; blocked?: boolean };
 type VideoEntry = { url: string; title?: string };
-type AdminBooking = { id: number; listing_id: number; listing_title: string; guest_name: string; guest_email: string; check_in: string; check_out: string; guests: number; status: string; created_at: string; corporate_name?: string | null };
-type AdminPayment = { id: number; booking_id: number; amount: number; status: string; created_at: string; listing_title: string; guest_name: string };
+type ChargeableAmenity = { id: number; listing_id: number; name: string; price_npr: number; charge_type: 'per_night' | 'one_time' };
+type AdminBooking = { id: number; listing_id: number; listing_title: string; guest_name: string; guest_email: string; check_in: string; check_out: string; guests: number; status: string; created_at: string; corporate_name?: string | null; subtotal_npr?: number | null; total_amount?: number | null; amenity_charges_json?: string | null; listing_price_per_night?: number | null };
+type AdminPayment = { id: number; booking_id: number; amount: number; service_charge?: number; status: string; created_at: string; listing_title: string; guest_name: string };
 type Corporate = { id: number; name: string; status: string; contact_name: string | null; contact_email: string | null; contact_phone: string | null; billing_method: string | null; approval_required: boolean; max_nightly_rate: number | null; notes: string | null; created_at: string; updated_at: string };
 type CmsSection = { id: number; section_key: string; title: string | null; content: string | null; display_place: string; sort_order: number; created_at: string; updated_at: string };
 
@@ -59,6 +60,15 @@ type HomePlacementSettings = {
 const ADMIN_TABS = ['overview', 'listings', 'users', 'bookings', 'corporates', 'payments', 'reports', 'content', 'settings', 'logs'] as const;
 type AdminTab = (typeof ADMIN_TABS)[number];
 
+const LISTING_BADGES = ['recommended', 'featured', 'new'] as const;
+function parseBadges(badge: string | null | undefined): string[] {
+  if (!badge || typeof badge !== 'string') return [];
+  return badge.split(',').map((b) => b.trim()).filter((b) => LISTING_BADGES.includes(b as (typeof LISTING_BADGES)[number]));
+}
+function formatBadges(badges: string[]): string {
+  return badges.filter((b) => LISTING_BADGES.includes(b as (typeof LISTING_BADGES)[number])).join(',');
+}
+
 const LOGS_SUBTABS = ['email_sms', 'journey', 'api', 'errors', 'analytics', 'heatmap'] as const;
 type LogsSubTab = (typeof LOGS_SUBTABS)[number];
 
@@ -87,6 +97,12 @@ export default function AdminDashboard() {
     if (stateTab && ADMIN_TABS.includes(stateTab as AdminTab)) setTab(stateTab as AdminTab);
   }, [location.state]);
   const [pendingListings, setPendingListings] = useState<Listing[]>([]);
+  const [pendingListingsSearch, setPendingListingsSearch] = useState('');
+  const [liveListingsSearch, setLiveListingsSearch] = useState('');
+  const [adminBookingsSearch, setAdminBookingsSearch] = useState('');
+  const [adminPaymentsSearch, setAdminPaymentsSearch] = useState('');
+  const [reportsSearch, setReportsSearch] = useState('');
+  const [cmsSearch, setCmsSearch] = useState('');
   const [users, setUsers] = useState<User[]>([]);
   const [stats, setStats] = useState<{ total_users?: number; total_listings?: number; total_bookings?: number; total_revenue?: number }>({});
   const [adminBookings, setAdminBookings] = useState<AdminBooking[]>([]);
@@ -135,9 +151,9 @@ export default function AdminDashboard() {
   const [logDateTo, setLogDateTo] = useState(() => new Date().toISOString().slice(0, 10));
   const [emailSmsLogRows, setEmailSmsLogRows] = useState<{ id: number; channel: string; recipient: string; subject: string | null; body_preview: string | null; event_type: string | null; status: string; api_response: string | null; created_at: string }[]>([]);
   const [emailSmsLogTotal, setEmailSmsLogTotal] = useState(0);
-  const [journeyLogRows, setJourneyLogRows] = useState<{ id: number; user_id: number | null; session_id: string; event_type: string; page_or_route: string | null; payload: string | null; created_at: string }[]>([]);
+  const [journeyLogRows, setJourneyLogRows] = useState<{ id: number; user_id: number | null; session_id: string; event_type: string; page_or_route: string | null; payload: string | null; created_at: string; user_phone?: string | null; user_name?: string | null }[]>([]);
   const [journeyLogTotal, setJourneyLogTotal] = useState(0);
-  const [apiLogRows, setApiLogRows] = useState<{ id: number; method: string; path: string; user_id: number | null; response_status: number; response_time_ms: number; created_at: string }[]>([]);
+  const [apiLogRows, setApiLogRows] = useState<{ id: number; method: string; path: string; user_id: number | null; response_status: number; response_time_ms: number; created_at: string; user_phone?: string | null; user_name?: string | null; request_body?: string | null; response_body?: string | null; request_body_preview?: string | null; response_body_preview?: string | null }[]>([]);
   const [apiLogTotal, setApiLogTotal] = useState(0);
   const [errorLogRows, setErrorLogRows] = useState<{ id: number; source: string; level: string; message: string; stack_or_detail: string | null; user_id: number | null; request_path: string | null; request_id: string | null; created_at: string }[]>([]);
   const [errorLogTotal, setErrorLogTotal] = useState(0);
@@ -145,6 +161,8 @@ export default function AdminDashboard() {
   const [heatmapPageViews, setHeatmapPageViews] = useState<{ path: string; views: number }[]>([]);
   const [heatmapClicks, setHeatmapClicks] = useState<{ id: number; session_id: string; page_or_route: string | null; payload: string | null; created_at: string }[]>([]);
   const [logPage, setLogPage] = useState(1);
+  const [logsFiltersApplied, setLogsFiltersApplied] = useState(false);
+  const [logSearch, setLogSearch] = useState('');
   const [logChannel, setLogChannel] = useState<string>('');
   const [logEventType, setLogEventType] = useState<string>('');
   const [logPath, setLogPath] = useState('');
@@ -153,7 +171,7 @@ export default function AdminDashboard() {
   const [emailSmsDetail, setEmailSmsDetail] = useState<{ id: number; channel: string; recipient: string; subject: string | null; body_or_message: string | null; event_type: string | null; status: string; api_response: string | null; created_at: string } | null>(null);
   const [selectedJourneySessionId, setSelectedJourneySessionId] = useState<string | null>(null);
   const [journeySessionEvents, setJourneySessionEvents] = useState<{ id: number; user_id: number | null; session_id: string; event_type: string; page_or_route: string | null; payload: string | null; created_at: string }[]>([]);
-  const [selectedApiLog, setSelectedApiLog] = useState<{ id: number; method: string; path: string; user_id: number | null; response_status: number; response_time_ms: number; created_at: string } | null>(null);
+  const [selectedApiLog, setSelectedApiLog] = useState<{ id: number; method: string; path: string; user_id: number | null; response_status: number; response_time_ms: number; created_at: string; user_phone?: string | null; user_name?: string | null; request_body?: string | null; response_body?: string | null } | null>(null);
   const [selectedErrorLog, setSelectedErrorLog] = useState<{ id: number; source: string; level: string; message: string; stack_or_detail: string | null; user_id: number | null; request_path: string | null; request_id: string | null; created_at: string } | null>(null);
   const [selectedHeatmapPath, setSelectedHeatmapPath] = useState<string | null>(null);
   // Corporates tab
@@ -166,8 +184,13 @@ export default function AdminDashboard() {
   const [corporateForm, setCorporateForm] = useState<Partial<Corporate>>({ name: '', status: 'provisional', contact_name: '', contact_email: '', contact_phone: '', billing_method: '', approval_required: false, max_nightly_rate: null, notes: '' });
   const [corporateFormSaving, setCorporateFormSaving] = useState(false);
   const [createBookingOpen, setCreateBookingOpen] = useState(false);
-  const [createBookingForm, setCreateBookingForm] = useState({ corporate_id: '' as string, listing_id: '', guest_id: '', check_in: '', check_out: '', guests: '1', message: '' });
+  const [createBookingForm, setCreateBookingForm] = useState({ corporate_id: '' as string, listing_id: '', guest_id: '', guest_names: '', check_in: '', check_out: '', guests: '1', message: '' });
   const [createBookingSaving, setCreateBookingSaving] = useState(false);
+  const [createBookingListingPrice, setCreateBookingListingPrice] = useState<number | null>(null);
+  const [createBookingChargeableAmenities, setCreateBookingChargeableAmenities] = useState<ChargeableAmenity[]>([]);
+  const [createBookingAmenityQuantities, setCreateBookingAmenityQuantities] = useState<Record<number, number>>({});
+  const [addAmenityForm, setAddAmenityForm] = useState({ name: '', price_npr: '', charge_type: 'one_time' as 'per_night' | 'one_time' });
+  const [addAmenitySaving, setAddAmenitySaving] = useState(false);
   const [corporatesApprovedListings, setCorporatesApprovedListings] = useState<ApprovedListing[]>([]);
   // CMS (content tab)
   const [cmsSections, setCmsSections] = useState<CmsSection[]>([]);
@@ -176,6 +199,13 @@ export default function AdminDashboard() {
   const [cmsSectionForm, setCmsSectionForm] = useState<{ section_key: string; title: string; content: string; display_place: string; sort_order: number }>({ section_key: '', title: '', content: '', display_place: 'footer', sort_order: 0 });
   const [cmsSectionSaving, setCmsSectionSaving] = useState(false);
   const [newCmsSectionKey, setNewCmsSectionKey] = useState('');
+  // Users tab
+  const [usersSearch, setUsersSearch] = useState('');
+  const [usersLoading, setUsersLoading] = useState(false);
+  const [selectedUserDetail, setSelectedUserDetail] = useState<User | null>(null);
+  const [addAdminOpen, setAddAdminOpen] = useState(false);
+  const [addAdminForm, setAddAdminForm] = useState({ name: '', email: '', phone: '', password: '' });
+  const [addAdminSaving, setAddAdminSaving] = useState(false);
 
   useEffect(() => {
     api.get<{
@@ -222,6 +252,16 @@ export default function AdminDashboard() {
   }, [tab]);
 
   useEffect(() => {
+    if (tab !== 'users') return;
+    setUsersLoading(true);
+    const params = new URLSearchParams();
+    if (usersSearch.trim()) params.set('search', usersSearch.trim());
+    api.get<{ users: User[] }>(`/api/admin/users?${params}`).then((res) => {
+      setUsers(res.data.users || []);
+    }).catch(() => setUsers([])).finally(() => setUsersLoading(false));
+  }, [tab, usersSearch]);
+
+  useEffect(() => {
     if (tab !== 'corporates') return;
     const params = new URLSearchParams();
     if (corporatesSearch.trim()) params.set('search', corporatesSearch.trim());
@@ -238,6 +278,22 @@ export default function AdminDashboard() {
       setCorporatesApprovedListings(res.data.listings || []);
     }).catch(() => setCorporatesApprovedListings([]));
   }, [tab]);
+
+  useEffect(() => {
+    if (!createBookingOpen || !createBookingForm.listing_id) {
+      setCreateBookingListingPrice(null);
+      setCreateBookingChargeableAmenities([]);
+      setCreateBookingAmenityQuantities({});
+      return;
+    }
+    const id = Number(createBookingForm.listing_id);
+    if (!Number.isInteger(id)) return;
+    api.get<{ price_per_night?: number }>(`/api/listings/${id}`).then((res) => setCreateBookingListingPrice(res.data.price_per_night ?? null)).catch(() => setCreateBookingListingPrice(null));
+    api.get<{ amenities: ChargeableAmenity[] }>(`/api/listings/${id}/chargeable-amenities`).then((res) => {
+      setCreateBookingChargeableAmenities(res.data.amenities || []);
+      setCreateBookingAmenityQuantities({});
+    }).catch(() => setCreateBookingChargeableAmenities([]));
+  }, [createBookingOpen, createBookingForm.listing_id]);
 
   useEffect(() => {
     if (tab !== 'content') return;
@@ -303,21 +359,24 @@ export default function AdminDashboard() {
     });
   }, [tab]);
 
+  // Logs: only fetch when filters are applied (From + To required) to reduce DB load
   useEffect(() => {
-    if (tab !== 'logs') return;
+    if (tab !== 'logs' || !logsFiltersApplied) return;
     const from = logDateFrom ? `${logDateFrom}T00:00:00.000Z` : undefined;
     const to = logDateTo ? `${logDateTo}T23:59:59.999Z` : undefined;
+    if (!from || !to) return;
     const page = logPage;
     const limit = 25;
     const buildQ = (extra: Record<string, string> = {}) => {
-      const params = new URLSearchParams({ page: String(page), limit: String(limit) });
-      if (from) params.set('from_date', from);
-      if (to) params.set('to_date', to);
+      const params = new URLSearchParams({ page: String(page), limit: String(limit), from_date: from, to_date: to });
       Object.entries(extra).forEach(([k, v]) => { if (v) params.set(k, v); });
       return `?${params.toString()}`;
     };
     if (logsSubTab === 'email_sms') {
-      api.get<{ rows: typeof emailSmsLogRows; total: number }>(`/api/admin/logs/email-sms${buildQ(logChannel ? { channel: logChannel } : {})}`).then((res) => {
+      const extra: Record<string, string> = {};
+      if (logChannel) extra.channel = logChannel;
+      if (logSearch.trim()) extra.search = logSearch.trim();
+      api.get<{ rows: typeof emailSmsLogRows; total: number }>(`/api/admin/logs/email-sms${buildQ(extra)}`).then((res) => {
         setEmailSmsLogRows(res.data.rows || []);
         setEmailSmsLogTotal(res.data.total ?? 0);
       }).catch(() => { setEmailSmsLogRows([]); setEmailSmsLogTotal(0); });
@@ -336,11 +395,11 @@ export default function AdminDashboard() {
         setErrorLogRows(res.data.rows || []);
         setErrorLogTotal(res.data.total ?? 0);
       }).catch(() => { setErrorLogRows([]); setErrorLogTotal(0); });
-    } else if (logsSubTab === 'analytics' && from && to) {
+    } else if (logsSubTab === 'analytics') {
       api.get<typeof analyticsData>(`/api/admin/logs/analytics?from_date=${encodeURIComponent(from)}&to_date=${encodeURIComponent(to)}`).then((res) => {
         setAnalyticsData(res.data);
       }).catch(() => setAnalyticsData(null));
-    } else if (logsSubTab === 'heatmap' && from && to) {
+    } else if (logsSubTab === 'heatmap') {
       api.get<{ rows: typeof heatmapPageViews }>(`/api/admin/logs/heatmap/page-views?from_date=${encodeURIComponent(from)}&to_date=${encodeURIComponent(to)}&limit=50`).then((res) => {
         setHeatmapPageViews(res.data.rows || []);
       }).catch(() => setHeatmapPageViews([]));
@@ -348,7 +407,7 @@ export default function AdminDashboard() {
         setHeatmapClicks(res.data.rows || []);
       }).catch(() => setHeatmapClicks([]));
     }
-  }, [tab, logsSubTab, logDateFrom, logDateTo, logPage, logChannel, logEventType, logPath, logSource]);
+  }, [tab, logsSubTab, logsFiltersApplied, logDateFrom, logDateTo, logPage, logChannel, logSearch, logEventType, logPath, logSource]);
 
   useEffect(() => {
     if (!selectedJourneySessionId || tab !== 'logs') return;
@@ -452,15 +511,16 @@ export default function AdminDashboard() {
     }).catch(() => toast({ title: 'Failed.', variant: 'destructive' }));
   };
 
-  const handleBadgeChange = (id: number, badge: string | null) => {
-    const value = badge === '' ? null : badge;
-    api.patch(`/api/admin/listings/${id}/badge`, { badge: value })
+  const handleBadgeChange = (id: number, badges: string[]) => {
+    const value = formatBadges(badges);
+    api.patch(`/api/admin/listings/${id}/badge`, { badges })
       .then((res) => {
-        toast({ title: 'Badge updated.' });
-        setPendingListings((list) => list.map((l) => l.id === id ? { ...l, badge: res.data.listing?.badge ?? value } : l));
-        setLiveListings((list) => list.map((l) => l.id === id ? { ...l, badge: value } : l));
+        toast({ title: 'Badges updated.' });
+        const nextBadge = res.data.listing?.badge ?? (value || null);
+        setPendingListings((list) => list.map((l) => l.id === id ? { ...l, badge: nextBadge } : l));
+        setLiveListings((list) => list.map((l) => l.id === id ? { ...l, badge: nextBadge } : l));
       })
-      .catch(() => toast({ title: 'Failed to update badge.', variant: 'destructive' }));
+      .catch(() => toast({ title: 'Failed to update badges.', variant: 'destructive' }));
   };
 
   const handleStatusChange = (id: number, status: 'approved' | 'disabled') => {
@@ -498,7 +558,7 @@ export default function AdminDashboard() {
 
       {tab === 'overview' && (
         <div className="mt-6 space-y-6">
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
             <Card className="cursor-pointer border-primary-200 transition-shadow hover:shadow-md" onClick={() => setTab('listings')}>
               <CardContent className="flex items-center gap-4 p-6">
                 <div className="rounded-full bg-accent-100 p-3">
@@ -507,6 +567,17 @@ export default function AdminDashboard() {
                 <div>
                   <p className="text-2xl font-bold text-primary-800">{pendingListings.length}</p>
                   <p className="text-sm text-muted-foreground">Pending listings</p>
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="cursor-pointer border-primary-200 transition-shadow hover:shadow-md" onClick={() => setTab('listings')}>
+              <CardContent className="flex items-center gap-4 p-6">
+                <div className="rounded-full bg-primary-100 p-3">
+                  <Home className="h-8 w-8 text-primary-600" />
+                </div>
+                <div>
+                  <p className="text-2xl font-bold text-primary-800">{stats.total_listings ?? '—'}</p>
+                  <p className="text-sm text-muted-foreground">Total listings</p>
                 </div>
               </CardContent>
             </Card>
@@ -569,34 +640,46 @@ export default function AdminDashboard() {
         </div>
         <Card className="border-primary-200">
           <CardHeader className="border-b border-primary-100 bg-primary-50/50">
-            <div className="flex items-center gap-2">
-              <FileCheck className="h-5 w-5 text-accent-500" />
-              <span className="font-semibold text-primary-800 text-lg">Pending listings</span>
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div>
+                <div className="flex items-center gap-2">
+                  <FileCheck className="h-5 w-5 text-accent-500" />
+                  <span className="font-semibold text-primary-800 text-lg">Pending listings</span>
+                </div>
+                <p className="text-sm text-muted-foreground">Approve or reject new homestay listings</p>
+              </div>
+              <input
+                type="text"
+                placeholder="Search by title or ID…"
+                value={pendingListingsSearch}
+                onChange={(e) => setPendingListingsSearch(e.target.value)}
+                className="h-9 w-56 rounded-md border border-primary-200 bg-background px-2 text-sm"
+              />
             </div>
-            <p className="text-sm text-muted-foreground">Approve or reject new homestay listings</p>
           </CardHeader>
           <CardContent className="p-6">
-            {pendingListings.length === 0 ? (
+            {pendingListings.filter((l) => !pendingListingsSearch.trim() || l.title.toLowerCase().includes(pendingListingsSearch.toLowerCase()) || String(l.id).includes(pendingListingsSearch)).length === 0 ? (
               <p className="text-muted-foreground">No pending listings.</p>
             ) : (
               <div className="space-y-4">
-                {pendingListings.map((l) => (
+                {pendingListings.filter((l) => !pendingListingsSearch.trim() || l.title.toLowerCase().includes(pendingListingsSearch.toLowerCase()) || String(l.id).includes(pendingListingsSearch)).map((l) => {
+                  const currentBadges = parseBadges(l.badge);
+                  return (
                   <div key={l.id} className="flex flex-wrap items-center justify-between gap-4 rounded-lg border border-primary-200 p-4">
                     <div>
                       <p className="font-medium text-primary-800">{l.title}</p>
                       <p className="text-sm text-muted-foreground">ID: {l.id}</p>
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
-                      <select
-                        value={l.badge ?? ''}
-                        onChange={(e) => handleBadgeChange(l.id, e.target.value || null)}
-                        className="rounded-md border border-primary-200 bg-background px-2 py-1.5 text-sm"
-                      >
-                        <option value="">No badge</option>
-                        <option value="recommended">Recommended</option>
-                        <option value="featured">Featured</option>
-                        <option value="new">New</option>
-                      </select>
+                      <div className="flex items-center gap-3 rounded-md border border-primary-200 bg-muted/30 px-2 py-1.5">
+                        <span className="text-xs font-medium text-muted-foreground">Badges:</span>
+                        {LISTING_BADGES.map((b) => (
+                          <label key={b} className="flex cursor-pointer items-center gap-1.5 text-sm">
+                            <input type="checkbox" checked={currentBadges.includes(b)} onChange={() => { const next = currentBadges.includes(b) ? currentBadges.filter((x) => x !== b) : [...currentBadges, b]; handleBadgeChange(l.id, next); }} className="rounded border-primary-300" />
+                            <span>{b.charAt(0).toUpperCase() + b.slice(1)}</span>
+                          </label>
+                        ))}
+                      </div>
                       <Button size="sm" className="bg-accent-500 hover:bg-accent-600" onClick={() => handleApprove(l.id)}>Approve</Button>
                       <Button size="sm" variant="destructive" onClick={() => handleReject(l.id)}>Reject</Button>
                       <Button variant="outline" size="sm" asChild>
@@ -607,7 +690,8 @@ export default function AdminDashboard() {
                       </Button>
                     </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </CardContent>
@@ -615,11 +699,22 @@ export default function AdminDashboard() {
 
         <Card className="border-primary-200">
           <CardHeader className="border-b border-primary-100 bg-primary-50/50">
-            <h2 className="font-semibold text-primary-800">Approved & disabled listings</h2>
-            <p className="text-sm text-muted-foreground">Enable or disable homestays. Disabled listings are hidden from search and the site. Set badge for approved listings.</p>
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div>
+                <h2 className="font-semibold text-primary-800">Approved & disabled listings</h2>
+                <p className="text-sm text-muted-foreground">Enable or disable homestays. Disabled listings are hidden from search and the site. Set badges for approved listings.</p>
+              </div>
+              <input
+                type="text"
+                placeholder="Search by title, ID or location…"
+                value={liveListingsSearch}
+                onChange={(e) => setLiveListingsSearch(e.target.value)}
+                className="h-9 w-56 rounded-md border border-primary-200 bg-background px-2 text-sm"
+              />
+            </div>
           </CardHeader>
           <CardContent className="p-6">
-            {liveListings.length === 0 ? (
+            {liveListings.filter((l) => !liveListingsSearch.trim() || l.title.toLowerCase().includes(liveListingsSearch.toLowerCase()) || l.location?.toLowerCase().includes(liveListingsSearch.toLowerCase()) || String(l.id).includes(liveListingsSearch)).length === 0 ? (
               <p className="text-muted-foreground">No approved or disabled listings.</p>
             ) : (
               <div className="overflow-x-auto">
@@ -630,12 +725,14 @@ export default function AdminDashboard() {
                       <th className="p-3 text-left text-sm font-medium text-primary-800">Title</th>
                       <th className="p-3 text-left text-sm font-medium text-primary-800">Location</th>
                       <th className="p-3 text-left text-sm font-medium text-primary-800">Status</th>
-                      <th className="p-3 text-left text-sm font-medium text-primary-800">Badge</th>
+                      <th className="p-3 text-left text-sm font-medium text-primary-800">Badges</th>
                       <th className="p-3 text-left text-sm font-medium text-primary-800">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {liveListings.map((l) => (
+                    {liveListings.filter((l) => !liveListingsSearch.trim() || l.title.toLowerCase().includes(liveListingsSearch.toLowerCase()) || l.location?.toLowerCase().includes(liveListingsSearch.toLowerCase()) || String(l.id).includes(liveListingsSearch)).map((l) => {
+                      const currentBadges = parseBadges(l.badge);
+                      return (
                       <tr key={l.id} className="border-b border-primary-100">
                         <td className="p-3 text-sm">{l.id}</td>
                         <td className="p-3 font-medium text-primary-800">{l.title}</td>
@@ -646,17 +743,14 @@ export default function AdminDashboard() {
                           </span>
                         </td>
                         <td className="p-3">
-                          <select
-                            value={l.badge ?? ''}
-                            onChange={(e) => handleBadgeChange(l.id, e.target.value || null)}
-                            className="rounded-md border border-primary-200 bg-background px-2 py-1.5 text-sm"
-                            disabled={l.status !== 'approved'}
-                          >
-                            <option value="">None</option>
-                            <option value="recommended">Recommended</option>
-                            <option value="featured">Featured</option>
-                            <option value="new">New</option>
-                          </select>
+                          <div className="flex flex-wrap items-center gap-2">
+                            {LISTING_BADGES.map((b) => (
+                              <label key={b} className="flex cursor-pointer items-center gap-1 text-sm">
+                                <input type="checkbox" checked={currentBadges.includes(b)} disabled={l.status !== 'approved'} onChange={() => { const next = currentBadges.includes(b) ? currentBadges.filter((x) => x !== b) : [...currentBadges, b]; handleBadgeChange(l.id, next); }} className="rounded border-primary-300" />
+                                <span>{b.charAt(0).toUpperCase() + b.slice(1)}</span>
+                              </label>
+                            ))}
+                          </div>
                         </td>
                         <td className="p-3">
                           <div className="flex items-center gap-2">
@@ -674,7 +768,8 @@ export default function AdminDashboard() {
                           </div>
                         </td>
                       </tr>
-                    ))}
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -685,55 +780,150 @@ export default function AdminDashboard() {
       )}
 
       {tab === 'users' && (
-        <Card className="mt-6 border-primary-200">
-          <CardHeader className="border-b border-primary-100 bg-primary-50/50">
-            <div className="flex items-center gap-2">
-              <Users className="h-5 w-5 text-primary-600" />
-              <h2 className="font-semibold text-primary-800">Users</h2>
-            </div>
-            <p className="text-sm text-muted-foreground">Change user roles</p>
-          </CardHeader>
-          <CardContent className="p-0">
-            <div className="overflow-x-auto">
-              <table className="w-full border-collapse">
-                <thead>
-                  <tr className="border-b border-primary-200 bg-primary-50/50">
-                    <th className="p-3 text-left text-sm font-medium text-primary-800">ID</th>
-                    <th className="p-3 text-left text-sm font-medium text-primary-800">Name</th>
-                    <th className="p-3 text-left text-sm font-medium text-primary-800">Email</th>
-                    <th className="p-3 text-left text-sm font-medium text-primary-800">Role</th>
-                    <th className="p-3 text-left text-sm font-medium text-primary-800">Change role</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {users.map((u) => (
-                    <tr key={u.id} className="border-b border-primary-100">
-                      <td className="p-3 text-sm">{u.id}</td>
-                      <td className="p-3 font-medium text-primary-800">{u.name}</td>
-                      <td className="p-3 text-sm text-muted-foreground">{u.email}</td>
-                      <td className="p-3">
-                        <span className={`rounded-full px-2 py-1 text-xs font-medium ${u.role === 'admin' ? 'bg-accent-100 text-accent-800' : u.role === 'host' ? 'bg-primary-100 text-primary-800' : 'bg-secondary-200 text-secondary-800'}`}>
-                          {u.role}
-                        </span>
-                      </td>
-                      <td className="p-3">
-                        <select
-                          value={u.role}
-                          onChange={(e) => handleRoleChange(u.id, e.target.value)}
-                          className="rounded-md border border-primary-200 bg-background px-2 py-1.5 text-sm"
-                        >
-                          <option value="guest">guest</option>
-                          <option value="host">host</option>
-                          <option value="admin">admin</option>
-                        </select>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </CardContent>
-        </Card>
+        <>
+          <Card className="mt-6 border-primary-200">
+            <CardHeader className="border-b border-primary-100 bg-primary-50/50">
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <Users className="h-5 w-5 text-primary-600" />
+                    <h2 className="font-semibold text-primary-800">Users</h2>
+                  </div>
+                  <p className="text-sm text-muted-foreground">Manage users, roles, and block/unblock. Add admin users (they verify OTP on first login).</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    placeholder="Search by name, email, or phone…"
+                    value={usersSearch}
+                    onChange={(e) => setUsersSearch(e.target.value)}
+                    className="h-9 w-56 rounded-md border border-primary-200 bg-background px-2 text-sm"
+                  />
+                  <Button size="sm" className="bg-accent-500 hover:bg-accent-600" onClick={() => { setAddAdminForm({ name: '', email: '', phone: '', password: '' }); setAddAdminOpen(true); }}>
+                    Add admin user
+                  </Button>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="p-0">
+              <div className="overflow-x-auto">
+                {usersLoading ? (
+                  <p className="p-8 text-center text-muted-foreground">Loading users…</p>
+                ) : (
+                  <table className="w-full border-collapse">
+                    <thead>
+                      <tr className="border-b border-primary-200 bg-primary-50/50">
+                        <th className="p-3 text-left text-sm font-medium text-primary-800">ID</th>
+                        <th className="p-3 text-left text-sm font-medium text-primary-800">Name</th>
+                        <th className="p-3 text-left text-sm font-medium text-primary-800">Email</th>
+                        <th className="p-3 text-left text-sm font-medium text-primary-800">Mobile</th>
+                        <th className="p-3 text-left text-sm font-medium text-primary-800">Created</th>
+                        <th className="p-3 text-left text-sm font-medium text-primary-800">Role</th>
+                        <th className="p-3 text-left text-sm font-medium text-primary-800">Change role</th>
+                        <th className="p-3 text-left text-sm font-medium text-primary-800">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {users.map((u) => (
+                        <tr key={u.id} className="border-b border-primary-100">
+                          <td className="p-3 text-sm">{u.id}</td>
+                          <td className="p-3 font-medium text-primary-800">{u.name}</td>
+                          <td className="p-3 text-sm text-muted-foreground">{u.email}</td>
+                          <td className="p-3 text-sm">{u.phone ?? '—'}</td>
+                          <td className="p-3 text-sm text-muted-foreground">{u.created_at ? formatDateOnly(u.created_at) : '—'}</td>
+                          <td className="p-3">
+                            <span className={`rounded-full px-2 py-1 text-xs font-medium ${u.role === 'admin' ? 'bg-accent-100 text-accent-800' : u.role === 'host' ? 'bg-primary-100 text-primary-800' : 'bg-secondary-200 text-secondary-800'}`}>
+                              {u.role}
+                            </span>
+                            {u.blocked && <span className="ml-1 rounded-full bg-red-100 px-2 py-0.5 text-xs text-red-800">Blocked</span>}
+                          </td>
+                          <td className="p-3">
+                            <select
+                              value={u.role}
+                              onChange={(e) => handleRoleChange(u.id, e.target.value)}
+                              className="rounded-md border border-primary-200 bg-background px-2 py-1.5 text-sm"
+                            >
+                              <option value="guest">guest</option>
+                              <option value="host">host</option>
+                              <option value="admin">admin</option>
+                            </select>
+                          </td>
+                          <td className="p-3">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <Button type="button" variant="outline" size="sm" onClick={() => setSelectedUserDetail(u)}>View detail</Button>
+                              {u.blocked ? (
+                                <Button type="button" size="sm" className="bg-green-600 hover:bg-green-700" onClick={() => api.patch(`/api/admin/users/${u.id}/block`, { blocked: false }).then(() => { setUsers((prev) => prev.map((x) => x.id === u.id ? { ...x, blocked: false } : x)); toast({ title: 'User unblocked.' }); }).catch((err) => toast({ title: err.response?.data?.message || 'Failed', variant: 'destructive' }))}>Unblock</Button>
+                              ) : (
+                                <Button type="button" variant="destructive" size="sm" onClick={() => api.patch(`/api/admin/users/${u.id}/block`, { blocked: true }).then(() => { setUsers((prev) => prev.map((x) => x.id === u.id ? { ...x, blocked: true } : x)); toast({ title: 'User blocked.' }); }).catch((err) => toast({ title: err.response?.data?.message || 'Failed', variant: 'destructive' }))}>Block</Button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+                {!usersLoading && users.length === 0 && <p className="p-8 text-center text-muted-foreground">No users found.</p>}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Dialog.Root open={!!selectedUserDetail} onOpenChange={(open) => !open && setSelectedUserDetail(null)}>
+            <Dialog.Portal>
+              <Dialog.Overlay className="fixed inset-0 bg-black/50" />
+              <Dialog.Content className="fixed left-1/2 top-1/2 z-50 w-full max-w-md -translate-x-1/2 -translate-y-1/2 rounded-lg border border-primary-200 bg-background p-6 shadow-lg">
+                <Dialog.Title className="text-lg font-semibold text-primary-800">User detail</Dialog.Title>
+                {selectedUserDetail && (
+                  <div className="mt-4 space-y-2 text-sm">
+                    <p><span className="font-medium text-muted-foreground">ID:</span> {selectedUserDetail.id}</p>
+                    <p><span className="font-medium text-muted-foreground">Name:</span> {selectedUserDetail.name}</p>
+                    <p><span className="font-medium text-muted-foreground">Email:</span> {selectedUserDetail.email}</p>
+                    <p><span className="font-medium text-muted-foreground">Mobile:</span> {selectedUserDetail.phone ?? '—'}</p>
+                    <p><span className="font-medium text-muted-foreground">Role:</span> {selectedUserDetail.role}</p>
+                    <p><span className="font-medium text-muted-foreground">Created:</span> {selectedUserDetail.created_at ? formatDateOnly(selectedUserDetail.created_at) : '—'}</p>
+                    {selectedUserDetail.blocked && <p className="text-red-600 font-medium">Blocked</p>}
+                  </div>
+                )}
+                <div className="mt-4 flex justify-end">
+                  <Button variant="outline" onClick={() => setSelectedUserDetail(null)}>Close</Button>
+                </div>
+              </Dialog.Content>
+            </Dialog.Portal>
+          </Dialog.Root>
+
+          <Dialog.Root open={addAdminOpen} onOpenChange={setAddAdminOpen}>
+            <Dialog.Portal>
+              <Dialog.Overlay className="fixed inset-0 bg-black/50" />
+              <Dialog.Content className="fixed left-1/2 top-1/2 z-50 w-full max-w-md -translate-x-1/2 -translate-y-1/2 rounded-lg border border-primary-200 bg-background p-6 shadow-lg">
+                <Dialog.Title className="text-lg font-semibold text-primary-800">Add admin user</Dialog.Title>
+                <p className="mt-1 text-sm text-muted-foreground">New admin will need to verify OTP on first login.</p>
+                <form className="mt-4 space-y-3" onSubmit={(e) => { e.preventDefault(); if (!addAdminForm.name.trim() || !addAdminForm.email.trim() || !addAdminForm.password) { toast({ title: 'Name, email and password required.', variant: 'destructive' }); return; } setAddAdminSaving(true); api.post('/api/admin/users', { name: addAdminForm.name.trim(), email: addAdminForm.email.trim(), phone: addAdminForm.phone.trim() || undefined, password: addAdminForm.password }).then(() => { toast({ title: 'Admin user created.' }); setAddAdminOpen(false); setAddAdminForm({ name: '', email: '', phone: '', password: '' }); const params = new URLSearchParams(); if (usersSearch.trim()) params.set('search', usersSearch.trim()); return api.get<{ users: User[] }>(`/api/admin/users?${params}`); }).then((r) => { if (r?.data?.users) setUsers(r.data.users); }).catch((err) => toast({ title: err.response?.data?.message || 'Failed to create admin.', variant: 'destructive' })).finally(() => setAddAdminSaving(false)); }}>
+                  <div>
+                    <label className="block text-sm font-medium text-primary-700">Name *</label>
+                    <input type="text" value={addAdminForm.name} onChange={(e) => setAddAdminForm((f) => ({ ...f, name: e.target.value }))} className="mt-1 w-full rounded-md border border-primary-200 bg-background px-3 py-2 text-sm" required />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-primary-700">Email *</label>
+                    <input type="email" value={addAdminForm.email} onChange={(e) => setAddAdminForm((f) => ({ ...f, email: e.target.value }))} className="mt-1 w-full rounded-md border border-primary-200 bg-background px-3 py-2 text-sm" required />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-primary-700">Phone (optional)</label>
+                    <input type="text" value={addAdminForm.phone} onChange={(e) => setAddAdminForm((f) => ({ ...f, phone: e.target.value }))} className="mt-1 w-full rounded-md border border-primary-200 bg-background px-3 py-2 text-sm" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-primary-700">Password *</label>
+                    <PasswordInput value={addAdminForm.password} onChange={(e) => setAddAdminForm((f) => ({ ...f, password: e.target.value }))} className="mt-1 w-full rounded-md border border-primary-200 bg-background px-3 py-2 text-sm" required />
+                    <p className="mt-1 text-xs text-muted-foreground">Min 8 chars, uppercase, lowercase, number, special character.</p>
+                  </div>
+                  <div className="flex justify-end gap-2 pt-2">
+                    <Button type="button" variant="outline" onClick={() => setAddAdminOpen(false)}>Cancel</Button>
+                    <Button type="submit" className="bg-accent-500 hover:bg-accent-600" disabled={addAdminSaving}>{addAdminSaving ? 'Creating…' : 'Create admin'}</Button>
+                  </div>
+                </form>
+              </Dialog.Content>
+            </Dialog.Portal>
+          </Dialog.Root>
+        </>
       )}
 
       {tab === 'bookings' && (
@@ -747,11 +937,19 @@ export default function AdminDashboard() {
                 </div>
                 <p className="text-sm text-muted-foreground">View all bookings ({adminBookingsTotal} total)</p>
               </div>
-              <select
-                value={adminBookingsStatus}
-                onChange={(e) => setAdminBookingsStatus(e.target.value)}
-                className="rounded-md border border-primary-200 bg-background px-3 py-2 text-sm"
-              >
+              <div className="flex flex-wrap items-center gap-2">
+                <input
+                  type="text"
+                  placeholder="Search guest or listing…"
+                  value={adminBookingsSearch}
+                  onChange={(e) => setAdminBookingsSearch(e.target.value)}
+                  className="h-9 w-48 rounded-md border border-primary-200 bg-background px-2 text-sm"
+                />
+                <select
+                  value={adminBookingsStatus}
+                  onChange={(e) => setAdminBookingsStatus(e.target.value)}
+                  className="rounded-md border border-primary-200 bg-background px-3 py-2 text-sm"
+                >
                 <option value="">All statuses</option>
                 <option value="pending">Pending</option>
                 <option value="pending_payment">Pending payment</option>
@@ -761,11 +959,12 @@ export default function AdminDashboard() {
                 <option value="declined">Declined</option>
                 <option value="cancelled">Cancelled</option>
               </select>
+              </div>
             </div>
           </CardHeader>
           <CardContent className="p-0">
             <div className="overflow-x-auto">
-              {adminBookings.length === 0 ? (
+              {(() => { const filteredBookings = adminBookings.filter((b) => !adminBookingsSearch.trim() || (b.guest_name && b.guest_name.toLowerCase().includes(adminBookingsSearch.toLowerCase())) || (b.listing_title && b.listing_title.toLowerCase().includes(adminBookingsSearch.toLowerCase()))); return filteredBookings.length === 0 ? (
                 <p className="p-8 text-center text-muted-foreground">No bookings found.</p>
               ) : (
                 <table className="w-full border-collapse">
@@ -781,7 +980,7 @@ export default function AdminDashboard() {
                     </tr>
                   </thead>
                   <tbody>
-                    {adminBookings.map((b) => (
+                    {filteredBookings.map((b) => (
                       <tr key={b.id} className="border-b border-primary-100">
                         <td className="p-3 text-sm">{b.id}</td>
                         <td className="p-3 font-medium text-primary-800">{b.listing_title}</td>
@@ -798,7 +997,7 @@ export default function AdminDashboard() {
                     ))}
                   </tbody>
                 </table>
-              )}
+              ); })()}
             </div>
           </CardContent>
         </Card>
@@ -812,7 +1011,7 @@ export default function AdminDashboard() {
               <Button size="sm" variant="outline" onClick={() => { setEditingCorporate(null); setCorporateForm({ name: '', status: 'provisional', contact_name: '', contact_email: '', contact_phone: '', billing_method: '', approval_required: false, max_nightly_rate: null, notes: '' }); setCorporateFormOpen(true); }}>
                 <Plus className="h-4 w-4 mr-1" /> Add corporate
               </Button>
-              <Button size="sm" className="bg-accent-500 hover:bg-accent-600" onClick={() => { setCreateBookingForm({ corporate_id: '', listing_id: '', guest_id: '', check_in: '', check_out: '', guests: '1', message: '' }); setCreateBookingOpen(true); }}>
+              <Button size="sm" className="bg-accent-500 hover:bg-accent-600" onClick={() => { setCreateBookingForm({ corporate_id: '', listing_id: '', guest_id: '', guest_names: '', check_in: '', check_out: '', guests: '1', message: '' }); setCreateBookingListingPrice(null); setCreateBookingChargeableAmenities([]); setCreateBookingAmenityQuantities({}); setCreateBookingOpen(true); }}>
                 Create corporate booking
               </Button>
             </div>
@@ -942,8 +1141,40 @@ export default function AdminDashboard() {
               <Dialog.Overlay className="fixed inset-0 bg-black/50" />
               <Dialog.Content className="fixed left-1/2 top-1/2 z-50 max-h-[90vh] w-full max-w-lg -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-lg border border-primary-200 bg-background p-6 shadow-lg">
                 <Dialog.Title className="text-lg font-semibold text-primary-800">Create corporate booking</Dialog.Title>
-                <p className="mt-1 text-sm text-muted-foreground">Create an approved booking on behalf of a guest. Optionally link to a corporate.</p>
-                <form className="mt-4 space-y-3" onSubmit={(e) => { e.preventDefault(); const listing_id = Number(createBookingForm.listing_id); const guest_id = Number(createBookingForm.guest_id); if (!listing_id || !guest_id || !createBookingForm.check_in || !createBookingForm.check_out) { toast({ title: 'Please select listing, guest, and dates.', variant: 'destructive' }); return; } const guests = Math.max(1, parseInt(createBookingForm.guests, 10) || 1); setCreateBookingSaving(true); api.post('/api/admin/bookings/corporate', { listing_id, guest_id, check_in: createBookingForm.check_in, check_out: createBookingForm.check_out, guests, message: createBookingForm.message || undefined, corporate_id: createBookingForm.corporate_id ? Number(createBookingForm.corporate_id) : null }).then(() => { toast({ title: 'Booking created (approved).' }); setCreateBookingOpen(false); const params = new URLSearchParams(); if (adminBookingsStatus) params.set('status', adminBookingsStatus); api.get<{ bookings: AdminBooking[]; total: number }>(`/api/admin/bookings?${params}`).then((r) => { setAdminBookings(r.data.bookings || []); setAdminBookingsTotal(r.data.total ?? 0); }).catch(() => {}); }).catch((err) => toast({ title: err.response?.data?.message || 'Failed to create booking.', variant: 'destructive' })).finally(() => setCreateBookingSaving(false)); }}>
+                <p className="mt-1 text-sm text-muted-foreground">Add guest names (one per line or comma-separated) or upload CSV. Number of guests and total price are calculated from the list.</p>
+                <form className="mt-4 space-y-3" onSubmit={(e) => {
+                  e.preventDefault();
+                  const listing_id = Number(createBookingForm.listing_id);
+                  if (!listing_id || !createBookingForm.check_in || !createBookingForm.check_out) { toast({ title: 'Please select listing and dates.', variant: 'destructive' }); return; }
+                  const raw = createBookingForm.guest_names.trim().replace(/\r\n/g, '\n').split(/[\n,]/).map((s) => s.trim()).filter(Boolean);
+                  const guestCount = raw.length >= 1 ? raw.length : Math.max(1, parseInt(createBookingForm.guests, 10) || 1);
+                  const useGuestNames = raw.length >= 1;
+                  if (useGuestNames && guestCount !== raw.length) { toast({ title: 'Guest names count mismatch.', variant: 'destructive' }); return; }
+                  if (!useGuestNames && !createBookingForm.guest_id) { toast({ title: 'Add guest names or select a primary guest (user).', variant: 'destructive' }); return; }
+                  setCreateBookingSaving(true);
+                  const amenitiesPayload = createBookingChargeableAmenities
+                    .filter((a) => (createBookingAmenityQuantities[a.id] ?? 0) > 0)
+                    .map((a) => ({ id: a.id, quantity: createBookingAmenityQuantities[a.id] ?? 0 }));
+                  const payload = {
+                    listing_id,
+                    check_in: createBookingForm.check_in,
+                    check_out: createBookingForm.check_out,
+                    guests: guestCount,
+                    message: createBookingForm.message || undefined,
+                    corporate_id: createBookingForm.corporate_id ? Number(createBookingForm.corporate_id) : null,
+                    ...(useGuestNames ? { guest_names: raw.join('\n'), guest_id: null } : { guest_id: Number(createBookingForm.guest_id) }),
+                    ...(amenitiesPayload.length > 0 ? { amenities: amenitiesPayload } : {}),
+                  };
+                  api.post('/api/admin/bookings/corporate', payload).then(() => {
+                    toast({ title: 'Booking created (approved).' });
+                    setCreateBookingOpen(false);
+                    setCreateBookingChargeableAmenities([]);
+                    setCreateBookingAmenityQuantities({});
+                    const params = new URLSearchParams();
+                    if (adminBookingsStatus) params.set('status', adminBookingsStatus);
+                    api.get<{ bookings: AdminBooking[]; total: number }>(`/api/admin/bookings?${params}`).then((r) => { setAdminBookings(r.data.bookings || []); setAdminBookingsTotal(r.data.total ?? 0); }).catch(() => {});
+                  }).catch((err) => toast({ title: err.response?.data?.message || 'Failed to create booking.', variant: 'destructive' })).finally(() => setCreateBookingSaving(false));
+                }}>
                   <div>
                     <label className="block text-sm font-medium text-primary-700">Corporate (optional)</label>
                     <select value={createBookingForm.corporate_id} onChange={(e) => setCreateBookingForm((f) => ({ ...f, corporate_id: e.target.value }))} className="mt-1 w-full rounded-md border border-primary-200 bg-background px-3 py-2 text-sm">
@@ -963,9 +1194,15 @@ export default function AdminDashboard() {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-primary-700">Guest (user) *</label>
-                    <select value={createBookingForm.guest_id} onChange={(e) => setCreateBookingForm((f) => ({ ...f, guest_id: e.target.value }))} className="mt-1 w-full rounded-md border border-primary-200 bg-background px-3 py-2 text-sm" required>
-                      <option value="">Select guest</option>
+                    <label className="block text-sm font-medium text-primary-700">Guest names (one per line or comma-separated)</label>
+                    <textarea value={createBookingForm.guest_names} onChange={(e) => setCreateBookingForm((f) => ({ ...f, guest_names: e.target.value }))} className="mt-1 w-full rounded-md border border-primary-200 bg-background px-3 py-2 text-sm" rows={4} placeholder={'e.g. Ram Sharma\nSita Rai\nOr: Ram Sharma, Sita Rai'} />
+                    <p className="mt-1 text-xs text-muted-foreground">Or upload CSV/txt (one name per line or comma-separated)</p>
+                    <input type="file" accept=".csv,.txt" className="mt-1 block w-full text-sm text-muted-foreground file:mr-2 file:rounded-md file:border-0 file:bg-primary-100 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-primary-800 hover:file:bg-primary-200" onChange={(ev) => { const f = ev.target.files?.[0]; if (!f) return; const r = new FileReader(); r.onload = () => { const text = (r.result as string) || ''; const lines = text.replace(/\r\n/g, '\n').split(/[\n,]/).map((s) => s.trim()).filter(Boolean); setCreateBookingForm((prev) => ({ ...prev, guest_names: lines.join('\n') })); }; r.readAsText(f); ev.target.value = ''; }} />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-primary-700">Primary guest (user) — only if not using guest names above</label>
+                    <select value={createBookingForm.guest_id} onChange={(e) => setCreateBookingForm((f) => ({ ...f, guest_id: e.target.value }))} className="mt-1 w-full rounded-md border border-primary-200 bg-background px-3 py-2 text-sm">
+                      <option value="">— None (use guest names list) —</option>
                       {users.map((u) => (
                         <option key={u.id} value={u.id}>{u.name} ({u.email})</option>
                       ))}
@@ -981,10 +1218,79 @@ export default function AdminDashboard() {
                       <input type="date" value={createBookingForm.check_out} onChange={(e) => setCreateBookingForm((f) => ({ ...f, check_out: e.target.value }))} className="mt-1 w-full rounded-md border border-primary-200 bg-background px-3 py-2 text-sm" required />
                     </div>
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium text-primary-700">Number of guests</label>
-                    <input type="number" min={1} value={createBookingForm.guests} onChange={(e) => setCreateBookingForm((f) => ({ ...f, guests: e.target.value }))} className="mt-1 w-full rounded-md border border-primary-200 bg-background px-3 py-2 text-sm" />
-                  </div>
+                  {createBookingForm.listing_id && (
+                    <div>
+                      <label className="block text-sm font-medium text-primary-700">Chargeable amenities (optional)</label>
+                      <p className="mt-0.5 text-xs text-muted-foreground">Add optional add-ons; charges will appear on the invoice.</p>
+                      {createBookingChargeableAmenities.length > 0 ? (
+                        <div className="mt-2 space-y-2 rounded-lg border border-primary-200 bg-primary-50/30 p-3">
+                          {createBookingChargeableAmenities.map((a) => (
+                            <div key={a.id} className="flex items-center justify-between gap-4">
+                              <span className="text-sm text-primary-800">{a.name} — NPR {Number(a.price_npr).toLocaleString()}{a.charge_type === 'per_night' ? ' / night' : ' (one-time)'}</span>
+                              <input
+                                type="number"
+                                min={0}
+                                value={createBookingAmenityQuantities[a.id] ?? 0}
+                                onChange={(e) => setCreateBookingAmenityQuantities((prev) => ({ ...prev, [a.id]: Math.max(0, parseInt(e.target.value, 10) || 0) }))}
+                                className="w-20 rounded-md border border-primary-200 bg-background px-2 py-1 text-sm"
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="mt-2 rounded-lg border border-dashed border-primary-200 bg-primary-50/20 p-3">
+                          <p className="text-sm text-muted-foreground mb-2">No chargeable amenities for this listing. Add one:</p>
+                          <div className="flex flex-wrap items-end gap-2">
+                            <input type="text" placeholder="Name (e.g. Community hall)" value={addAmenityForm.name} onChange={(e) => setAddAmenityForm((f) => ({ ...f, name: e.target.value }))} className="rounded-md border border-primary-200 bg-background px-2 py-1.5 text-sm w-40" />
+                            <input type="number" min={0} step={0.01} placeholder="Price NPR" value={addAmenityForm.price_npr} onChange={(e) => setAddAmenityForm((f) => ({ ...f, price_npr: e.target.value }))} className="rounded-md border border-primary-200 bg-background px-2 py-1.5 text-sm w-24" />
+                            <select value={addAmenityForm.charge_type} onChange={(e) => setAddAmenityForm((f) => ({ ...f, charge_type: e.target.value as 'per_night' | 'one_time' }))} className="rounded-md border border-primary-200 bg-background px-2 py-1.5 text-sm">
+                              <option value="one_time">One-time</option>
+                              <option value="per_night">Per night</option>
+                            </select>
+                            <Button type="button" size="sm" variant="outline" disabled={addAmenitySaving || !addAmenityForm.name.trim() || !Number(addAmenityForm.price_npr)} onClick={() => {
+                              const lid = Number(createBookingForm.listing_id);
+                              if (!lid) return;
+                              setAddAmenitySaving(true);
+                              api.post(`/api/admin/listings/${lid}/chargeable-amenities`, { name: addAmenityForm.name.trim(), price_npr: Number(addAmenityForm.price_npr), charge_type: addAmenityForm.charge_type }).then(() => {
+                                setAddAmenityForm({ name: '', price_npr: '', charge_type: 'one_time' });
+                                return api.get<{ amenities: ChargeableAmenity[] }>(`/api/listings/${lid}/chargeable-amenities`);
+                              }).then((res) => {
+                                setCreateBookingChargeableAmenities(res.data.amenities || []);
+                                toast({ title: 'Chargeable amenity added.' });
+                              }).catch((err) => toast({ title: err.response?.data?.message || 'Failed to add amenity', variant: 'destructive' })).finally(() => setAddAmenitySaving(false));
+                            }}>{addAmenitySaving ? 'Adding…' : 'Add'}</Button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  {(() => {
+                    const raw = createBookingForm.guest_names.trim().replace(/\r\n/g, '\n').split(/[\n,]/).map((s) => s.trim()).filter(Boolean);
+                    const guests = raw.length >= 1 ? raw.length : Math.max(1, parseInt(createBookingForm.guests, 10) || 1);
+                    const nights = createBookingForm.check_in && createBookingForm.check_out
+                      ? Math.max(0, Math.ceil((new Date(createBookingForm.check_out).getTime() - new Date(createBookingForm.check_in).getTime()) / (24 * 60 * 60 * 1000)))
+                      : 0;
+                    const pricePerNight = createBookingListingPrice ?? 0;
+                    const subtotal = nights * pricePerNight * guests;
+                    let amenityTotal = 0;
+                    createBookingChargeableAmenities.forEach((a) => {
+                      const qty = createBookingAmenityQuantities[a.id] ?? 0;
+                      if (qty <= 0) return;
+                      if (a.charge_type === 'per_night') amenityTotal += qty * nights * Number(a.price_npr);
+                      else amenityTotal += qty * Number(a.price_npr);
+                    });
+                    amenityTotal = Math.round(amenityTotal * 100) / 100;
+                    const total = Math.round((subtotal + amenityTotal) * 100) / 100;
+                    return (
+                      <div className="rounded-lg border border-primary-200 bg-primary-50/50 p-3 text-sm">
+                        <p><span className="font-medium text-muted-foreground">Number of guests:</span> {guests}{raw.length >= 1 ? ` (from ${raw.length} name(s))` : ''}</p>
+                        {nights > 0 && <p><span className="font-medium text-muted-foreground">Nights:</span> {nights}</p>}
+                        {nights > 0 && pricePerNight > 0 && <p><span className="font-medium text-muted-foreground">Accommodation subtotal (NPR):</span> {subtotal.toLocaleString()} ({pricePerNight.toLocaleString()} × {nights} × {guests})</p>}
+                        {amenityTotal > 0 && <p><span className="font-medium text-muted-foreground">Amenities (NPR):</span> {amenityTotal.toLocaleString()}</p>}
+                        {total > 0 && <p className="font-semibold text-primary-800"><span className="font-medium text-muted-foreground">Total (NPR):</span> {total.toLocaleString()}</p>}
+                      </div>
+                    );
+                  })()}
                   <div>
                     <label className="block text-sm font-medium text-primary-700">Message (optional)</label>
                     <textarea value={createBookingForm.message} onChange={(e) => setCreateBookingForm((f) => ({ ...f, message: e.target.value }))} className="mt-1 w-full rounded-md border border-primary-200 bg-background px-3 py-2 text-sm" rows={2} />
@@ -1003,15 +1309,26 @@ export default function AdminDashboard() {
       {tab === 'payments' && (
         <Card className="mt-6 border-primary-200">
           <CardHeader className="border-b border-primary-100 bg-primary-50/50">
-            <div className="flex items-center gap-2">
-              <CreditCard className="h-5 w-5 text-accent-500" />
-              <h2 className="font-semibold text-primary-800">Payment management</h2>
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div>
+                <div className="flex items-center gap-2">
+                  <CreditCard className="h-5 w-5 text-accent-500" />
+                  <h2 className="font-semibold text-primary-800">Payment management</h2>
+                </div>
+                <p className="text-sm text-muted-foreground">Track payments and reconciliation ({adminPaymentsTotal} total)</p>
+              </div>
+              <input
+                type="text"
+                placeholder="Search guest or listing…"
+                value={adminPaymentsSearch}
+                onChange={(e) => setAdminPaymentsSearch(e.target.value)}
+                className="h-9 w-48 rounded-md border border-primary-200 bg-background px-2 text-sm"
+              />
             </div>
-            <p className="text-sm text-muted-foreground">Track payments and reconciliation ({adminPaymentsTotal} total)</p>
           </CardHeader>
           <CardContent className="p-0">
             <div className="overflow-x-auto">
-              {adminPayments.length === 0 ? (
+              {adminPayments.filter((p) => !adminPaymentsSearch.trim() || (p.guest_name && p.guest_name.toLowerCase().includes(adminPaymentsSearch.toLowerCase())) || (p.listing_title && p.listing_title.toLowerCase().includes(adminPaymentsSearch.toLowerCase()))).length === 0 ? (
                 <p className="p-8 text-center text-muted-foreground">No payments yet.</p>
               ) : (
                 <table className="w-full border-collapse">
@@ -1022,19 +1339,21 @@ export default function AdminDashboard() {
                       <th className="p-3 text-left text-sm font-medium text-primary-800">Listing</th>
                       <th className="p-3 text-left text-sm font-medium text-primary-800">Guest</th>
                       <th className="p-3 text-left text-sm font-medium text-primary-800">Amount</th>
+                      <th className="p-3 text-left text-sm font-medium text-primary-800">Service charge</th>
                       <th className="p-3 text-left text-sm font-medium text-primary-800">Status</th>
                       <th className="p-3 text-left text-sm font-medium text-primary-800">Date</th>
                       <th className="p-3 text-left text-sm font-medium text-primary-800">Receipt</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {adminPayments.map((p) => (
+                    {adminPayments.filter((p) => !adminPaymentsSearch.trim() || (p.guest_name && p.guest_name.toLowerCase().includes(adminPaymentsSearch.toLowerCase())) || (p.listing_title && p.listing_title.toLowerCase().includes(adminPaymentsSearch.toLowerCase()))).map((p) => (
                       <tr key={p.id} className="border-b border-primary-100">
                         <td className="p-3 text-sm">{p.id}</td>
                         <td className="p-3 text-sm">{p.booking_id}</td>
                         <td className="p-3 font-medium text-primary-800">{p.listing_title}</td>
                         <td className="p-3 text-sm">{p.guest_name}</td>
                         <td className="p-3 font-medium text-accent-600">NPR {Number(p.amount).toLocaleString()}</td>
+                        <td className="p-3 text-sm text-muted-foreground">NPR {Number(p.service_charge ?? 0).toLocaleString()}</td>
                         <td className="p-3">
                           <span className={`rounded-full px-2 py-1 text-xs font-medium ${p.status === 'succeeded' ? 'bg-green-100 text-green-800' : 'bg-secondary-200 text-secondary-800'}`}>{p.status}</span>
                         </td>
@@ -1055,15 +1374,26 @@ export default function AdminDashboard() {
       {tab === 'reports' && (
         <Card className="mt-6 border-primary-200">
           <CardHeader className="border-b border-primary-100 bg-primary-50/50">
-            <div className="flex items-center gap-2">
-              <BarChart3 className="h-5 w-5 text-accent-500" />
-              <h2 className="font-semibold text-primary-800">Reports & analytics</h2>
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div>
+                <div className="flex items-center gap-2">
+                  <BarChart3 className="h-5 w-5 text-accent-500" />
+                  <h2 className="font-semibold text-primary-800">Reports & analytics</h2>
+                </div>
+                <p className="text-sm text-muted-foreground">Booking and payment details</p>
+              </div>
+              <input
+                type="text"
+                placeholder="Search guest or listing…"
+                value={reportsSearch}
+                onChange={(e) => setReportsSearch(e.target.value)}
+                className="h-9 w-48 rounded-md border border-primary-200 bg-background px-2 text-sm"
+              />
             </div>
-            <p className="text-sm text-muted-foreground">Booking and payment details</p>
           </CardHeader>
           <CardContent className="p-0">
             <div className="overflow-x-auto">
-              {adminBookings.length === 0 ? (
+              {adminBookings.filter((b) => !reportsSearch.trim() || (b.guest_name && b.guest_name.toLowerCase().includes(reportsSearch.toLowerCase())) || (b.listing_title && b.listing_title.toLowerCase().includes(reportsSearch.toLowerCase()))).length === 0 ? (
                 <p className="p-8 text-center text-muted-foreground">No booking records. Switch to Bookings tab to load data, or data will load when you open Reports.</p>
               ) : (
                 <table className="w-full border-collapse">
@@ -1080,7 +1410,7 @@ export default function AdminDashboard() {
                     </tr>
                   </thead>
                   <tbody>
-                    {adminBookings.map((b) => (
+                    {adminBookings.filter((b) => !reportsSearch.trim() || (b.guest_name && b.guest_name.toLowerCase().includes(reportsSearch.toLowerCase())) || (b.listing_title && b.listing_title.toLowerCase().includes(reportsSearch.toLowerCase()))).map((b) => (
                       <tr key={b.id} className="border-b border-primary-100">
                         <td className="p-3 text-sm font-medium text-primary-800">{b.id}</td>
                         <td className="p-3 text-sm">{b.listing_title}</td>
@@ -1222,11 +1552,22 @@ export default function AdminDashboard() {
           </Card>
           <Card className="border-primary-200">
             <CardHeader className="border-b border-primary-100 bg-primary-50/50">
-              <div className="flex items-center gap-2">
-                <FileText className="h-5 w-5 text-accent-500" />
-                <h2 className="font-semibold text-primary-800">CMS sections</h2>
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <FileText className="h-5 w-5 text-accent-500" />
+                    <h2 className="font-semibold text-primary-800">CMS sections</h2>
+                  </div>
+                  <p className="text-sm text-muted-foreground">Edit About Us, Privacy Policy, Terms, FAQs, Help Center, Safety, Cancellation, Address, Contact, and other footer/page content. Set display place (e.g. footer, page) and sort order.</p>
+                </div>
+                <input
+                  type="text"
+                  placeholder="Search by key or title…"
+                  value={cmsSearch}
+                  onChange={(e) => setCmsSearch(e.target.value)}
+                  className="h-9 w-48 rounded-md border border-primary-200 bg-background px-2 text-sm"
+                />
               </div>
-              <p className="text-sm text-muted-foreground">Edit About Us, Privacy Policy, Terms, FAQs, Help Center, Safety, Cancellation, Address, Contact, and other footer/page content. Set display place (e.g. footer, page) and sort order.</p>
             </CardHeader>
             <CardContent className="p-6">
               <div className="flex flex-wrap items-end gap-3 mb-4">
@@ -1256,11 +1597,11 @@ export default function AdminDashboard() {
               </div>
               {cmsSectionsLoading ? (
                 <p className="p-6 text-center text-muted-foreground">Loading sections…</p>
-              ) : cmsSections.length === 0 ? (
+              ) : cmsSections.filter((s) => !cmsSearch.trim() || (s.section_key && s.section_key.toLowerCase().includes(cmsSearch.toLowerCase())) || (s.title && s.title.toLowerCase().includes(cmsSearch.toLowerCase()))).length === 0 ? (
                 <p className="p-6 text-center text-muted-foreground">No CMS sections yet. Add one above or they may be seeded in the database.</p>
               ) : (
                 <ul className="space-y-2">
-                  {cmsSections.map((s) => (
+                  {cmsSections.filter((s) => !cmsSearch.trim() || (s.section_key && s.section_key.toLowerCase().includes(cmsSearch.toLowerCase())) || (s.title && s.title.toLowerCase().includes(cmsSearch.toLowerCase()))).map((s) => (
                     <li key={s.id} className="flex items-center justify-between gap-2 rounded-md border border-primary-100 bg-primary-50/50 px-3 py-2 text-sm">
                       <span className="font-medium text-primary-800">{s.section_key}</span>
                       <span className="text-muted-foreground">{s.display_place} · order {s.sort_order}</span>
@@ -2231,12 +2572,18 @@ export default function AdminDashboard() {
           <div className="flex flex-wrap items-center gap-4">
             <label className="flex items-center gap-2 text-sm">
               <span className="text-muted-foreground">From</span>
-              <input type="date" value={logDateFrom} onChange={(e) => setLogDateFrom(e.target.value)} className="rounded border border-primary-200 px-2 py-1 text-sm" />
+              <input type="date" value={logDateFrom} onChange={(e) => { setLogDateFrom(e.target.value); setLogsFiltersApplied(false); }} className="rounded border border-primary-200 px-2 py-1 text-sm" />
             </label>
             <label className="flex items-center gap-2 text-sm">
               <span className="text-muted-foreground">To</span>
-              <input type="date" value={logDateTo} onChange={(e) => setLogDateTo(e.target.value)} className="rounded border border-primary-200 px-2 py-1 text-sm" />
+              <input type="date" value={logDateTo} onChange={(e) => { setLogDateTo(e.target.value); setLogsFiltersApplied(false); }} className="rounded border border-primary-200 px-2 py-1 text-sm" />
             </label>
+            <Button size="sm" className="bg-accent-500 hover:bg-accent-600" disabled={!logDateFrom || !logDateTo} onClick={() => setLogsFiltersApplied(true)}>
+              Apply filters
+            </Button>
+            {!logsFiltersApplied && (
+              <span className="text-sm text-amber-600">Set date range and click Apply filters to load data (reduces database load).</span>
+            )}
           </div>
           <div className="flex flex-wrap gap-2 border-b border-primary-200 pb-2">
             {LOGS_SUBTABS.map((st) => (
@@ -2259,7 +2606,9 @@ export default function AdminDashboard() {
                     <Mail className="h-5 w-5 text-accent-500" />
                     <h2 className="font-semibold text-primary-800">Email & SMS log</h2>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-sm text-muted-foreground">Search</span>
+                    <input type="text" value={logSearch} onChange={(e) => { setLogSearch(e.target.value); setLogPage(1); }} placeholder="Recipient, subject or body…" className="w-44 rounded border border-primary-200 px-2 py-1 text-sm" />
                     <span className="text-sm text-muted-foreground">Channel</span>
                     <select value={logChannel} onChange={(e) => { setLogChannel(e.target.value); setLogPage(1); }} className="rounded border border-primary-200 px-2 py-1 text-sm">
                       <option value="">All</option>
@@ -2271,6 +2620,10 @@ export default function AdminDashboard() {
                 <p className="text-sm text-muted-foreground">Total: {emailSmsLogTotal} — Click a row for full details</p>
               </CardHeader>
               <CardContent className="p-0 overflow-x-auto">
+                {!logsFiltersApplied ? (
+                  <div className="p-8 text-center text-muted-foreground">Set date range and click Apply filters to load data.</div>
+                ) : (
+                <>
                 <table className="w-full text-sm">
                   <thead><tr className="border-b border-primary-200 bg-primary-50/50"><th className="text-left p-2">Time</th><th className="text-left p-2">Channel</th><th className="text-left p-2">Recipient</th><th className="text-left p-2">Event</th><th className="text-left p-2">Status</th><th className="text-left p-2">Response</th></tr></thead>
                   <tbody>
@@ -2293,6 +2646,8 @@ export default function AdminDashboard() {
                     <Button variant="outline" size="sm" disabled={logPage >= Math.ceil(emailSmsLogTotal / 25)} onClick={() => setLogPage((p) => p + 1)}>Next</Button>
                   </div>
                 </div>
+                </>
+                )}
               </CardContent>
             </Card>
           )}
@@ -2320,13 +2675,16 @@ export default function AdminDashboard() {
                 <p className="text-sm text-muted-foreground">Total: {journeyLogTotal} — Click a row to view full session timeline</p>
               </CardHeader>
               <CardContent className="p-0 overflow-x-auto">
+                {!logsFiltersApplied ? (
+                  <div className="p-8 text-center text-muted-foreground">Set date range and click Apply filters to load data.</div>
+                ) : (
                 <table className="w-full text-sm">
-                  <thead><tr className="border-b border-primary-200 bg-primary-50/50"><th className="text-left p-2">Time</th><th className="text-left p-2">User</th><th className="text-left p-2">Session</th><th className="text-left p-2">Event</th><th className="text-left p-2">Page</th><th className="text-left p-2">Payload</th></tr></thead>
+                  <thead><tr className="border-b border-primary-200 bg-primary-50/50"><th className="text-left p-2">Time</th><th className="text-left p-2 w-32">User (mobile, name)</th><th className="text-left p-2">Session</th><th className="text-left p-2">Event</th><th className="text-left p-2">Page</th><th className="text-left p-2">Payload</th></tr></thead>
                   <tbody>
                     {journeyLogRows.map((r) => (
                       <tr key={r.id} className="border-b border-primary-100 cursor-pointer hover:bg-primary-50/80" onClick={() => setSelectedJourneySessionId(r.session_id)}>
                         <td className="p-2 text-muted-foreground">{new Date(r.created_at).toLocaleString()}</td>
-                        <td className="p-2">{r.user_id ?? '—'}</td>
+                        <td className="p-2 w-32 break-words whitespace-normal text-xs">{(r.user_phone || r.user_name) ? [r.user_phone, r.user_name].filter(Boolean).join(' — ') : '—'}</td>
                         <td className="p-2 font-mono text-xs">{r.session_id.slice(0, 12)}…</td>
                         <td className="p-2">{r.event_type}</td>
                         <td className="p-2">{r.page_or_route ?? '—'}</td>
@@ -2335,6 +2693,8 @@ export default function AdminDashboard() {
                     ))}
                   </tbody>
                 </table>
+                )}
+                {logsFiltersApplied && (
                 <div className="flex items-center justify-between border-t border-primary-200 px-4 py-2">
                   <span className="text-sm text-muted-foreground">Page {logPage} of {Math.max(1, Math.ceil(journeyLogTotal / 25))}</span>
                   <div className="flex gap-2">
@@ -2342,6 +2702,7 @@ export default function AdminDashboard() {
                     <Button variant="outline" size="sm" disabled={logPage >= Math.ceil(journeyLogTotal / 25)} onClick={() => setLogPage((p) => p + 1)}>Next</Button>
                   </div>
                 </div>
+                )}
               </CardContent>
             </Card>
           )}
@@ -2359,24 +2720,31 @@ export default function AdminDashboard() {
                     <input type="text" value={logPath} onChange={(e) => setLogPath(e.target.value)} onBlur={() => setLogPage(1)} placeholder="e.g. bookings" className="w-32 rounded border border-primary-200 px-2 py-1 text-sm" />
                   </div>
                 </div>
-                <p className="text-sm text-muted-foreground">Total: {apiLogTotal} — Click a row for details</p>
+                <p className="text-sm text-muted-foreground">Total: {apiLogTotal} — Click a row for details (request/response payload)</p>
               </CardHeader>
               <CardContent className="p-0 overflow-x-auto">
+                {!logsFiltersApplied ? (
+                  <div className="p-8 text-center text-muted-foreground">Set date range and click Apply filters to load data.</div>
+                ) : (
                 <table className="w-full text-sm">
-                  <thead><tr className="border-b border-primary-200 bg-primary-50/50"><th className="text-left p-2">Time</th><th className="text-left p-2">Method</th><th className="text-left p-2">Path</th><th className="text-left p-2">User</th><th className="text-left p-2">Status</th><th className="text-left p-2">Time (ms)</th></tr></thead>
+                  <thead><tr className="border-b border-primary-200 bg-primary-50/50"><th className="text-left p-2">Time</th><th className="text-left p-2">Method</th><th className="text-left p-2">Path</th><th className="text-left p-2 w-32">User (mobile, name)</th><th className="text-left p-2">Status</th><th className="text-left p-2">Time (ms)</th><th className="text-left p-2 max-w-[120px]">Request</th><th className="text-left p-2 max-w-[120px]">Response</th></tr></thead>
                   <tbody>
                     {apiLogRows.map((r) => (
                       <tr key={r.id} className="border-b border-primary-100 cursor-pointer hover:bg-primary-50/80" onClick={() => setSelectedApiLog(r)}>
                         <td className="p-2 text-muted-foreground">{new Date(r.created_at).toLocaleString()}</td>
                         <td className="p-2">{r.method}</td>
                         <td className="p-2 font-mono text-xs">{r.path}</td>
-                        <td className="p-2">{r.user_id ?? '—'}</td>
+                        <td className="p-2 w-32 break-words whitespace-normal text-xs">{(r.user_phone || r.user_name) ? [r.user_phone, r.user_name].filter(Boolean).join(' — ') : '—'}</td>
                         <td className="p-2"><span className={r.response_status >= 400 ? 'text-red-600' : 'text-green-600'}>{r.response_status}</span></td>
                         <td className="p-2">{r.response_time_ms}</td>
+                        <td className="p-2 max-w-[120px] truncate text-xs" title={r.request_body_preview ?? r.request_body ?? ''}>{r.request_body_preview ?? r.request_body ?? '—'}</td>
+                        <td className="p-2 max-w-[120px] truncate text-xs" title={r.response_body_preview ?? r.response_body ?? ''}>{r.response_body_preview ?? r.response_body ?? '—'}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
+                )}
+                {logsFiltersApplied && (
                 <div className="flex items-center justify-between border-t border-primary-200 px-4 py-2">
                   <span className="text-sm text-muted-foreground">Page {logPage} of {Math.max(1, Math.ceil(apiLogTotal / 25))}</span>
                   <div className="flex gap-2">
@@ -2384,6 +2752,7 @@ export default function AdminDashboard() {
                     <Button variant="outline" size="sm" disabled={logPage >= Math.ceil(apiLogTotal / 25)} onClick={() => setLogPage((p) => p + 1)}>Next</Button>
                   </div>
                 </div>
+                )}
               </CardContent>
             </Card>
           )}
@@ -2409,6 +2778,10 @@ export default function AdminDashboard() {
                 <p className="text-sm text-muted-foreground">Total: {errorLogTotal} — Click a row for full message and stack</p>
               </CardHeader>
               <CardContent className="p-0 overflow-x-auto">
+                {!logsFiltersApplied ? (
+                  <div className="p-8 text-center text-muted-foreground">Set date range and click Apply filters to load data.</div>
+                ) : (
+                <>
                 <table className="w-full text-sm">
                   <thead><tr className="border-b border-primary-200 bg-primary-50/50"><th className="text-left p-2">Time</th><th className="text-left p-2">Source</th><th className="text-left p-2">Level</th><th className="text-left p-2">Message</th><th className="text-left p-2">Path</th></tr></thead>
                   <tbody>
@@ -2430,14 +2803,29 @@ export default function AdminDashboard() {
                     <Button variant="outline" size="sm" disabled={logPage >= Math.ceil(errorLogTotal / 25)} onClick={() => setLogPage((p) => p + 1)}>Next</Button>
                   </div>
                 </div>
+                </>
+                )}
               </CardContent>
             </Card>
           )}
 
           {logsSubTab === 'analytics' && (
             <>
-              {!analyticsData ? (
-                <Card className="border-primary-200"><CardContent className="py-12 text-center text-muted-foreground">Select date range above and view Analytics. No data for the selected range.</CardContent></Card>
+              <Card className="border-primary-200 bg-primary-50/30">
+                <CardContent className="pt-4 pb-4">
+                  <h3 className="font-medium text-primary-800 mb-2">What do these charts mean?</h3>
+                  <p className="text-sm text-muted-foreground">
+                    <strong>Email/SMS by day</strong> — How many emails and SMS we sent (e.g. booking confirmations, OTPs). Use this to see if notifications are going out. &bull;{' '}
+                    <strong>User journey by day</strong> — How often users viewed pages or clicked things. Helps spot popular flows. &bull;{' '}
+                    <strong>API responses by day</strong> — Green (2xx) = success; yellow (4xx) = client issues; red (5xx) = server issues. &bull;{' '}
+                    <strong>Errors by day</strong> — Where errors came from (website, API, or database). Helps prioritise fixes.
+                  </p>
+                </CardContent>
+              </Card>
+              {!logsFiltersApplied ? (
+                <Card className="border-primary-200"><CardContent className="py-12 text-center text-muted-foreground">Set date range and click Apply filters to load analytics.</CardContent></Card>
+              ) : !analyticsData ? (
+                <Card className="border-primary-200"><CardContent className="py-12 text-center text-muted-foreground">No data for the selected date range.</CardContent></Card>
               ) : (
             <div className="grid gap-4 md:grid-cols-2">
               <Card className="border-primary-200">
@@ -2512,6 +2900,19 @@ export default function AdminDashboard() {
           )}
 
           {logsSubTab === 'heatmap' && (
+            <>
+              <Card className="border-primary-200 bg-primary-50/30">
+                <CardContent className="pt-4 pb-4">
+                  <h3 className="font-medium text-primary-800 mb-2">What do these show?</h3>
+                  <p className="text-sm text-muted-foreground">
+                    <strong>Page view heat map</strong> — Which pages or screens were opened most often (e.g. /search, /listings/5). Use this to see what users look at. &bull;{' '}
+                    <strong>Click events</strong> — Where on the page users clicked (useful to see which buttons or areas get used). Filter by path to inspect one page.
+                  </p>
+                </CardContent>
+              </Card>
+              {!logsFiltersApplied ? (
+                <Card className="border-primary-200"><CardContent className="py-12 text-center text-muted-foreground">Set date range and click Apply filters to load heat map data.</CardContent></Card>
+              ) : (
             <div className="grid gap-4 md:grid-cols-2">
               <Card className="border-primary-200">
                 <CardHeader className="border-b border-primary-100 bg-primary-50/50">
@@ -2566,6 +2967,8 @@ export default function AdminDashboard() {
                 </CardContent>
               </Card>
             </div>
+              )}
+            </>
           )}
         </div>
       )}
@@ -2638,7 +3041,7 @@ export default function AdminDashboard() {
       <Dialog.Root open={!!selectedApiLog} onOpenChange={(open) => !open && setSelectedApiLog(null)}>
         <Dialog.Portal>
           <Dialog.Overlay className="fixed inset-0 z-50 bg-black/50" />
-          <Dialog.Content className="fixed left-1/2 top-1/2 z-50 w-full max-w-lg -translate-x-1/2 -translate-y-1/2 rounded-lg border border-primary-200 bg-background p-6 shadow-lg">
+          <Dialog.Content className="fixed left-1/2 top-1/2 z-50 w-full max-w-2xl max-h-[90vh] -translate-x-1/2 -translate-y-1/2 rounded-lg border border-primary-200 bg-background p-6 shadow-lg overflow-y-auto">
             {selectedApiLog && (
               <>
                 <div className="flex items-center justify-between border-b border-primary-100 pb-3">
@@ -2651,10 +3054,22 @@ export default function AdminDashboard() {
                   <div><dt className="text-muted-foreground">Time</dt><dd>{new Date(selectedApiLog.created_at).toLocaleString()}</dd></div>
                   <div><dt className="text-muted-foreground">Method</dt><dd className="font-mono">{selectedApiLog.method}</dd></div>
                   <div><dt className="text-muted-foreground">Path</dt><dd className="font-mono break-all">{selectedApiLog.path}</dd></div>
-                  <div><dt className="text-muted-foreground">User ID</dt><dd>{selectedApiLog.user_id ?? '—'}</dd></div>
+                  <div><dt className="text-muted-foreground">User (mobile, name)</dt><dd className="break-words">{(selectedApiLog.user_phone || selectedApiLog.user_name) ? [selectedApiLog.user_phone, selectedApiLog.user_name].filter(Boolean).join(' — ') : (selectedApiLog.user_id ?? '—')}</dd></div>
                   <div><dt className="text-muted-foreground">Response status</dt><dd><span className={selectedApiLog.response_status >= 400 ? 'text-red-600' : 'text-green-600'}>{selectedApiLog.response_status}</span></dd></div>
                   <div><dt className="text-muted-foreground">Response time</dt><dd>{selectedApiLog.response_time_ms} ms</dd></div>
                 </dl>
+                {(selectedApiLog.request_body != null && selectedApiLog.request_body !== '') && (
+                  <div className="mt-4">
+                    <div className="font-medium text-muted-foreground mb-1">Request payload</div>
+                    <pre className="rounded bg-primary-50 p-3 text-xs whitespace-pre-wrap break-words max-h-40 overflow-y-auto">{selectedApiLog.request_body}</pre>
+                  </div>
+                )}
+                {(selectedApiLog.response_body != null && selectedApiLog.response_body !== '') && (
+                  <div className="mt-4">
+                    <div className="font-medium text-muted-foreground mb-1">Response</div>
+                    <pre className="rounded bg-primary-50 p-3 text-xs whitespace-pre-wrap break-words max-h-40 overflow-y-auto">{selectedApiLog.response_body}</pre>
+                  </div>
+                )}
               </>
             )}
           </Dialog.Content>
@@ -2698,38 +3113,98 @@ export default function AdminDashboard() {
         </Dialog.Portal>
       </Dialog.Root>
 
-      {/* Booking details dialog */}
+      {/* Booking details & invoice dialog */}
       <Dialog.Root open={!!selectedBooking} onOpenChange={(open) => !open && setSelectedBooking(null)}>
         <Dialog.Portal>
           <Dialog.Overlay className="fixed inset-0 z-50 bg-black/50" />
-          <Dialog.Content className="fixed left-1/2 top-1/2 z-50 w-full max-w-md -translate-x-1/2 -translate-y-1/2 rounded-lg border border-primary-200 bg-background p-6 shadow-lg">
-            {selectedBooking && (
-              <>
-                <div className="flex items-center justify-between border-b border-primary-100 pb-3">
-                  <Dialog.Title className="font-semibold text-primary-800">Booking details</Dialog.Title>
-                  <Dialog.Close asChild>
-                    <button type="button" className="rounded p-1 hover:bg-primary-100" aria-label="Close">
-                      <X className="h-5 w-5" />
-                    </button>
-                  </Dialog.Close>
-                </div>
-                <dl className="mt-4 space-y-2 text-sm">
-                  <div><dt className="font-medium text-muted-foreground">Booking ID</dt><dd className="font-medium text-primary-800">{selectedBooking.id}</dd></div>
-                  <div><dt className="font-medium text-muted-foreground">Listing</dt><dd className="text-primary-800">{selectedBooking.listing_title}</dd></div>
-                  <div><dt className="font-medium text-muted-foreground">Guest</dt><dd className="text-primary-800">{selectedBooking.guest_name} ({selectedBooking.guest_email})</dd></div>
-                  <div><dt className="font-medium text-muted-foreground">Check-in</dt><dd className="text-primary-800">{formatDateOnly(selectedBooking.check_in)}</dd></div>
-                  <div><dt className="font-medium text-muted-foreground">Check-out</dt><dd className="text-primary-800">{formatDateOnly(selectedBooking.check_out)}</dd></div>
-                  <div><dt className="font-medium text-muted-foreground">Guests</dt><dd className="text-primary-800">{selectedBooking.guests}</dd></div>
-                  <div><dt className="font-medium text-muted-foreground">Status</dt><dd><span className={`rounded-full px-2 py-1 text-xs font-medium ${bookingStatusColor(selectedBooking.status)}`}>{selectedBooking.status}</span></dd></div>
-                  <div><dt className="font-medium text-muted-foreground">Created</dt><dd className="text-primary-800">{formatDateOnly(selectedBooking.created_at)}</dd></div>
-                </dl>
-                <div className="mt-4 flex justify-end">
-                  <Button variant="outline" size="sm" asChild>
-                    <Link to={`/listings/${selectedBooking.listing_id}`} state={{ from: 'admin' }} onClick={() => setSelectedBooking(null)}>View listing</Link>
-                  </Button>
-                </div>
-              </>
-            )}
+          <Dialog.Content className="fixed left-1/2 top-1/2 z-50 w-full max-w-lg max-h-[90vh] -translate-x-1/2 -translate-y-1/2 rounded-lg border border-primary-200 bg-background p-6 shadow-lg overflow-y-auto">
+            {selectedBooking && (() => {
+              const subtotal = selectedBooking.subtotal_npr != null ? Number(selectedBooking.subtotal_npr) : null;
+              const total = selectedBooking.total_amount != null ? Number(selectedBooking.total_amount) : null;
+              let amenityLines: { name: string; quantity: number; unit_price: number; total: number }[] = [];
+              try {
+                if (selectedBooking.amenity_charges_json) {
+                  const parsed = JSON.parse(selectedBooking.amenity_charges_json);
+                  amenityLines = Array.isArray(parsed) ? parsed : [];
+                }
+              } catch {
+                amenityLines = [];
+              }
+              const hasInvoice = subtotal != null || total != null || amenityLines.length > 0;
+              const downloadInvoicePdf = () => {
+                const doc = new jsPDF();
+                doc.setFontSize(18);
+                doc.text('Booking Invoice / Price Quotation', 20, 20);
+                doc.setFontSize(11);
+                let y = 36;
+                doc.text(`Booking ID: ${selectedBooking.id}`, 20, y); y += 7;
+                doc.text(`Listing: ${selectedBooking.listing_title}`, 20, y); y += 7;
+                doc.text(`Guest: ${selectedBooking.guest_name} (${selectedBooking.guest_email})`, 20, y); y += 7;
+                doc.text(`Check-in: ${formatDateOnly(selectedBooking.check_in)}`, 20, y); y += 7;
+                doc.text(`Check-out: ${formatDateOnly(selectedBooking.check_out)}`, 20, y); y += 7;
+                doc.text(`Guests: ${selectedBooking.guests}`, 20, y); y += 7;
+                doc.text(`Created: ${formatDateOnly(selectedBooking.created_at)}`, 20, y); y += 10;
+                if (subtotal != null) {
+                  doc.text(`Accommodation subtotal: NPR ${subtotal.toLocaleString()}`, 20, y); y += 7;
+                }
+                amenityLines.forEach((line) => {
+                  doc.text(`${line.name} (×${line.quantity}): NPR ${line.total.toLocaleString()}`, 20, y); y += 6;
+                });
+                if (total != null) {
+                  y += 4;
+                  doc.setFont('helvetica', 'bold');
+                  doc.text(`Total: NPR ${total.toLocaleString()}`, 20, y);
+                  doc.setFont('helvetica', 'normal');
+                }
+                doc.save(`booking-invoice-${selectedBooking.id}.pdf`);
+                toast({ title: 'Invoice downloaded.' });
+              };
+              return (
+                <>
+                  <div className="flex items-center justify-between border-b border-primary-100 pb-3">
+                    <Dialog.Title className="font-semibold text-primary-800">Booking details</Dialog.Title>
+                    <Dialog.Close asChild>
+                      <button type="button" className="rounded p-1 hover:bg-primary-100" aria-label="Close">
+                        <X className="h-5 w-5" />
+                      </button>
+                    </Dialog.Close>
+                  </div>
+                  <dl className="mt-4 space-y-2 text-sm">
+                    <div><dt className="font-medium text-muted-foreground">Booking ID</dt><dd className="font-medium text-primary-800">{selectedBooking.id}</dd></div>
+                    <div><dt className="font-medium text-muted-foreground">Listing</dt><dd className="text-primary-800">{selectedBooking.listing_title}</dd></div>
+                    <div><dt className="font-medium text-muted-foreground">Guest</dt><dd className="text-primary-800">{selectedBooking.guest_name} ({selectedBooking.guest_email})</dd></div>
+                    <div><dt className="font-medium text-muted-foreground">Check-in</dt><dd className="text-primary-800">{formatDateOnly(selectedBooking.check_in)}</dd></div>
+                    <div><dt className="font-medium text-muted-foreground">Check-out</dt><dd className="text-primary-800">{formatDateOnly(selectedBooking.check_out)}</dd></div>
+                    <div><dt className="font-medium text-muted-foreground">Guests</dt><dd className="text-primary-800">{selectedBooking.guests}</dd></div>
+                    <div><dt className="font-medium text-muted-foreground">Status</dt><dd><span className={`rounded-full px-2 py-1 text-xs font-medium ${bookingStatusColor(selectedBooking.status)}`}>{selectedBooking.status}</span></dd></div>
+                    <div><dt className="font-medium text-muted-foreground">Created</dt><dd className="text-primary-800">{formatDateOnly(selectedBooking.created_at)}</dd></div>
+                  </dl>
+                  {hasInvoice && (
+                    <div className="mt-4 rounded-lg border border-primary-200 bg-primary-50/50 p-3">
+                      <h4 className="font-semibold text-primary-800 mb-2">Invoice / Price quotation</h4>
+                      <dl className="space-y-1 text-sm">
+                        {subtotal != null && <div className="flex justify-between"><dt className="text-muted-foreground">Accommodation subtotal</dt><dd>NPR {subtotal.toLocaleString()}</dd></div>}
+                        {amenityLines.map((line, i) => (
+                          <div key={i} className="flex justify-between"><dt className="text-muted-foreground">{line.name} (×{line.quantity})</dt><dd>NPR {line.total.toLocaleString()}</dd></div>
+                        ))}
+                        {total != null && <div className="flex justify-between font-semibold text-primary-800 mt-2 pt-2 border-t border-primary-200"><dt>Total</dt><dd>NPR {total.toLocaleString()}</dd></div>}
+                      </dl>
+                    </div>
+                  )}
+                  <div className="mt-4 flex flex-wrap gap-2 justify-end">
+                    {hasInvoice && (
+                      <Button variant="outline" size="sm" onClick={downloadInvoicePdf}>
+                        <Download className="mr-1.5 h-4 w-4" />
+                        Download PDF
+                      </Button>
+                    )}
+                    <Button variant="outline" size="sm" asChild>
+                      <Link to={`/listings/${selectedBooking.listing_id}`} state={{ from: 'admin' }} onClick={() => setSelectedBooking(null)}>View listing</Link>
+                    </Button>
+                  </div>
+                </>
+              );
+            })()}
           </Dialog.Content>
         </Dialog.Portal>
       </Dialog.Root>

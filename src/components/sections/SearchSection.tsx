@@ -22,7 +22,8 @@ export default function SearchSection() {
   };
 
   return (
-    <section className="relative -mt-24 z-30 container mx-auto px-4">
+    <section className="relative -mt-24 z-30 w-full px-4">
+      <div className="container mx-auto">
       <motion.div
         initial={{ opacity: 0, y: 40 }}
         whileInView={{ opacity: 1, y: 0 }}
@@ -114,6 +115,7 @@ export default function SearchSection() {
           </div>
         </form>
       </motion.div>
+      </div>
     </section>
   );
 }

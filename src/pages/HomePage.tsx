@@ -61,7 +61,7 @@ export default function HomePage() {
   }, []);
 
   return (
-    <div className="space-y-16 md:space-y-20 overflow-x-hidden min-h-screen">
+    <div className="w-full space-y-0 overflow-x-hidden min-h-screen">
       <HeroCarousel listings={heroListings} />
       <SearchSection />
 

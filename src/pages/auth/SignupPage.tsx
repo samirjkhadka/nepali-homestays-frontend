@@ -108,6 +108,13 @@ export default function SignupPage() {
                 className="mt-1 border-primary-200"
               />
               <p className="mt-1 text-xs text-muted-foreground">{PASSWORD_HINT}</p>
+              {password.length > 0 && !validatePassword(password).valid && (
+                <ul className="mt-1 list-inside list-disc text-xs text-destructive">
+                  {validatePassword(password).errors.map((err) => (
+                    <li key={err}>{err}</li>
+                  ))}
+                </ul>
+              )}
             </div>
             <div>
               <Label className="text-primary-800">I want to</Label>

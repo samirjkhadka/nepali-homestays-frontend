@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Link, Outlet, useNavigate } from 'react-router-dom';
+import { Link, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Menu, X, Globe, ChevronDown, LogOut, User, KeyRound, Heart, MessageSquare, Receipt, Calendar, LogIn, UserPlus, LayoutDashboard, PlusCircle } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
@@ -43,6 +43,8 @@ export default function Layout() {
   const { currency, setCurrency } = useCurrency();
   const { locale, setLocale, t } = useI18n();
   const navigate = useNavigate();
+  const { pathname } = useLocation();
+  const isHome = pathname === '/';
   const [profile, setProfile] = useState<{ name?: string; avatar_url?: string | null } | null>(null);
   const [isOpen, setIsOpen] = useState(false);
   const currentLang = languages.find((l) => l.code === locale) ?? languages[0];
@@ -376,7 +378,7 @@ export default function Layout() {
 
       {/* Spacer for fixed nav */}
       <div className="h-20" />
-      <main className="container mx-auto px-4 py-6">
+      <main className={isHome ? '' : 'container mx-auto px-4 py-6'}>
         <Outlet />
       </main>
     </div>

@@ -31,7 +31,8 @@ const testimonials = [
 
 export default function Testimonials() {
   return (
-    <section className="space-y-8">
+    <section className="py-20 bg-background">
+      <div className="container mx-auto px-4 space-y-8">
       <div className="text-center">
         <h2 className="text-3xl font-bold text-primary-800 md:text-4xl">What guests say</h2>
         <p className="mt-2 text-muted-foreground">
@@ -65,6 +66,7 @@ export default function Testimonials() {
             </CardContent>
           </Card>
         ))}
+      </div>
       </div>
     </section>
   );

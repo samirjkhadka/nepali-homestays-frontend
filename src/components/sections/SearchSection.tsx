@@ -22,7 +22,7 @@ export default function SearchSection() {
   };
 
   return (
-    <section className="relative -mt-24 z-30 w-full px-4">
+    <section className="relative z-30 w-full px-4 pt-8 md:pt-12">
       <div className="container mx-auto">
       <motion.div
         initial={{ opacity: 0, y: 40 }}

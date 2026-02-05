@@ -15,14 +15,15 @@ const PROVINCE_IMAGES = [
   'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?w=800&q=80', // Karnali
 ];
 
+/** Theme-aligned gradients (primary navy + accent orange) */
 const PROVINCE_COLORS: readonly string[] = [
-  'from-amber-500/80',
-  'from-cyan-500/80',
-  'from-orange-500/80',
-  'from-blue-500/80',
-  'from-green-500/80',
-  'from-rose-500/80',
-  'from-indigo-500/80',
+  'from-primary-500/90',
+  'from-primary-600/90',
+  'from-accent-500/90',
+  'from-accent-600/90',
+  'from-primary-400/90',
+  'from-primary-700/90',
+  'from-accent-600/90',
 ];
 
 function getProvinceStyle(index: number) {

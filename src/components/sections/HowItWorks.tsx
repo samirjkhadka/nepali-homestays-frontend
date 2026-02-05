@@ -22,7 +22,9 @@ const steps = [
 
 export default function HowItWorks() {
   return (
-    <section id="how-it-works" className="overflow-hidden rounded-2xl border border-primary-200 bg-secondary-50/80 shadow-md">
+    <section id="how-it-works" className="py-20 bg-background">
+      <div className="container mx-auto px-4">
+        <div className="overflow-hidden rounded-2xl border border-primary-200 bg-secondary-50/80 shadow-md">
       <div className="grid gap-0 md:grid-cols-5">
         <div className="relative h-56 w-full md:col-span-2 md:h-auto md:min-h-[320px]">
           <img
@@ -55,6 +57,8 @@ export default function HowItWorks() {
               </div>
             ))}
           </div>
+        </div>
+      </div>
         </div>
       </div>
     </section>

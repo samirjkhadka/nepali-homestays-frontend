@@ -16,13 +16,16 @@ export function ListingMap({ latitude, longitude, title, className = '' }: Listi
   const mapRef = useRef<L.Map | null>(null);
   const markerRef = useRef<L.Marker | null>(null);
 
-  const hasCoords = typeof latitude === 'number' && typeof longitude === 'number';
+  const lat = latitude != null ? Number(latitude) : undefined;
+  const lng = longitude != null ? Number(longitude) : undefined;
+  const hasCoords =
+    typeof lat === 'number' && !Number.isNaN(lat) && typeof lng === 'number' && !Number.isNaN(lng);
 
   useEffect(() => {
     if (!containerRef.current) return;
     if (mapRef.current) return;
 
-    const center: [number, number] = hasCoords ? [latitude!, longitude!] : NEPAL_CENTER;
+    const center: [number, number] = hasCoords ? [lat!, lng!] : NEPAL_CENTER;
     const zoom = hasCoords ? 14 : 8;
 
     const map = L.map(containerRef.current).setView(center, zoom);
@@ -38,7 +41,7 @@ export function ListingMap({ latitude, longitude, title, className = '' }: Listi
         iconSize: [25, 41],
         iconAnchor: [12, 41],
       });
-      const marker = L.marker([latitude!, longitude!], { icon }).addTo(map);
+      const marker = L.marker([lat!, lng!], { icon }).addTo(map);
       if (title) marker.bindPopup(title);
       markerRef.current = marker;
     }
@@ -53,10 +56,10 @@ export function ListingMap({ latitude, longitude, title, className = '' }: Listi
 
   useEffect(() => {
     if (!mapRef.current) return;
-    if (hasCoords) {
-      mapRef.current.setView([latitude!, longitude!], 14);
+    if (hasCoords && lat != null && lng != null) {
+      mapRef.current.setView([lat, lng], 14);
       if (markerRef.current) {
-        markerRef.current.setLatLng([latitude!, longitude!]);
+        markerRef.current.setLatLng([lat, lng]);
         if (title) markerRef.current.getPopup()?.setContent(title);
       } else {
         const icon = L.icon({
@@ -66,7 +69,7 @@ export function ListingMap({ latitude, longitude, title, className = '' }: Listi
           iconSize: [25, 41],
           iconAnchor: [12, 41],
         });
-        const marker = L.marker([latitude!, longitude!], { icon }).addTo(mapRef.current);
+        const marker = L.marker([lat, lng], { icon }).addTo(mapRef.current);
         if (title) marker.bindPopup(title);
         markerRef.current = marker;
       }
@@ -77,7 +80,7 @@ export function ListingMap({ latitude, longitude, title, className = '' }: Listi
       }
       mapRef.current.setView(NEPAL_CENTER, 8);
     }
-  }, [hasCoords, latitude, longitude, title]);
+  }, [hasCoords, lat, lng, title]);
 
   return (
     <div className={className}>

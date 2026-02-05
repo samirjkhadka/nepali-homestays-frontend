@@ -175,7 +175,7 @@ export default function BlogsAndNews() {
             </div>
           ) : (
             items.map((item, index) => (
-              <BlogCard key={item.id} item={item} index={index} />
+              <BlogCard key={`${item.id}-${index}`} item={item} index={index} />
             ))
           )}
         </div>

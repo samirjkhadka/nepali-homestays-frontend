@@ -393,7 +393,11 @@ export default function ListingDetailPage() {
             {listingData.title}
           </h1>
 
-          <div className="flex flex-wrap items-center gap-4 text-sm">
+            <div className="flex flex-wrap items-center gap-4 text-sm">
+            <div className="flex items-center gap-1 font-semibold text-primary">
+              {formatPrice(listingData.price_per_night)}
+              <span className="text-muted-foreground font-normal"> / night</span>
+            </div>
             {(averageRating > 0 || reviewsTotal > 0) && (
               <div className="flex items-center gap-1">
                 <Star className="w-4 h-4 fill-accent text-accent" />
@@ -596,10 +600,10 @@ export default function ListingDetailPage() {
               </div>
             </motion.div>
 
-            {/* Dynamic sections (except how_to_get_there) */}
+            {/* Dynamic sections (except how_to_get_there and facility_* — those are used by AmenitiesList only) */}
             {listingData.sections &&
               Object.entries(listingData.sections).map(([key, content]) => {
-                if (key === 'how_to_get_there' || !content?.trim()) return null;
+                if (key === 'how_to_get_there' || key.startsWith('facility_') || !content?.trim()) return null;
                 const label = listingDisplay.section_labels[key] ?? key.replace(/_/g, ' ');
                 if (key === 'faqs') {
                   try {
@@ -717,8 +721,8 @@ export default function ListingDetailPage() {
             >
               <h3 className="font-display text-2xl font-semibold text-foreground mb-4">Location & directions</h3>
               <ListingMap
-                latitude={listingData.latitude}
-                longitude={listingData.longitude}
+                latitude={listingData.latitude != null ? Number(listingData.latitude) : undefined}
+                longitude={listingData.longitude != null ? Number(listingData.longitude) : undefined}
                 title={listingData.title}
                 className="mb-4 rounded-xl overflow-hidden"
               />

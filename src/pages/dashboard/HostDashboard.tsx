@@ -272,6 +272,14 @@ export default function HostDashboard() {
     }).catch((err) => toast({ title: err.response?.data?.message || 'Failed to mark as paid.', variant: 'destructive' }));
   };
 
+  const handleMarkAsComplete = (id: number) => {
+    api.patch(`/api/bookings/${id}`, { status: 'completed' }).then(() => {
+      toast({ title: 'Booking marked as complete. Guest can now leave a review.' });
+      setDashboard((d) => d ? { ...d, bookings: d.bookings.map((b) => b.id === id ? { ...b, status: 'completed' } : b) } : null);
+      setSelectedBookingDetail((b) => (b?.id === id ? { ...b, status: 'completed' } : b));
+    }).catch((err) => toast({ title: err.response?.data?.message || 'Failed to mark as complete.', variant: 'destructive' }));
+  };
+
   useEffect(() => {
     if (!blockListingId || !dashboard?.listings?.length) {
       setCurrentBlockedDates([]);
@@ -320,6 +328,23 @@ export default function HostDashboard() {
 
   const currentUserId = dashboard?.current_user_id;
   const isPrimaryHost = (listing: Listing) => currentUserId != null && listing.host_id === currentUserId;
+
+  /** Co-hosts only see Overview and Listings; they cannot access Bookings, Calendar, Reviews, Messages, Profile. */
+  const isCoHostOnly = useMemo(() => {
+    if (!dashboard?.listings?.length || currentUserId == null) return false;
+    return dashboard.listings.every((l) => l.host_id !== currentUserId);
+  }, [dashboard?.listings, currentUserId]);
+
+  const visibleTabs = isCoHostOnly ? (['overview', 'listings'] as const) : TABS;
+
+  /** Co-hosts: if they have a restricted tab in URL or state, switch to listings. */
+  useEffect(() => {
+    if (!dashboard || !isCoHostOnly) return;
+    if (tab !== 'overview' && tab !== 'listings') {
+      setTab('listings');
+      setSearchParams({ tab: 'listings' });
+    }
+  }, [dashboard, isCoHostOnly, tab, setSearchParams]);
 
   const handleAddCoHost = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -385,7 +410,7 @@ export default function HostDashboard() {
         </div>
       </div>
       <div className="mt-6 flex flex-wrap gap-2 border-b border-primary-200">
-        {TABS.map((t) => (
+        {visibleTabs.map((t) => (
           <button
             key={t}
             type="button"
@@ -861,6 +886,11 @@ export default function HostDashboard() {
                                   Mark as paid (guest paid at checkout)
                                 </Button>
                               )}
+                              {b.status === 'paid' && (
+                                <Button size="sm" className="mt-2 bg-accent-500 hover:bg-accent-600" onClick={(e) => { e.stopPropagation(); handleMarkAsComplete(b.id); }}>
+                                  Mark as complete (guest can review)
+                                </Button>
+                              )}
                               <Button size="sm" variant="outline" className="mt-2 ml-2" onClick={(e) => { e.stopPropagation(); setSelectedBookingDetail(b); }}>View details</Button>
                             </div>
                           </CardContent>
@@ -903,6 +933,9 @@ export default function HostDashboard() {
                       {b.message && <p><span className="font-medium text-muted-foreground">Message:</span> {b.message}</p>}
                       {(b.status === 'pending_payment' || b.status === 'partial_paid') && (
                         <Button size="sm" className="mt-2 bg-primary hover:bg-primary/90" onClick={() => { handleMarkAsPaid(b.id); setSelectedBookingDetail(null); }}>Mark as paid</Button>
+                      )}
+                      {b.status === 'paid' && (
+                        <Button size="sm" className="mt-2 bg-accent-500 hover:bg-accent-600" onClick={() => { handleMarkAsComplete(b.id); setSelectedBookingDetail(null); }}>Mark as complete (guest can review)</Button>
                       )}
                     </div>
                   );

@@ -64,6 +64,10 @@ export interface BookingCardProps {
   partialPaymentMinPercent?: number;
   onPaymentTypeChange?: (type: 'full' | 'partial') => void;
   onPartialPercentChange?: (percent: number) => void;
+  /** Optional extra services (paid add-ons) from listing */
+  extraServices?: { id: number; name: string; price_npr: number; unit: string; description?: string | null }[];
+  selectedExtraServices?: { extra_service_id: number; quantity: number }[];
+  onExtraServicesChange?: (selection: { extra_service_id: number; quantity: number }[]) => void;
 }
 
 export function BookingCard({
@@ -89,6 +93,9 @@ export function BookingCard({
   partialPaymentMinPercent = 25,
   onPaymentTypeChange,
   onPartialPercentChange,
+  extraServices,
+  selectedExtraServices = [],
+  onExtraServicesChange,
 }: BookingCardProps) {
   const badges = trustBadges?.length ? trustBadges : ['Free cancellation for 48 hours', 'Verified homestay host', 'Secure payment process'];
   const { format: formatPrice } = useCurrency();
@@ -127,14 +134,28 @@ export function BookingCard({
     return false;
   })();
 
-  const subtotal = nights * priceNum;
+  // Total room cost = rate per person × number of people × number of nights
+  const subtotalRoom = nights * priceNum * guests;
+  const extraTotal = (() => {
+    if (!extraServices?.length || !selectedExtraServices?.length) return 0;
+    let sum = 0;
+    for (const sel of selectedExtraServices) {
+      const s = extraServices.find((e) => e.id === sel.extra_service_id);
+      if (!s) continue;
+      const p = Number(s.price_npr);
+      if (s.unit === 'per_person') sum += p * sel.quantity * guests;
+      else sum += p * sel.quantity;
+    }
+    return Math.round(sum * 100) / 100;
+  })();
+  const subtotal = subtotalRoom + extraTotal;
   const isPartial = paymentType === 'partial';
   let feeAmount = 0;
   let feeLabel = '';
   if (!isPartial && bookingFee && bookingFee.value > 0) {
     const raw =
       bookingFee.kind === 'percent' ? (subtotal * bookingFee.value) / 100 : bookingFee.value;
-    const rawRounded = Math.round(raw * 100) / 100;
+    const rawRounded = Math.round(raw);
     if (bookingFee.type === 'discount') {
       feeAmount = -rawRounded;
       feeLabel = `Discount${bookingFee.kind === 'percent' ? ` (${bookingFee.value}%)` : ''}`;
@@ -145,10 +166,14 @@ export function BookingCard({
       feeAmount = rawRounded;
       feeLabel = `Service fee${bookingFee.kind === 'percent' ? ` (${bookingFee.value}%)` : ''}`;
     }
+  } else if (isPartial && bookingFee && bookingFee.value > 0 && bookingFee.type === 'service_charge' && bookingFee.applies_to !== 'host') {
+    const raw = bookingFee.kind === 'percent' ? (subtotal * bookingFee.value) / 100 : bookingFee.value;
+    feeAmount = Math.round(raw);
+    feeLabel = `Service fee${bookingFee.kind === 'percent' ? ` (${bookingFee.value}%)` : ''}`;
   }
-  const total = Math.max(0, Math.round((subtotal + feeAmount) * 100) / 100);
-  const payNowAmount = isPartial ? Math.round((subtotal * Math.min(99, Math.max(partialPaymentMinPercent, partialPercent))) / 100 * 100) / 100 : total;
-  const payNowPercent = nights > 0 && subtotal > 0 ? Math.round((payNowAmount / subtotal) * 100) : partialPercent;
+  const total = Math.max(0, Math.round(subtotal + feeAmount));
+  const payNowAmount = isPartial ? Math.round((total * Math.min(99, Math.max(partialPaymentMinPercent, partialPercent))) / 100) : total;
+  const payNowPercent = total > 0 ? Math.round((payNowAmount / total) * 100) : partialPercent;
 
   const isDisabled = hasUnavailableInRange || !checkIn || !checkOut || nights <= 0;
 
@@ -343,6 +368,51 @@ export function BookingCard({
           </div>
         </div>
 
+        {extraServices && extraServices.length > 0 && onExtraServicesChange && (
+          <div className="mb-4 p-3 rounded-xl border border-border bg-muted/30 space-y-2">
+            <p className="text-sm font-medium text-foreground">Add extra services</p>
+            {extraServices.map((s) => {
+              const sel = selectedExtraServices.find((e) => e.extra_service_id === s.id);
+              const qty = sel?.quantity ?? 0;
+              const priceNum = Number(s.price_npr);
+              const unitLabel = s.unit === 'per_person' ? 'per person' : s.unit === 'per_group' ? 'per group' : 'fixed';
+              return (
+                <div
+                  key={s.id}
+                  className="flex items-center justify-between gap-3 py-2 min-h-[44px]"
+                >
+                  <div className="flex items-center gap-2 flex-1 min-w-0">
+                    <span className="text-sm text-foreground truncate">{s.name}</span>
+                    <span className="text-xs text-muted-foreground shrink-0">
+                      {formatPrice(String(priceNum))} {unitLabel}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <label className="text-xs text-muted-foreground whitespace-nowrap">No. of days</label>
+                    <input
+                      type="number"
+                      min={0}
+                      max={99}
+                      value={qty}
+                      onChange={(e) => {
+                        const n = Math.min(99, Math.max(0, parseInt(e.target.value, 10) || 0));
+                        if (n === 0) {
+                          onExtraServicesChange(selectedExtraServices.filter((e) => e.extra_service_id !== s.id));
+                        } else {
+                          const rest = selectedExtraServices.filter((e) => e.extra_service_id !== s.id);
+                          onExtraServicesChange([...rest, { extra_service_id: s.id, quantity: n }]);
+                        }
+                      }}
+                      className="w-14 rounded border border-border bg-background px-2 py-1.5 text-sm text-foreground"
+                      placeholder="0"
+                    />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
         {onPaymentTypeChange && nights > 0 && !hasUnavailableInRange && (
           <div className="mb-4 p-3 rounded-xl border border-border bg-muted/30 space-y-3">
             <p className="text-sm font-medium text-foreground">Payment at reservation</p>
@@ -395,7 +465,7 @@ export function BookingCard({
         <Button
           type="submit"
           disabled={isDisabled || submitting}
-          className="w-full py-6 text-lg font-semibold bg-primary hover:bg-primary/90 rounded-xl disabled:opacity-50"
+          className="w-full mt-4 py-6 text-lg font-semibold bg-primary hover:bg-primary/90 rounded-xl disabled:opacity-50"
         >
           {submitting ? 'Redirecting…' : isPartial ? `Pay ${formatPrice(String(payNowAmount.toFixed(2)))} now (${payNowPercent}%)` : 'Reserve Now'}
         </Button>
@@ -409,14 +479,20 @@ export function BookingCard({
         <div className="mt-6 pt-6 border-t border-border space-y-3">
           <div className="flex justify-between text-foreground">
             <span className="underline">
-              {displayPrice} × {nights} night{nights > 1 ? 's' : ''}
+              {displayPrice} × {guests} guest{guests > 1 ? 's' : ''} × {nights} night{nights > 1 ? 's' : ''}
             </span>
-            <span>{formatPrice(String(subtotal.toFixed(2)))}</span>
+            <span>{formatPrice(String(subtotalRoom))}</span>
           </div>
+          {extraTotal > 0 && (
+            <div className="flex justify-between text-foreground">
+              <span className="underline">Extra services</span>
+              <span>{formatPrice(String(extraTotal))}</span>
+            </div>
+          )}
           {feeAmount !== 0 && (
             <div className="flex justify-between text-foreground">
               <span className="underline">{feeLabel}</span>
-              <span>{feeAmount > 0 ? formatPrice(String(feeAmount.toFixed(2))) : `-${formatPrice(String(Math.abs(feeAmount).toFixed(2)))}`}</span>
+              <span>{feeAmount > 0 ? formatPrice(String(feeAmount)) : `-${formatPrice(String(Math.abs(feeAmount)))}`}</span>
             </div>
           )}
           {isPartial && (
@@ -427,12 +503,12 @@ export function BookingCard({
           )}
           <div className="flex justify-between font-semibold text-foreground pt-3 border-t border-border">
             <span>Total</span>
-            <span>{formatPrice(String(total.toFixed(2)))}</span>
+            <span>{formatPrice(String(total))}</span>
           </div>
           {isPartial && total > payNowAmount && (
             <div className="flex justify-between text-sm text-foreground">
               <span>Pay now ({payNowPercent}%)</span>
-              <span>{formatPrice(String(payNowAmount.toFixed(2)))}</span>
+              <span>{formatPrice(String(Math.round(payNowAmount)))}</span>
             </div>
           )}
         </div>

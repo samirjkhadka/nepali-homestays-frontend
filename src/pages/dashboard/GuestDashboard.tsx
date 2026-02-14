@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { api } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
 import { useCurrency } from '@/lib/currency';
+import { formatDateTime } from '@/lib/format';
 import { useAuth } from '@/lib/auth';
 
 type Booking = {
@@ -446,7 +447,7 @@ export default function GuestDashboard() {
                       <div key={m.id} className={`rounded-lg p-3 ${m.sender_id === selectedConversation.other_user_id ? 'bg-primary-100 ml-0 mr-8' : 'bg-accent-100 ml-8 mr-0'}`}>
                         <p className="text-xs font-medium text-muted-foreground">{m.sender_name}</p>
                         <p className="text-primary-800">{m.message}</p>
-                        <p className="text-xs text-muted-foreground mt-1">{new Date(m.created_at).toLocaleString()}</p>
+                        <p className="text-xs text-muted-foreground mt-1">{formatDateTime(m.created_at)}</p>
                       </div>
                     ))}
                   </div>

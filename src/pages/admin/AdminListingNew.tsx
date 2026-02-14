@@ -8,7 +8,9 @@ import { Textarea } from '@/components/ui/textarea';
 import { api } from '@/lib/api';
 import { getImageDisplayUrl } from '@/lib/image-url';
 import { useToast } from '@/hooks/use-toast';
-import { FACILITY_GROUPS, HOMESTAY_TYPES, HOMESTAY_CATEGORIES, WARD_NUMBERS, PRICE_TYPE_OPTIONS } from '@/data/districts';
+import { HOMESTAY_TYPES, HOMESTAY_CATEGORIES, WARD_NUMBERS } from '@/data/districts';
+import type { ExtraServiceFormItem } from '@/data/amenities';
+import { AmenitiesAndExtras } from '@/components/AmenitiesAndExtras';
 import { resizeImageFiles } from '@/lib/image-resize';
 import { MapLocationPicker } from '@/components/MapLocationPicker';
 import { ImagePlus, GripVertical, X, User } from 'lucide-react';
@@ -56,6 +58,7 @@ export default function AdminListingNew() {
     latitude: null as number | null,
     longitude: null as number | null,
     amenities: [] as string[],
+    extra_services: [] as ExtraServiceFormItem[],
     image_urls: [] as string[],
     sections: {
       history: '',
@@ -63,7 +66,6 @@ export default function AdminListingNew() {
       about_us: '',
       their_community: '',
     } as Record<string, string>,
-    facilityExtras: {} as Record<string, string>,
   });
 
   useEffect(() => {
@@ -85,20 +87,6 @@ export default function AdminListingNew() {
       setForm((f) => ({ ...f, municipality: '' }));
     }
   }, [form.district_id]);
-
-  const toggleAmenity = (id: string, groupId: string, groupType: 'single' | 'multi') => {
-    setForm((f) => {
-      const group = FACILITY_GROUPS.find((g) => g.id === groupId);
-      if (!group) return f;
-      const optionIds = group.options.map((o) => o.id);
-      if (groupType === 'single') {
-        const already = f.amenities.includes(id);
-        const withoutGroup = f.amenities.filter((a) => !optionIds.includes(a));
-        return { ...f, amenities: already ? withoutGroup : [...withoutGroup, id] };
-      }
-      return { ...f, amenities: f.amenities.includes(id) ? f.amenities.filter((x) => x !== id) : [...f.amenities, id] };
-    });
-  };
 
   const validate = (): boolean => {
     const e: Record<string, string> = {};
@@ -190,7 +178,6 @@ export default function AdminListingNew() {
     }
     const sectionsFiltered: Record<string, string> = {};
     Object.entries(form.sections).forEach(([k, v]) => { if (v?.trim()) sectionsFiltered[k] = v.trim(); });
-    Object.entries(form.facilityExtras).forEach(([k, v]) => { if (v?.trim()) sectionsFiltered[`facility_${k}`] = v.trim(); });
 
     api
       .post('/api/admin/listings', {
@@ -213,6 +200,7 @@ export default function AdminListingNew() {
         latitude: form.latitude ?? undefined,
         longitude: form.longitude ?? undefined,
         amenities: form.amenities.length ? form.amenities : undefined,
+        extra_services: form.extra_services.length ? form.extra_services.map((s) => ({ name: s.name, price_npr: s.price_npr, unit: s.unit, description: s.description || undefined })) : undefined,
         image_urls: form.image_urls.length ? form.image_urls : undefined,
         sections: Object.keys(sectionsFiltered).length ? sectionsFiltered : undefined,
       })
@@ -436,50 +424,13 @@ export default function AdminListingNew() {
           </CardContent>
         </Card>
 
-        {/* Facilities */}
-        <Card className="border-primary-200">
-          <CardHeader className="border-b border-primary-100 bg-primary-50/50"><h2 className="font-semibold text-primary-800">Facilities</h2></CardHeader>
-          <CardContent className="pt-6 space-y-4">
-            {FACILITY_GROUPS.map((group) => {
-              const amenityId = group.options[0]?.id;
-              const isYes = amenityId && form.amenities.includes(amenityId);
-              return (
-                <div key={group.id} className="rounded-lg border border-primary-200 p-3">
-                  <p className="text-sm font-medium text-primary-800 mb-2">{group.label}</p>
-                  <div className="flex flex-wrap gap-2">
-                    {group.options.map((opt) => (
-                      <label key={opt.id} className="flex cursor-pointer items-center gap-2 rounded-lg border border-primary-200 px-3 py-2 text-sm hover:bg-primary-50/50 has-[:checked]:border-accent-500 has-[:checked]:bg-accent-50/50">
-                        <input type={group.type === 'single' ? 'radio' : 'checkbox'} name={group.id} checked={form.amenities.includes(opt.id)} onChange={() => toggleAmenity(opt.id, group.id, group.type)} className={group.type === 'single' ? 'rounded-full border-primary-300' : 'rounded border-primary-300'} />
-                        {opt.label}
-                      </label>
-                    ))}
-                  </div>
-                  {group.hasCapacity && isYes && (
-                    <div className="mt-3">
-                      <Label className="text-primary-800 text-sm">Capacity</Label>
-                      <Input type="number" min={1} placeholder="e.g. 50" value={form.facilityExtras[`${group.id}_capacity`] ?? ''} onChange={(e) => setForm((f) => ({ ...f, facilityExtras: { ...f.facilityExtras, [`${group.id}_capacity`]: e.target.value } }))} className="mt-1 w-32" />
-                    </div>
-                  )}
-                  {group.hasPriceType && isYes && (
-                    <div className="mt-3 space-y-2">
-                      <div>
-                        <Label className="text-primary-800 text-sm">Price type</Label>
-                        <select value={form.facilityExtras[`${group.id}_price_type`] ?? ''} onChange={(e) => setForm((f) => ({ ...f, facilityExtras: { ...f.facilityExtras, [`${group.id}_price_type`]: e.target.value } }))} className="mt-1 w-full max-w-xs rounded-md border border-input bg-background px-3 py-2 text-sm">
-                          <option value="">Select</option>
-                          {PRICE_TYPE_OPTIONS.map((o) => (<option key={o.id} value={o.id}>{o.label}</option>))}
-                        </select>
-                      </div>
-                      <div>
-                        <Label className="text-primary-800 text-sm">Price (NPR)</Label>
-                        <Input type="number" min={0} placeholder="e.g. 500" value={form.facilityExtras[`${group.id}_price`] ?? ''} onChange={(e) => setForm((f) => ({ ...f, facilityExtras: { ...f.facilityExtras, [`${group.id}_price`]: e.target.value } }))} className="mt-1 w-32" />
-                      </div>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </CardContent>
-        </Card>
+        {/* Amenities & Extra services (same as host) */}
+        <AmenitiesAndExtras
+          amenities={form.amenities}
+          onAmenitiesChange={(amenities) => setForm((f) => ({ ...f, amenities }))}
+          extraServices={form.extra_services}
+          onExtraServicesChange={(extra_services) => setForm((f) => ({ ...f, extra_services }))}
+        />
 
         {/* Description & directions */}
         <Card className="border-primary-200">

@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
-import { Bed, DollarSign, Home, Plus, Calendar, BarChart3, Star, MessageSquare, Languages, ChevronRight, ArrowLeft } from 'lucide-react';
+import { Bed, DollarSign, Home, Plus, Calendar, BarChart3, Star, MessageSquare, Languages, ChevronRight, ArrowLeft, CalendarDays, User } from 'lucide-react';
 import {
   BarChart,
   Bar,
@@ -27,6 +27,7 @@ import {
 import { api } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
 import { useCurrency } from '@/lib/currency';
+import { formatDateTime } from '@/lib/format';
 
 type Booking = {
   id: number;
@@ -82,6 +83,16 @@ function statusBadgeClass(status: string): string {
 
 const TABS = ['overview', 'listings', 'bookings', 'calendar', 'reviews', 'messages', 'profile'] as const;
 type TabType = (typeof TABS)[number];
+
+const TAB_ICONS: Record<TabType, React.ComponentType<{ className?: string }>> = {
+  overview: BarChart3,
+  listings: Home,
+  bookings: Bed,
+  calendar: CalendarDays,
+  reviews: Star,
+  messages: MessageSquare,
+  profile: User,
+};
 
 const CHART_COLORS = [
   '#0d9488', /* accent/teal */
@@ -410,19 +421,23 @@ export default function HostDashboard() {
         </div>
       </div>
       <div className="mt-6 flex flex-wrap gap-2 border-b border-primary-200">
-        {visibleTabs.map((t) => (
-          <button
-            key={t}
-            type="button"
-            className={`px-4 py-2 font-medium capitalize transition-colors ${tab === t ? 'border-b-2 border-accent-500 text-accent-600' : 'text-muted-foreground hover:text-primary-700'}`}
-            onClick={() => {
-              setTab(t);
-              setSearchParams(t === 'overview' ? {} : { tab: t });
-            }}
-          >
-            {t}
-          </button>
-        ))}
+        {visibleTabs.map((t) => {
+          const Icon = TAB_ICONS[t];
+          return (
+            <button
+              key={t}
+              type="button"
+              className={`inline-flex items-center gap-2 px-4 py-2 font-medium capitalize transition-colors ${tab === t ? 'border-b-2 border-accent-500 text-accent-600' : 'text-muted-foreground hover:text-primary-700'}`}
+              onClick={() => {
+                setTab(t);
+                setSearchParams(t === 'overview' ? {} : { tab: t });
+              }}
+            >
+              {Icon && <Icon className="h-4 w-4 shrink-0" />}
+              {t}
+            </button>
+          );
+        })}
       </div>
 
       {tab === 'overview' && (
@@ -1122,7 +1137,7 @@ export default function HostDashboard() {
                           <div key={m.id} className="rounded-lg p-3 bg-primary-50/50">
                             <p className="text-xs font-medium text-primary-700">{m.sender_name}</p>
                             <p className="text-sm text-foreground">{m.message}</p>
-                            <p className="mt-1 text-xs text-muted-foreground">{m.created_at ? new Date(m.created_at).toLocaleString() : ''}</p>
+                            <p className="mt-1 text-xs text-muted-foreground">{m.created_at ? formatDateTime(m.created_at) : ''}</p>
                           </div>
                         ))}
                       </div>

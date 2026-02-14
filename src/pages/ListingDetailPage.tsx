@@ -48,6 +48,7 @@ type Listing = {
   longitude?: number | null;
   images: { url: string }[];
   amenities: string[];
+  extra_services?: { id: number; name: string; price_npr: number; unit: string; description?: string | null }[];
   host?: { name: string; avatar_url: string | null; bio: string | null };
   hosts?: HostProfile[];
   sections?: Record<string, string>;
@@ -110,6 +111,7 @@ export default function ListingDetailPage() {
   const [checkOut, setCheckOut] = useState('');
   const [guests, setGuests] = useState(1);
   const [message] = useState('');
+  const [selectedExtraServices, setSelectedExtraServices] = useState<{ extra_service_id: number; quantity: number }[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [isFavorite, setIsFavorite] = useState(false);
   const [favoriteLoading, setFavoriteLoading] = useState(false);
@@ -287,6 +289,7 @@ export default function ListingDetailPage() {
       message: message || undefined,
       payment_type: paymentType,
       ...(paymentType === 'partial' ? { partial_percent: Math.max(partialPaymentMinPercent, Math.min(99, partialPercent)) } : {}),
+      ...(selectedExtraServices.length > 0 ? { extra_services: selectedExtraServices } : {}),
     };
     api
       .post<{
@@ -654,6 +657,32 @@ export default function ListingDetailPage() {
             {/* Amenities */}
             <AmenitiesList amenities={listingData.amenities || []} sections={listingData.sections} />
 
+            {/* Extra services (paid add-ons) */}
+            {listingData.extra_services && listingData.extra_services.length > 0 && (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="py-8 border-t border-border"
+              >
+                <h3 className="font-display text-2xl font-semibold text-foreground mb-4">Extra services</h3>
+                <p className="text-muted-foreground text-sm mb-4">Optional paid add-ons you can select when booking.</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {listingData.extra_services.map((s) => (
+                    <div key={s.id} className="p-4 rounded-xl bg-muted/50 border border-border">
+                      <p className="font-medium text-foreground">{s.name}</p>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        NPR {Number(s.price_npr).toLocaleString()}
+                        {s.unit === 'per_person' && ' per person'}
+                        {s.unit === 'per_group' && ' per group'}
+                        {s.unit === 'fixed' && ' (fixed)'}
+                      </p>
+                      {s.description && <p className="text-sm text-foreground/80 mt-2">{s.description}</p>}
+                    </div>
+                  ))}
+                </div>
+              </motion.div>
+            )}
+
             {/* Write review (when ?review=bookingId) */}
             {user && reviewBookingId && (
               <Card className="border-border bg-card">
@@ -794,6 +823,9 @@ export default function ListingDetailPage() {
                 partialPaymentMinPercent={partialPaymentMinPercent}
                 onPaymentTypeChange={setPaymentType}
                 onPartialPercentChange={setPartialPercent}
+                extraServices={listingData.extra_services}
+                selectedExtraServices={selectedExtraServices}
+                onExtraServicesChange={setSelectedExtraServices}
               />
             )}
           </div>

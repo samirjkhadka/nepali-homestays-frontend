@@ -81,8 +81,8 @@ export function CurrencyProvider({ children }: { children: ReactNode }) {
     return function format(priceNpr: number | string): string {
       const amount = convert(priceNpr);
       const sym = CURRENCY_SYMBOLS[currency];
-      if (currency === 'NPR') return `${sym} ${Math.round(amount).toLocaleString()}`;
-      return `${sym} ${amount.toFixed(2)}`;
+      if (currency === 'NPR') return `${sym} ${Number(amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+      return `${sym} ${Number(amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
     };
   }, [currency, convert]);
 

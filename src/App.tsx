@@ -17,6 +17,7 @@ import HostDashboard from '@/pages/dashboard/HostDashboard';
 import AdminDashboard from '@/pages/admin/AdminDashboard';
 import AdminListingNew from '@/pages/admin/AdminListingNew';
 import AdminListingEdit from '@/pages/admin/AdminListingEdit';
+import AdminSendNotifications from '@/pages/admin/AdminSendNotifications';
 import HostListingNew from '@/pages/host/HostListingNew';
 import HostListingEdit from '@/pages/host/HostListingEdit';
 import PayBookingPage from '@/pages/booking/PayBookingPage';
@@ -125,6 +126,14 @@ export default function App() {
             element={
               <ProtectedRoute roles={['admin']}>
                 <AdminListingEdit />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="admin/notifications/send"
+            element={
+              <ProtectedRoute roles={['admin']}>
+                <AdminSendNotifications />
               </ProtectedRoute>
             }
           />

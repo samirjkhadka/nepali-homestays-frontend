@@ -88,8 +88,14 @@ export default function AdminListingEdit() {
       const images = (d.images as { url: string }[] | undefined) ?? [];
       const image_urls = images.map((i) => i.url);
       const rawExtra = d.extra_services;
+      const validUnits = ['fixed', 'per_person', 'per_group'] as const;
       const extra_services: ExtraServiceFormItem[] = Array.isArray(rawExtra)
-        ? rawExtra.map((e) => ({ name: e.name, price_npr: e.price_npr, unit: e.unit, description: e.description ?? undefined }))
+        ? rawExtra.map((e) => ({
+            name: e.name,
+            price_npr: e.price_npr,
+            unit: validUnits.includes(e.unit as (typeof validUnits)[number]) ? (e.unit as ExtraServiceFormItem['unit']) : 'fixed',
+            description: e.description ?? undefined,
+          }))
         : [];
       setForm({
         title: (d.title as string) ?? '',
@@ -193,8 +199,6 @@ export default function AdminListingEdit() {
       .catch((err) => toast({ title: err.response?.data?.message || 'Failed.', variant: 'destructive' }))
       .finally(() => setLoading(false));
   };
-
-  const selectClass = 'mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm';
 
   return (
     <div>

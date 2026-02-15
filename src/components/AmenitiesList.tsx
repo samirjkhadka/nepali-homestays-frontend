@@ -69,8 +69,9 @@ function buildDisplayItems(amenities: string[], sections?: Record<string, string
   // New predefined amenities (free inclusions)
   for (const opt of AMENITIES_OPTIONS) {
     if (!set.has(opt.id)) continue;
-    const icon = NEW_AMENITY_ICONS[opt.id];
-    if (icon) items.push({ id: opt.id, label: opt.label, icon });
+    if (opt.id in NEW_AMENITY_ICONS) {
+      items.push({ id: opt.id, label: opt.label, icon: NEW_AMENITY_ICONS[opt.id] });
+    }
   }
 
   // Legacy: skip if we already added all from set (new list only)

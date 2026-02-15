@@ -624,6 +624,9 @@ export default function AdminDashboard() {
               <div className="flex flex-wrap gap-3">
                 <Button size="sm" className="bg-accent-500 hover:bg-accent-600" onClick={() => setTab('listings')}>Review pending listings</Button>
                 <Button size="sm" variant="outline" onClick={() => setTab('users')}>Manage users</Button>
+                <Button size="sm" variant="outline" asChild>
+                  <Link to="/admin/notifications/send"><Bell className="w-4 h-4 mr-1 inline" />Send notifications</Link>
+                </Button>
               </div>
             </CardContent>
           </Card>

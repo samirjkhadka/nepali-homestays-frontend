@@ -369,7 +369,7 @@ export function BookingCard({
         </div>
 
         {extraServices && extraServices.length > 0 && onExtraServicesChange && (
-          <div className="mb-4 p-3 rounded-xl border border-border bg-muted/30 space-y-2">
+          <div className="mb-6 p-3 rounded-xl border border-border bg-muted/30 space-y-2">
             <p className="text-sm font-medium text-foreground">Add extra services</p>
             {extraServices.map((s) => {
               const sel = selectedExtraServices.find((e) => e.extra_service_id === s.id);
@@ -465,7 +465,7 @@ export function BookingCard({
         <Button
           type="submit"
           disabled={isDisabled || submitting}
-          className="w-full mt-4 py-6 text-lg font-semibold bg-primary hover:bg-primary/90 rounded-xl disabled:opacity-50"
+          className="w-full mt-6 py-6 text-lg font-semibold bg-primary hover:bg-primary/90 rounded-xl disabled:opacity-50"
         >
           {submitting ? 'Redirecting…' : isPartial ? `Pay ${formatPrice(String(payNowAmount.toFixed(2)))} now (${payNowPercent}%)` : 'Reserve Now'}
         </Button>

@@ -25,7 +25,6 @@ import { Textarea } from '@/components/ui/textarea';
 import {
   AMENITIES_OPTIONS,
   EXTRA_SERVICE_UNITS,
-  type AmenityOption,
   type ExtraServiceFormItem,
   type ExtraServiceUnit,
 } from '@/data/amenities';

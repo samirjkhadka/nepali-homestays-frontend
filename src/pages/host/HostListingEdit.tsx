@@ -199,8 +199,6 @@ export default function HostListingEdit() {
       .finally(() => setLoading(false));
   };
 
-  const selectClass = 'mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm';
-
   return (
     <div>
       <h1 className="text-2xl font-semibold">Edit listing</h1>

@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Link, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Menu, X, Globe, ChevronDown, LogOut, User, KeyRound, Heart, MessageSquare, Receipt, Calendar, LogIn, UserPlus, LayoutDashboard, PlusCircle } from 'lucide-react';
+import { NotificationBell } from '@/components/NotificationBell';
 import { useAuth } from '@/lib/auth';
 import { useCurrency } from '@/lib/currency';
 import { useI18n } from '@/lib/i18n';
@@ -169,7 +170,8 @@ export default function Layout() {
                   )}
                 </AnimatePresence>
               </div>
-              {/* Auth / User */}
+              {/* Notifications + Auth / User */}
+              {user && <NotificationBell />}
               {user ? (
                 <div className="relative" ref={dropdownRef}>
                   <button

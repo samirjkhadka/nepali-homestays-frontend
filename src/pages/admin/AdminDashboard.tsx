@@ -10,6 +10,7 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, L
 import { api } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
 import { HOMESTAY_CATEGORIES } from '@/data/districts';
+import { AdminTable } from '@/components/admin/AdminTable';
 
 type Listing = { id: number; title: string; host_id: number; status: string; created_at: string; badge?: string | null };
 type ApprovedListing = { id: number; title: string; location: string; badge: string | null };
@@ -716,67 +717,22 @@ export default function AdminDashboard() {
               />
             </div>
           </CardHeader>
-          <CardContent className="p-6">
-            {liveListings.filter((l) => !liveListingsSearch.trim() || l.title.toLowerCase().includes(liveListingsSearch.toLowerCase()) || l.location?.toLowerCase().includes(liveListingsSearch.toLowerCase()) || String(l.id).includes(liveListingsSearch)).length === 0 ? (
-              <p className="text-muted-foreground">No approved or disabled listings.</p>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full border-collapse">
-                  <thead>
-                    <tr className="border-b border-primary-200 bg-primary-50/50">
-                      <th className="p-3 text-left text-sm font-medium text-primary-800">ID</th>
-                      <th className="p-3 text-left text-sm font-medium text-primary-800">Title</th>
-                      <th className="p-3 text-left text-sm font-medium text-primary-800">Location</th>
-                      <th className="p-3 text-left text-sm font-medium text-primary-800">Status</th>
-                      <th className="p-3 text-left text-sm font-medium text-primary-800">Badges</th>
-                      <th className="p-3 text-left text-sm font-medium text-primary-800">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {liveListings.filter((l) => !liveListingsSearch.trim() || l.title.toLowerCase().includes(liveListingsSearch.toLowerCase()) || l.location?.toLowerCase().includes(liveListingsSearch.toLowerCase()) || String(l.id).includes(liveListingsSearch)).map((l) => {
-                      const currentBadges = parseBadges(l.badge);
-                      return (
-                      <tr key={l.id} className="border-b border-primary-100">
-                        <td className="p-3 text-sm">{l.id}</td>
-                        <td className="p-3 font-medium text-primary-800">{l.title}</td>
-                        <td className="p-3 text-sm text-muted-foreground">{l.location}</td>
-                        <td className="p-3">
-                          <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${l.status === 'approved' ? 'bg-green-100 text-green-800' : 'bg-muted text-muted-foreground'}`}>
-                            {l.status === 'approved' ? 'Enabled' : 'Disabled'}
-                          </span>
-                        </td>
-                        <td className="p-3">
-                          <div className="flex flex-wrap items-center gap-2">
-                            {LISTING_BADGES.map((b) => (
-                              <label key={b} className="flex cursor-pointer items-center gap-1 text-sm">
-                                <input type="checkbox" checked={currentBadges.includes(b)} disabled={l.status !== 'approved'} onChange={() => { const next = currentBadges.includes(b) ? currentBadges.filter((x) => x !== b) : [...currentBadges, b]; handleBadgeChange(l.id, next); }} className="rounded border-primary-300" />
-                                <span>{b.charAt(0).toUpperCase() + b.slice(1)}</span>
-                              </label>
-                            ))}
-                          </div>
-                        </td>
-                        <td className="p-3">
-                          <div className="flex items-center gap-2">
-                            {l.status === 'approved' ? (
-                              <Button type="button" variant="outline" size="sm" onClick={() => handleStatusChange(l.id, 'disabled')}>
-                                Disable
-                              </Button>
-                            ) : (
-                              <Button type="button" size="sm" className="bg-accent-500 hover:bg-accent-600" onClick={() => handleStatusChange(l.id, 'approved')}>
-                                Enable
-                              </Button>
-                            )}
-                            <Link to={`/admin/listings/${l.id}/edit`} className="text-sm text-primary hover:underline">Edit</Link>
-                            <Link to={`/listings/${l.id}`} className="text-sm text-primary hover:underline" state={{ from: 'admin' }}>View</Link>
-                          </div>
-                        </td>
-                      </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )}
+          <CardContent className="p-0">
+            <AdminTable<LiveListing>
+              data={liveListings.filter((l) => !liveListingsSearch.trim() || l.title.toLowerCase().includes(liveListingsSearch.toLowerCase()) || l.location?.toLowerCase().includes(liveListingsSearch.toLowerCase()) || String(l.id).includes(liveListingsSearch))}
+              keyExtractor={(l) => l.id}
+              pageSize={15}
+              emptyMessage="No approved or disabled listings."
+              containerClassName="max-h-[70vh] overflow-y-auto"
+              columns={[
+                { key: 'id', label: 'ID', sortable: true },
+                { key: 'title', label: 'Title', sortable: true },
+                { key: 'location', label: 'Location', sortable: true },
+                { key: 'status', label: 'Status', sortable: true, render: (l) => <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${l.status === 'approved' ? 'bg-green-100 text-green-800' : 'bg-muted text-muted-foreground'}`}>{l.status === 'approved' ? 'Enabled' : 'Disabled'}</span> },
+                { key: 'badge', label: 'Badges', render: (l) => { const currentBadges = parseBadges(l.badge); return (<div className="flex flex-wrap items-center gap-2">{LISTING_BADGES.map((b) => (<label key={b} className="flex cursor-pointer items-center gap-1 text-sm"><input type="checkbox" checked={currentBadges.includes(b)} disabled={l.status !== 'approved'} onChange={() => { const next = currentBadges.includes(b) ? currentBadges.filter((x) => x !== b) : [...currentBadges, b]; handleBadgeChange(l.id, next); }} className="rounded border-primary-300" /><span>{b.charAt(0).toUpperCase() + b.slice(1)}</span></label>))}</div>); } },
+                { key: 'actions', label: 'Actions', render: (l) => (<div className="flex items-center gap-2">{l.status === 'approved' ? (<Button type="button" variant="outline" size="sm" onClick={() => handleStatusChange(l.id, 'disabled')}>Disable</Button>) : (<Button type="button" size="sm" className="bg-accent-500 hover:bg-accent-600" onClick={() => handleStatusChange(l.id, 'approved')}>Enable</Button>)}<Link to={`/admin/listings/${l.id}/edit`} className="text-sm text-primary hover:underline">Edit</Link><Link to={`/listings/${l.id}`} className="text-sm text-primary hover:underline" state={{ from: 'admin' }}>View</Link></div>) },
+              ]}
+            />
           </CardContent>
         </Card>
         </div>
@@ -809,73 +765,28 @@ export default function AdminDashboard() {
               </div>
             </CardHeader>
             <CardContent className="p-0">
-              <div className="overflow-x-auto">
-                {usersLoading ? (
-                  <p className="p-8 text-center text-muted-foreground">Loading users…</p>
-                ) : (
-                  <table className="w-full border-collapse">
-                    <thead>
-                      <tr className="border-b border-primary-200 bg-primary-50/50">
-                        <th className="p-3 text-left text-sm font-medium text-primary-800">ID</th>
-                        <th className="p-3 text-left text-sm font-medium text-primary-800">Name</th>
-                        <th className="p-3 text-left text-sm font-medium text-primary-800">Email</th>
-                        <th className="p-3 text-left text-sm font-medium text-primary-800">Mobile</th>
-                        <th className="p-3 text-left text-sm font-medium text-primary-800">Created</th>
-                        <th className="p-3 text-left text-sm font-medium text-primary-800">Role</th>
-                        <th className="p-3 text-left text-sm font-medium text-primary-800">Host listing</th>
-                        <th className="p-3 text-left text-sm font-medium text-primary-800">Change role</th>
-                        <th className="p-3 text-left text-sm font-medium text-primary-800">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {users.map((u) => (
-                        <tr key={u.id} className="border-b border-primary-100">
-                          <td className="p-3 text-sm">{u.id}</td>
-                          <td className="p-3 font-medium text-primary-800">{u.name}</td>
-                          <td className="p-3 text-sm text-muted-foreground">{u.email}</td>
-                          <td className="p-3 text-sm">{u.phone ?? '—'}</td>
-                          <td className="p-3 text-sm text-muted-foreground">{u.created_at ? formatDateOnly(u.created_at) : '—'}</td>
-                          <td className="p-3">
-                            <span className={`rounded-full px-2 py-1 text-xs font-medium ${u.role === 'admin' ? 'bg-accent-100 text-accent-800' : u.role === 'host' ? 'bg-primary-100 text-primary-800' : 'bg-secondary-200 text-secondary-800'}`}>
-                              {u.role === 'admin' ? 'Admin' : u.role === 'host' ? 'Host' : 'Guest'}
-                            </span>
-                            {u.blocked && <span className="ml-1 rounded-full bg-red-100 px-2 py-0.5 text-xs text-red-800">Blocked</span>}
-                          </td>
-                          <td className="p-3 text-sm text-muted-foreground">
-                            {u.host_listing_id != null && u.host_listing_title != null ? (
-                              <span title={u.host_listing_title}>#{u.host_listing_id} – {u.host_listing_title}</span>
-                            ) : (
-                              '—'
-                            )}
-                          </td>
-                          <td className="p-3">
-                            <select
-                              value={u.role}
-                              onChange={(e) => handleRoleChange(u.id, e.target.value)}
-                              className="rounded-md border border-primary-200 bg-background px-2 py-1.5 text-sm"
-                            >
-                              <option value="guest">Guest</option>
-                              <option value="host">Host</option>
-                              <option value="admin">Admin</option>
-                            </select>
-                          </td>
-                          <td className="p-3">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <Button type="button" variant="outline" size="sm" onClick={() => setSelectedUserDetail(u)}>View detail</Button>
-                              {u.blocked ? (
-                                <Button type="button" size="sm" className="bg-green-600 hover:bg-green-700" onClick={() => api.patch(`/api/admin/users/${u.id}/block`, { blocked: false }).then(() => { setUsers((prev) => prev.map((x) => x.id === u.id ? { ...x, blocked: false } : x)); toast({ title: 'User unblocked.' }); }).catch((err) => toast({ title: err.response?.data?.message || 'Failed', variant: 'destructive' }))}>Unblock</Button>
-                              ) : (
-                                <Button type="button" variant="destructive" size="sm" onClick={() => api.patch(`/api/admin/users/${u.id}/block`, { blocked: true }).then(() => { setUsers((prev) => prev.map((x) => x.id === u.id ? { ...x, blocked: true } : x)); toast({ title: 'User blocked.' }); }).catch((err) => toast({ title: err.response?.data?.message || 'Failed', variant: 'destructive' }))}>Block</Button>
-                              )}
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                )}
-                {!usersLoading && users.length === 0 && <p className="p-8 text-center text-muted-foreground">No users found.</p>}
-              </div>
+              {usersLoading ? (
+                <p className="p-8 text-center text-muted-foreground">Loading users…</p>
+              ) : (
+                <AdminTable<User>
+                  data={users.filter((u) => !usersSearch.trim() || u.name?.toLowerCase().includes(usersSearch.toLowerCase()) || u.email?.toLowerCase().includes(usersSearch.toLowerCase()) || (u.phone && u.phone.includes(usersSearch)))}
+                  keyExtractor={(u) => u.id}
+                  pageSize={15}
+                  emptyMessage="No users found."
+                  containerClassName="max-h-[70vh] overflow-y-auto"
+                  columns={[
+                    { key: 'id', label: 'ID', sortable: true },
+                    { key: 'name', label: 'Name', sortable: true },
+                    { key: 'email', label: 'Email', sortable: true },
+                    { key: 'phone', label: 'Mobile', sortable: true, render: (u) => u.phone ?? '—' },
+                    { key: 'created_at', label: 'Created', sortable: true, render: (u) => u.created_at ? formatDateOnly(u.created_at) : '—' },
+                    { key: 'role', label: 'Role', sortable: true, render: (u) => (<><span className={`rounded-full px-2 py-1 text-xs font-medium ${u.role === 'admin' ? 'bg-accent-100 text-accent-800' : u.role === 'host' ? 'bg-primary-100 text-primary-800' : 'bg-secondary-200 text-secondary-800'}`}>{u.role === 'admin' ? 'Admin' : u.role === 'host' ? 'Host' : 'Guest'}</span>{u.blocked && <span className="ml-1 rounded-full bg-red-100 px-2 py-0.5 text-xs text-red-800">Blocked</span>}</>) },
+                    { key: 'host_listing_id', label: 'Host listing', render: (u) => u.host_listing_id != null && u.host_listing_title != null ? <span title={u.host_listing_title ?? ''}>#{u.host_listing_id} – {u.host_listing_title}</span> : '—' },
+                    { key: 'change_role', label: 'Change role', render: (u) => (<select value={u.role} onChange={(e) => handleRoleChange(u.id, e.target.value)} className="rounded-md border border-primary-200 bg-background px-2 py-1.5 text-sm"><option value="guest">Guest</option><option value="host">Host</option><option value="admin">Admin</option></select>) },
+                    { key: 'actions', label: 'Actions', render: (u) => (<div className="flex flex-wrap items-center gap-2"><Button type="button" variant="outline" size="sm" onClick={() => setSelectedUserDetail(u)}>View detail</Button>{u.blocked ? (<Button type="button" size="sm" className="bg-green-600 hover:bg-green-700" onClick={() => api.patch(`/api/admin/users/${u.id}/block`, { blocked: false }).then(() => { setUsers((prev) => prev.map((x) => x.id === u.id ? { ...x, blocked: false } : x)); toast({ title: 'User unblocked.' }); }).catch((err) => toast({ title: err.response?.data?.message || 'Failed', variant: 'destructive' }))}>Unblock</Button>) : (<Button type="button" variant="destructive" size="sm" onClick={() => api.patch(`/api/admin/users/${u.id}/block`, { blocked: true }).then(() => { setUsers((prev) => prev.map((x) => x.id === u.id ? { ...x, blocked: true } : x)); toast({ title: 'User blocked.' }); }).catch((err) => toast({ title: err.response?.data?.message || 'Failed', variant: 'destructive' }))}>Block</Button>)}</div>) },
+                  ]}
+                />
+              )}
             </CardContent>
           </Card>
 
@@ -974,42 +885,25 @@ export default function AdminDashboard() {
             </div>
           </CardHeader>
           <CardContent className="p-0">
-            <div className="overflow-x-auto">
-              {(() => { const filteredBookings = adminBookings.filter((b) => !adminBookingsSearch.trim() || (b.guest_name && b.guest_name.toLowerCase().includes(adminBookingsSearch.toLowerCase())) || (b.listing_title && b.listing_title.toLowerCase().includes(adminBookingsSearch.toLowerCase()))); return filteredBookings.length === 0 ? (
-                <p className="p-8 text-center text-muted-foreground">No bookings found.</p>
-              ) : (
-                <table className="w-full border-collapse">
-                  <thead>
-                    <tr className="border-b border-primary-200 bg-primary-50/50">
-                      <th className="p-3 text-left text-sm font-medium text-primary-800">ID</th>
-                      <th className="p-3 text-left text-sm font-medium text-primary-800">Listing</th>
-                      <th className="p-3 text-left text-sm font-medium text-primary-800">Guest</th>
-                      <th className="p-3 text-left text-sm font-medium text-primary-800">Corporate</th>
-                      <th className="p-3 text-left text-sm font-medium text-primary-800">Dates</th>
-                      <th className="p-3 text-left text-sm font-medium text-primary-800">Status</th>
-                      <th className="p-3 text-left text-sm font-medium text-primary-800">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredBookings.map((b) => (
-                      <tr key={b.id} className="border-b border-primary-100">
-                        <td className="p-3 text-sm">{b.id}</td>
-                        <td className="p-3 font-medium text-primary-800">{b.listing_title}</td>
-                        <td className="p-3 text-sm">{b.guest_name}</td>
-                        <td className="p-3 text-sm text-muted-foreground">{b.corporate_name || '—'}</td>
-                        <td className="p-3 text-sm text-muted-foreground">{formatDateOnly(b.check_in)} – {formatDateOnly(b.check_out)}</td>
-                        <td className="p-3">
-                          <span className={`rounded-full px-2 py-1 text-xs font-medium ${bookingStatusColor(b.status)}`}>{b.status}</span>
-                        </td>
-                        <td className="p-3">
-                          <Button variant="outline" size="sm" onClick={() => setSelectedBooking(b)}>View booking details</Button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              ); })()}
-            </div>
+            <AdminTable<AdminBooking>
+              data={adminBookings.filter((b) => !adminBookingsSearch.trim() || (b.guest_name && b.guest_name.toLowerCase().includes(adminBookingsSearch.toLowerCase())) || (b.listing_title && b.listing_title.toLowerCase().includes(adminBookingsSearch.toLowerCase())))}
+              keyExtractor={(b) => b.id}
+              noPagination
+              emptyMessage="No bookings found."
+              containerClassName="max-h-[70vh] overflow-y-auto"
+              columns={[
+                { key: 'id', label: 'ID', sortable: true },
+                { key: 'listing_title', label: 'Listing', sortable: true },
+                { key: 'guest_name', label: 'Guest', sortable: true },
+                { key: 'corporate_name', label: 'Corporate', render: (b) => b.corporate_name || '—' },
+                { key: 'dates', label: 'Dates', sortValue: (b) => b.check_in, render: (b) => `${formatDateOnly(b.check_in)} – ${formatDateOnly(b.check_out)}` },
+                { key: 'status', label: 'Status', sortable: true, render: (b) => <span className={`rounded-full px-2 py-1 text-xs font-medium ${bookingStatusColor(b.status)}`}>{b.status}</span> },
+                { key: 'actions', label: 'Actions', render: (b) => <Button variant="outline" size="sm" onClick={() => setSelectedBooking(b)}>View booking details</Button> },
+              ]}
+            />
+            {adminBookingsTotal > 0 && (
+              <p className="border-t border-primary-200 px-4 py-2 text-sm text-muted-foreground">{adminBookingsTotal} total</p>
+            )}
           </CardContent>
         </Card>
       )}
@@ -1055,38 +949,21 @@ export default function AdminDashboard() {
               <p className="text-sm text-muted-foreground">{corporatesTotal} corporate(s)</p>
             </CardHeader>
             <CardContent className="p-0">
-              <div className="overflow-x-auto">
-                {corporates.length === 0 ? (
-                  <p className="p-8 text-center text-muted-foreground">No corporates found. Add one to start recording corporate bookings.</p>
-                ) : (
-                  <table className="w-full border-collapse">
-                    <thead>
-                      <tr className="border-b border-primary-200 bg-primary-50/50">
-                        <th className="p-3 text-left text-sm font-medium text-primary-800">Name</th>
-                        <th className="p-3 text-left text-sm font-medium text-primary-800">Status</th>
-                        <th className="p-3 text-left text-sm font-medium text-primary-800">Contact</th>
-                        <th className="p-3 text-left text-sm font-medium text-primary-800">Billing</th>
-                        <th className="p-3 text-left text-sm font-medium text-primary-800">Max rate</th>
-                        <th className="p-3 text-left text-sm font-medium text-primary-800">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {corporates.map((c) => (
-                        <tr key={c.id} className="border-b border-primary-100">
-                          <td className="p-3 font-medium text-primary-800">{c.name}</td>
-                          <td className="p-3"><span className="rounded-full px-2 py-1 text-xs font-medium bg-primary-100 text-primary-800">{c.status}</span></td>
-                          <td className="p-3 text-sm text-muted-foreground">{c.contact_name || '—'} {c.contact_email ? `(${c.contact_email})` : ''}</td>
-                          <td className="p-3 text-sm text-muted-foreground">{c.billing_method || '—'}</td>
-                          <td className="p-3 text-sm">{c.max_nightly_rate != null ? `NPR ${Number(c.max_nightly_rate).toLocaleString()}` : '—'}</td>
-                          <td className="p-3">
-                            <Button variant="outline" size="sm" onClick={() => { setEditingCorporate(c); setCorporateForm({ name: c.name, status: c.status, contact_name: c.contact_name ?? '', contact_email: c.contact_email ?? '', contact_phone: c.contact_phone ?? '', billing_method: c.billing_method ?? '', approval_required: c.approval_required, max_nightly_rate: c.max_nightly_rate, notes: c.notes ?? '' }); setCorporateFormOpen(true); }}>Edit</Button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                )}
-              </div>
+              <AdminTable<Corporate>
+                data={corporates.filter((c) => !corporatesSearch.trim() || c.name?.toLowerCase().includes(corporatesSearch.toLowerCase()) || c.contact_email?.toLowerCase().includes(corporatesSearch.toLowerCase()))}
+                keyExtractor={(c) => c.id}
+                pageSize={15}
+                emptyMessage="No corporates found. Add one to start recording corporate bookings."
+                containerClassName="max-h-[70vh] overflow-y-auto"
+                columns={[
+                  { key: 'name', label: 'Name', sortable: true },
+                  { key: 'status', label: 'Status', sortable: true, render: (c) => <span className="rounded-full px-2 py-1 text-xs font-medium bg-primary-100 text-primary-800">{c.status}</span> },
+                  { key: 'contact', label: 'Contact', render: (c) => `${c.contact_name || '—'} ${c.contact_email ? `(${c.contact_email})` : ''}` },
+                  { key: 'billing_method', label: 'Billing', render: (c) => c.billing_method || '—' },
+                  { key: 'max_nightly_rate', label: 'Max rate', sortValue: (c) => c.max_nightly_rate ?? 0, render: (c) => c.max_nightly_rate != null ? `NPR ${Number(c.max_nightly_rate).toLocaleString()}` : '—' },
+                  { key: 'actions', label: 'Actions', render: (c) => <Button variant="outline" size="sm" onClick={() => { setEditingCorporate(c); setCorporateForm({ name: c.name, status: c.status, contact_name: c.contact_name ?? '', contact_email: c.contact_email ?? '', contact_phone: c.contact_phone ?? '', billing_method: c.billing_method ?? '', approval_required: c.approval_required, max_nightly_rate: c.max_nightly_rate, notes: c.notes ?? '' }); setCorporateFormOpen(true); }}>Edit</Button> },
+                ]}
+              />
             </CardContent>
           </Card>
 
@@ -1338,46 +1215,24 @@ export default function AdminDashboard() {
             </div>
           </CardHeader>
           <CardContent className="p-0">
-            <div className="overflow-x-auto">
-              {adminPayments.filter((p) => !adminPaymentsSearch.trim() || (p.guest_name && p.guest_name.toLowerCase().includes(adminPaymentsSearch.toLowerCase())) || (p.listing_title && p.listing_title.toLowerCase().includes(adminPaymentsSearch.toLowerCase()))).length === 0 ? (
-                <p className="p-8 text-center text-muted-foreground">No payments yet.</p>
-              ) : (
-                <table className="w-full border-collapse">
-                  <thead>
-                    <tr className="border-b border-primary-200 bg-primary-50/50">
-                      <th className="p-3 text-left text-sm font-medium text-primary-800">ID</th>
-                      <th className="p-3 text-left text-sm font-medium text-primary-800">Booking</th>
-                      <th className="p-3 text-left text-sm font-medium text-primary-800">Listing</th>
-                      <th className="p-3 text-left text-sm font-medium text-primary-800">Guest</th>
-                      <th className="p-3 text-left text-sm font-medium text-primary-800">Amount</th>
-                      <th className="p-3 text-left text-sm font-medium text-primary-800">Service charge</th>
-                      <th className="p-3 text-left text-sm font-medium text-primary-800">Status</th>
-                      <th className="p-3 text-left text-sm font-medium text-primary-800">Date</th>
-                      <th className="p-3 text-left text-sm font-medium text-primary-800">Receipt</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {adminPayments.filter((p) => !adminPaymentsSearch.trim() || (p.guest_name && p.guest_name.toLowerCase().includes(adminPaymentsSearch.toLowerCase())) || (p.listing_title && p.listing_title.toLowerCase().includes(adminPaymentsSearch.toLowerCase()))).map((p) => (
-                      <tr key={p.id} className="border-b border-primary-100">
-                        <td className="p-3 text-sm">{p.id}</td>
-                        <td className="p-3 text-sm">{p.booking_id}</td>
-                        <td className="p-3 font-medium text-primary-800">{p.listing_title}</td>
-                        <td className="p-3 text-sm">{p.guest_name}</td>
-                        <td className="p-3 font-medium text-accent-600">NPR {Number(p.amount).toLocaleString()}</td>
-                        <td className="p-3 text-sm text-muted-foreground">NPR {Number(p.service_charge ?? 0).toLocaleString()}</td>
-                        <td className="p-3">
-                          <span className={`rounded-full px-2 py-1 text-xs font-medium ${p.status === 'succeeded' ? 'bg-green-100 text-green-800' : 'bg-secondary-200 text-secondary-800'}`}>{p.status}</span>
-                        </td>
-                        <td className="p-3 text-sm text-muted-foreground">{formatDateOnly(p.created_at)}</td>
-                        <td className="p-3">
-                          <Button variant="outline" size="sm" onClick={() => setSelectedPayment(p)}>View transaction receipt</Button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </div>
+            <AdminTable<AdminPayment>
+              data={adminPayments.filter((p) => !adminPaymentsSearch.trim() || (p.guest_name && p.guest_name.toLowerCase().includes(adminPaymentsSearch.toLowerCase())) || (p.listing_title && p.listing_title.toLowerCase().includes(adminPaymentsSearch.toLowerCase())))}
+              keyExtractor={(p) => p.id}
+              noPagination
+              emptyMessage="No payments yet."
+              containerClassName="max-h-[70vh] overflow-y-auto"
+              columns={[
+                { key: 'id', label: 'ID', sortable: true },
+                { key: 'booking_id', label: 'Booking', sortable: true },
+                { key: 'listing_title', label: 'Listing', sortable: true },
+                { key: 'guest_name', label: 'Guest', sortable: true },
+                { key: 'amount', label: 'Amount', sortable: true, render: (p) => <span className="font-medium text-accent-600">NPR {Number(p.amount).toLocaleString()}</span> },
+                { key: 'service_charge', label: 'Service charge', render: (p) => `NPR ${Number(p.service_charge ?? 0).toLocaleString()}` },
+                { key: 'status', label: 'Status', sortable: true, render: (p) => <span className={`rounded-full px-2 py-1 text-xs font-medium ${p.status === 'succeeded' ? 'bg-green-100 text-green-800' : 'bg-secondary-200 text-secondary-800'}`}>{p.status}</span> },
+                { key: 'created_at', label: 'Date', sortable: true, render: (p) => formatDateOnly(p.created_at) },
+                { key: 'actions', label: 'Receipt', render: (p) => <Button variant="outline" size="sm" onClick={() => setSelectedPayment(p)}>View transaction receipt</Button> },
+              ]}
+            />
           </CardContent>
         </Card>
       )}
@@ -1403,42 +1258,23 @@ export default function AdminDashboard() {
             </div>
           </CardHeader>
           <CardContent className="p-0">
-            <div className="overflow-x-auto">
-              {adminBookings.filter((b) => !reportsSearch.trim() || (b.guest_name && b.guest_name.toLowerCase().includes(reportsSearch.toLowerCase())) || (b.listing_title && b.listing_title.toLowerCase().includes(reportsSearch.toLowerCase()))).length === 0 ? (
-                <p className="p-8 text-center text-muted-foreground">No booking records. Switch to Bookings tab to load data, or data will load when you open Reports.</p>
-              ) : (
-                <table className="w-full border-collapse">
-                  <thead>
-                    <tr className="border-b border-primary-200 bg-primary-50/50">
-                      <th className="p-3 text-left text-sm font-medium text-primary-800">Booking ID</th>
-                      <th className="p-3 text-left text-sm font-medium text-primary-800">Listing</th>
-                      <th className="p-3 text-left text-sm font-medium text-primary-800">Guest</th>
-                      <th className="p-3 text-left text-sm font-medium text-primary-800">Check-in</th>
-                      <th className="p-3 text-left text-sm font-medium text-primary-800">Check-out</th>
-                      <th className="p-3 text-left text-sm font-medium text-primary-800">Guests</th>
-                      <th className="p-3 text-left text-sm font-medium text-primary-800">Status</th>
-                      <th className="p-3 text-left text-sm font-medium text-primary-800">Created</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {adminBookings.filter((b) => !reportsSearch.trim() || (b.guest_name && b.guest_name.toLowerCase().includes(reportsSearch.toLowerCase())) || (b.listing_title && b.listing_title.toLowerCase().includes(reportsSearch.toLowerCase()))).map((b) => (
-                      <tr key={b.id} className="border-b border-primary-100">
-                        <td className="p-3 text-sm font-medium text-primary-800">{b.id}</td>
-                        <td className="p-3 text-sm">{b.listing_title}</td>
-                        <td className="p-3 text-sm">{b.guest_name}</td>
-                        <td className="p-3 text-sm text-muted-foreground">{formatDateOnly(b.check_in)}</td>
-                        <td className="p-3 text-sm text-muted-foreground">{formatDateOnly(b.check_out)}</td>
-                        <td className="p-3 text-sm">{b.guests}</td>
-                        <td className="p-3">
-                          <span className={`rounded-full px-2 py-1 text-xs font-medium ${bookingStatusColor(b.status)}`}>{b.status}</span>
-                        </td>
-                        <td className="p-3 text-sm text-muted-foreground">{formatDateOnly(b.created_at)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </div>
+            <AdminTable<AdminBooking>
+              data={adminBookings.filter((b) => !reportsSearch.trim() || (b.guest_name && b.guest_name.toLowerCase().includes(reportsSearch.toLowerCase())) || (b.listing_title && b.listing_title.toLowerCase().includes(reportsSearch.toLowerCase())))}
+              keyExtractor={(b) => b.id}
+              pageSize={20}
+              emptyMessage="No booking records. Switch to Bookings tab to load data, or data will load when you open Reports."
+              containerClassName="max-h-[70vh] overflow-y-auto"
+              columns={[
+                { key: 'id', label: 'Booking ID', sortable: true },
+                { key: 'listing_title', label: 'Listing', sortable: true },
+                { key: 'guest_name', label: 'Guest', sortable: true },
+                { key: 'check_in', label: 'Check-in', sortable: true, render: (b) => formatDateOnly(b.check_in) },
+                { key: 'check_out', label: 'Check-out', sortable: true, render: (b) => formatDateOnly(b.check_out) },
+                { key: 'guests', label: 'Guests', sortable: true },
+                { key: 'status', label: 'Status', sortable: true, render: (b) => <span className={`rounded-full px-2 py-1 text-xs font-medium ${bookingStatusColor(b.status)}`}>{b.status}</span> },
+                { key: 'created_at', label: 'Created', sortable: true, render: (b) => formatDateOnly(b.created_at) },
+              ]}
+            />
             <p className="p-4 text-sm text-muted-foreground border-t border-primary-100">Payment amounts and transaction receipts are in the Payments tab.</p>
           </CardContent>
         </Card>
@@ -2636,7 +2472,7 @@ export default function AdminDashboard() {
                 ) : (
                 <>
                 <table className="w-full text-sm">
-                  <thead><tr className="border-b border-primary-200 bg-primary-50/50"><th className="text-left p-2">Time</th><th className="text-left p-2">Channel</th><th className="text-left p-2">Recipient</th><th className="text-left p-2">Event</th><th className="text-left p-2">Status</th><th className="text-left p-2">Response</th></tr></thead>
+                  <thead><tr className="border-b border-primary-200 bg-primary-50/50 sticky top-0 z-10 bg-primary-50 shadow-sm"><th className="text-left p-2">Time</th><th className="text-left p-2">Channel</th><th className="text-left p-2">Recipient</th><th className="text-left p-2">Event</th><th className="text-left p-2">Status</th><th className="text-left p-2">Response</th></tr></thead>
                   <tbody>
                     {emailSmsLogRows.map((r) => (
                       <tr key={r.id} className="border-b border-primary-100 cursor-pointer hover:bg-primary-50/80" onClick={() => setSelectedEmailSmsId(r.id)}>
@@ -2690,7 +2526,7 @@ export default function AdminDashboard() {
                   <div className="p-8 text-center text-muted-foreground">Set date range and click Apply filters to load data.</div>
                 ) : (
                 <table className="w-full text-sm">
-                  <thead><tr className="border-b border-primary-200 bg-primary-50/50"><th className="text-left p-2">Time</th><th className="text-left p-2 w-32">User (mobile, name)</th><th className="text-left p-2">Session</th><th className="text-left p-2">Event</th><th className="text-left p-2">Page</th><th className="text-left p-2">Payload</th></tr></thead>
+                  <thead><tr className="border-b border-primary-200 bg-primary-50/50 sticky top-0 z-10 bg-primary-50 shadow-sm"><th className="text-left p-2">Time</th><th className="text-left p-2 w-32">User (mobile, name)</th><th className="text-left p-2">Session</th><th className="text-left p-2">Event</th><th className="text-left p-2">Page</th><th className="text-left p-2">Payload</th></tr></thead>
                   <tbody>
                     {journeyLogRows.map((r) => (
                       <tr key={r.id} className="border-b border-primary-100 cursor-pointer hover:bg-primary-50/80" onClick={() => setSelectedJourneySessionId(r.session_id)}>
@@ -2738,7 +2574,7 @@ export default function AdminDashboard() {
                   <div className="p-8 text-center text-muted-foreground">Set date range and click Apply filters to load data.</div>
                 ) : (
                 <table className="w-full text-sm">
-                  <thead><tr className="border-b border-primary-200 bg-primary-50/50"><th className="text-left p-2">Time</th><th className="text-left p-2">Method</th><th className="text-left p-2">Path</th><th className="text-left p-2 w-32">User (mobile, name)</th><th className="text-left p-2">Status</th><th className="text-left p-2">Time (ms)</th><th className="text-left p-2 max-w-[120px]">Request</th><th className="text-left p-2 max-w-[120px]">Response</th></tr></thead>
+                  <thead><tr className="border-b border-primary-200 bg-primary-50/50 sticky top-0 z-10 bg-primary-50 shadow-sm"><th className="text-left p-2">Time</th><th className="text-left p-2">Method</th><th className="text-left p-2">Path</th><th className="text-left p-2 w-32">User (mobile, name)</th><th className="text-left p-2">Status</th><th className="text-left p-2">Time (ms)</th><th className="text-left p-2 max-w-[120px]">Request</th><th className="text-left p-2 max-w-[120px]">Response</th></tr></thead>
                   <tbody>
                     {apiLogRows.map((r) => (
                       <tr key={r.id} className="border-b border-primary-100 cursor-pointer hover:bg-primary-50/80" onClick={() => setSelectedApiLog(r)}>
@@ -2794,7 +2630,7 @@ export default function AdminDashboard() {
                 ) : (
                 <>
                 <table className="w-full text-sm">
-                  <thead><tr className="border-b border-primary-200 bg-primary-50/50"><th className="text-left p-2">Time</th><th className="text-left p-2">Source</th><th className="text-left p-2">Level</th><th className="text-left p-2">Message</th><th className="text-left p-2">Path</th></tr></thead>
+                  <thead><tr className="border-b border-primary-200 bg-primary-50/50 sticky top-0 z-10 bg-primary-50 shadow-sm"><th className="text-left p-2">Time</th><th className="text-left p-2">Source</th><th className="text-left p-2">Level</th><th className="text-left p-2">Message</th><th className="text-left p-2">Path</th></tr></thead>
                   <tbody>
                     {errorLogRows.map((r) => (
                       <tr key={r.id} className="border-b border-primary-100 cursor-pointer hover:bg-primary-50/80" onClick={() => setSelectedErrorLog(r)}>
@@ -2935,7 +2771,7 @@ export default function AdminDashboard() {
                 </CardHeader>
                 <CardContent className="p-0 overflow-x-auto">
                   <table className="w-full text-sm">
-                    <thead><tr className="border-b border-primary-200 bg-primary-50/50"><th className="text-left p-2">Path</th><th className="text-right p-2">Views</th></tr></thead>
+                    <thead><tr className="border-b border-primary-200 bg-primary-50/50 sticky top-0 z-10 bg-primary-50 shadow-sm"><th className="text-left p-2">Path</th><th className="text-right p-2">Views</th></tr></thead>
                     <tbody>
                       {heatmapPageViews.map((r, i) => (
                         <tr key={i} className="border-b border-primary-100 cursor-pointer hover:bg-primary-50/80" onClick={() => setSelectedHeatmapPath(selectedHeatmapPath === r.path ? null : r.path)}>
@@ -2960,7 +2796,7 @@ export default function AdminDashboard() {
                     </p>
                   )}
                   <table className="w-full text-sm">
-                    <thead><tr className="border-b border-primary-200 bg-primary-50/50 sticky top-0 bg-primary-50"><th className="text-left p-2">Time</th><th className="text-left p-2">Page</th><th className="text-left p-2">Payload (x, y, tag)</th></tr></thead>
+                    <thead><tr className="border-b border-primary-200 bg-primary-50/50 sticky top-0 z-10 bg-primary-50 shadow-sm"><th className="text-left p-2">Time</th><th className="text-left p-2">Page</th><th className="text-left p-2">Payload (x, y, tag)</th></tr></thead>
                     <tbody>
                       {(selectedHeatmapPath ? heatmapClicks.filter((r) => r.page_or_route === selectedHeatmapPath) : heatmapClicks).slice(0, 80).map((r) => {
                         let pl = r.payload;

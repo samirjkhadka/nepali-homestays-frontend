@@ -24,12 +24,6 @@ const SECTION_KEYS = {
   their_community: 'Our Community',
 } as const;
 
-function parseLatLng(s: string): number | null {
-  if (s.trim() === '') return null;
-  const n = parseFloat(s);
-  return Number.isFinite(n) ? n : null;
-}
-
 type Province = { id: number; name: string; slug: string };
 type District = { id: number; province_id: number; name: string };
 
@@ -275,21 +269,11 @@ export default function AdminListingEdit() {
             <div>
               <Label className="text-primary-800">Map location (optional)</Label>
               <MapLocationPicker
-                latitude={parseLatLng(form.latitude)}
-                longitude={parseLatLng(form.longitude)}
+                latitude={form.latitude}
+                longitude={form.longitude}
                 onSelect={(lat, lng) => setForm((f) => ({ ...f, latitude: String(lat), longitude: String(lng) }))}
                 className="mt-2"
               />
-              <div className="mt-2 grid grid-cols-2 gap-4">
-                <div>
-                  <Label className="text-primary-800 text-xs">Latitude</Label>
-                  <Input type="number" step="any" min={-90} max={90} placeholder="e.g. 27.7172" value={form.latitude} onChange={(e) => setForm((f) => ({ ...f, latitude: e.target.value }))} className="mt-1" />
-                </div>
-                <div>
-                  <Label className="text-primary-800 text-xs">Longitude</Label>
-                  <Input type="number" step="any" min={-180} max={180} placeholder="e.g. 85.324" value={form.longitude} onChange={(e) => setForm((f) => ({ ...f, longitude: e.target.value }))} className="mt-1" />
-                </div>
-              </div>
             </div>
 
             <Card className="border-primary-200">

@@ -1,16 +1,20 @@
 import { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { Bed, MapPin, LayoutGrid } from 'lucide-react';
+import { MapPin, LayoutGrid, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card';
 import { ListingBadges } from '@/components/ListingBadges';
 import { api } from '@/lib/api';
+import { getImageDisplayUrl } from '@/lib/image-url';
+import { assets } from '@/lib/design-tokens';
 import { PROVINCES, getProvinceBySlug } from '@/data/provinces';
 import type { ProvinceSlug } from '@/data/provinces';
 import { HOMESTAY_TYPES } from '@/data/districts';
 import { useCurrency } from '@/lib/currency';
+
+const PAGE_SIZE = 20;
 
 const PRICE_SLIDER_MIN = 0;
 const PRICE_SLIDER_MAX = 25000;
@@ -52,6 +56,7 @@ export default function SearchPage() {
   const [viewMode, setViewMode] = useState<'list' | 'map'>('list');
   const [provinces, setProvinces] = useState<Province[]>([]);
   const [districts, setDistricts] = useState<District[]>([]);
+  const [page, setPage] = useState(1);
 
   const provinceFromApi = provinceParam ? provinces.find((p) => p.slug === provinceParam) : null;
   const provinceId = provinceFromApi?.id;
@@ -80,7 +85,11 @@ export default function SearchPage() {
   }, [provinceFromUrl, searchParams]);
 
   useEffect(() => {
-    const params: Record<string, string | number> = {};
+    setPage(1);
+  }, [provinceId, districtId, district, location, minPrice, maxPrice, guests]);
+
+  useEffect(() => {
+    const params: Record<string, string | number> = { page, limit: PAGE_SIZE };
     if (provinceId) params.province_id = provinceId;
     if (districtId) params.district_id = districtId;
     const searchLocation = district || location;
@@ -97,7 +106,7 @@ export default function SearchPage() {
       })
       .catch(() => { setListings([]); setTotal(0); })
       .finally(() => setLoading(false));
-  }, [provinceId, districtId, district, location, minPrice, maxPrice, guests]);
+  }, [page, provinceId, districtId, district, location, minPrice, maxPrice, guests]);
 
   const filteredByType = listings.filter((l) => {
     if (homestayType && (l.type || '').toLowerCase() !== homestayType.toLowerCase()) return false;
@@ -109,6 +118,10 @@ export default function SearchPage() {
     if (sort === 'price_desc') return parseFloat(b.price_per_night) - parseFloat(a.price_per_night);
     return 0;
   });
+
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const startItem = total === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
+  const endItem = Math.min(page * PAGE_SIZE, total);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -311,8 +324,10 @@ export default function SearchPage() {
             </div>
           )}
         </div>
-        {!loading && sortedListings.length > 0 && (
-          <p className="mt-1 text-sm text-muted-foreground">Showing {sortedListings.length} of {total} homestays</p>
+        {!loading && total > 0 && (
+          <p className="mt-1 text-sm text-muted-foreground">
+            Showing {startItem}–{endItem} of {total} homestays
+          </p>
         )}
         {loading ? (
           <p className="mt-4 text-muted-foreground">Loading…</p>
@@ -331,16 +346,21 @@ export default function SearchPage() {
           </Card>
         ) : (
           <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {sortedListings.map((listing) => (
+            {sortedListings.map((listing) => {
+              const imageSrc = getImageDisplayUrl(listing.image_url) || assets.logo;
+              const useLogo = !listing.image_url;
+              return (
               <Card key={listing.id} className="overflow-hidden border-primary-200 transition-shadow hover:shadow-lg">
-                <div className="aspect-video bg-primary-100">
-                  {listing.image_url ? (
-                    <img src={listing.image_url.startsWith('http') ? listing.image_url : (import.meta.env.VITE_API_URL || '') + listing.image_url} alt={listing.title} className="h-full w-full object-cover" />
-                  ) : (
-                    <div className="flex h-full w-full items-center justify-center">
-                      <Bed className="h-12 w-12 text-primary-400" />
-                    </div>
-                  )}
+                <div className="aspect-video bg-primary-100 overflow-hidden">
+                  <img
+                    src={imageSrc}
+                    alt={listing.title}
+                    className={`h-full w-full object-cover ${useLogo ? 'object-contain p-4' : ''}`}
+                    onError={(e) => {
+                      e.currentTarget.src = assets.logo;
+                      e.currentTarget.className = 'h-full w-full object-contain p-4';
+                    }}
+                  />
                 </div>
                 <CardHeader className="pb-2">
                   <CardContent className="p-0 space-y-1.5">
@@ -358,7 +378,32 @@ export default function SearchPage() {
                   <Button size="sm" className="bg-primary-600 hover:bg-primary-700" onClick={() => navigate(`/listings/${listing.id}`)}>View Details</Button>
                 </CardFooter>
               </Card>
-            ))}
+            );})}
+          </div>
+        )}
+        {!loading && total > 0 && totalPages > 1 && (
+          <div className="mt-6 flex flex-wrap items-center justify-between gap-4 border-t border-primary-200 pt-4">
+            <p className="text-sm text-muted-foreground">
+              Page {page} of {totalPages}
+            </p>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={page <= 1}
+                onClick={() => setPage((p) => p - 1)}
+              >
+                <ChevronLeft className="h-4 w-4 mr-1" /> Previous
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={page >= totalPages}
+                onClick={() => setPage((p) => p + 1)}
+              >
+                Next <ChevronRight className="h-4 w-4 ml-1" />
+              </Button>
+            </div>
           </div>
         )}
       </div>

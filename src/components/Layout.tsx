@@ -372,9 +372,22 @@ export default function Layout() {
                   </div>
                   {user ? (
                     <div className="flex flex-col gap-2">
-                      <Link to={user.role === 'host' ? '/dashboard/host' : guestDashboardBase} onClick={() => setIsOpen(false)}>
-                        <Button variant="outline" className="w-full">Dashboard</Button>
+                      <Link to={user.role === 'admin' ? '/admin/dashboard' : user.role === 'host' ? '/dashboard/host' : guestDashboardBase} onClick={() => setIsOpen(false)}>
+                        <Button variant="outline" className="w-full">
+                          {user.role === 'admin' ? (
+                            <><LayoutDashboard className="h-4 w-4 mr-2" />Admin</>
+                          ) : user.role === 'host' ? (
+                            <><LayoutDashboard className="h-4 w-4 mr-2" />Host Dashboard</>
+                          ) : (
+                            'Dashboard'
+                          )}
+                        </Button>
                       </Link>
+                      {user.role === 'host' && (
+                        <Link to="/host/listings/new" onClick={() => setIsOpen(false)} className="block">
+                          <Button variant="outline" className="w-full"><PlusCircle className="h-4 w-4 mr-2" />Add Listing</Button>
+                        </Link>
+                      )}
                       <Button
                         variant="ghost"
                         className="w-full"

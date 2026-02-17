@@ -1875,7 +1875,7 @@ export default function AdminDashboard() {
                   <h2 className="font-semibold text-primary-800">Home placements (Hero &amp; Featured)</h2>
                 </div>
                 <p className="text-sm text-muted-foreground">
-                  Choose which homestays appear on the homepage hero carousel (max 5) and in the featured section. Set prices for these placements; hosts will be able to purchase them in a later phase.
+                  Choose which homestays appear on the homepage hero carousel (max 5) and in the featured section (max 6). Set prices for these placements; hosts will be able to purchase them in a later phase.
                 </p>
               </CardHeader>
               <CardContent className="p-6 space-y-6">
@@ -1938,29 +1938,34 @@ export default function AdminDashboard() {
                         placeholder="0"
                         className="flex h-9 w-full rounded-md border border-primary-200 bg-background px-3 py-1 text-sm"
                       />
-                      <label className="block text-sm text-muted-foreground mt-3">Listings</label>
+                      <label className="block text-sm text-muted-foreground mt-3">Listings (max 6)</label>
                       <div className="max-h-48 overflow-y-auto rounded border border-primary-200 bg-muted/30 p-2 space-y-1">
                         {settingsApprovedListings.length === 0 ? (
                           <p className="text-sm text-muted-foreground">No approved listings.</p>
                         ) : (
-                          settingsApprovedListings.map((listing) => (
-                            <label key={listing.id} className="flex items-center gap-2 text-sm">
-                              <input
-                                type="checkbox"
-                                checked={homePlacements.featured_listing_ids.includes(listing.id)}
-                                onChange={(e) => {
-                                  if (e.target.checked) {
-                                    setHomePlacements((p) => p ? { ...p, featured_listing_ids: [...p.featured_listing_ids, listing.id] } : p);
-                                  } else {
-                                    setHomePlacements((p) => p ? { ...p, featured_listing_ids: p.featured_listing_ids.filter((id) => id !== listing.id) } : p);
-                                  }
-                                }}
-                                className="rounded border-primary-300"
-                              />
-                              <span className="truncate">{listing.title}</span>
-                              <span className="text-muted-foreground text-xs shrink-0">({listing.location})</span>
-                            </label>
-                          ))
+                          settingsApprovedListings.map((listing) => {
+                            const selected = homePlacements.featured_listing_ids.includes(listing.id);
+                            const atMax = homePlacements.featured_listing_ids.length >= 6 && !selected;
+                            return (
+                              <label key={listing.id} className={`flex items-center gap-2 text-sm ${atMax ? 'opacity-60' : ''}`}>
+                                <input
+                                  type="checkbox"
+                                  checked={selected}
+                                  disabled={atMax}
+                                  onChange={(e) => {
+                                    if (!e.target.checked) {
+                                      setHomePlacements((p) => p ? { ...p, featured_listing_ids: p.featured_listing_ids.filter((id) => id !== listing.id) } : p);
+                                    } else if (homePlacements.featured_listing_ids.length < 6) {
+                                      setHomePlacements((p) => p ? { ...p, featured_listing_ids: [...p.featured_listing_ids, listing.id].slice(0, 6) } : p);
+                                    }
+                                  }}
+                                  className="rounded border-primary-300"
+                                />
+                                <span className="truncate">{listing.title}</span>
+                                <span className="text-muted-foreground text-xs shrink-0">({listing.location})</span>
+                              </label>
+                            );
+                          })
                         )}
                       </div>
                     </div>

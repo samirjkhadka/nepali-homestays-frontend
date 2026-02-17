@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Clock, ArrowRight, User, Loader2, Newspaper } from 'lucide-react';
+import { Clock, ArrowRight, User, Loader2 } from 'lucide-react';
 import { api } from '@/lib/api';
+import { assets } from '@/lib/design-tokens';
 import { HOMESTAY_NEWS, HOMESTAY_NEWS_SOURCE_URL, type NewsItem } from '@/data/homestayNews';
 
 /** Shape returned by GET /api/news/feed */
@@ -43,7 +44,9 @@ function BlogCard({
   item: NewsItem;
   index: number;
 }) {
-  const imageUrl = item.imageUrl;
+  const [imageFailed, setImageFailed] = useState(false);
+  const useLogo = !item.imageUrl || imageFailed;
+  const imageSrc = useLogo ? assets.logo : item.imageUrl;
 
   return (
     <motion.article
@@ -54,19 +57,14 @@ function BlogCard({
       whileHover={{ y: -8 }}
       className="group bg-card rounded-2xl overflow-hidden shadow-md hover:shadow-lg transition-all duration-300 border border-border"
     >
-      {/* Image or placeholder */}
+      {/* Image: item image or logo as default / fallback */}
       <div className="relative aspect-[16/10] overflow-hidden bg-muted">
-        {imageUrl ? (
-          <img
-            src={imageUrl}
-            alt={item.title}
-            className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
-          />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-primary/10 to-primary/5">
-            <Newspaper className="w-14 h-14 text-muted-foreground/50" aria-hidden />
-          </div>
-        )}
+        <img
+          src={imageSrc}
+          alt={item.title}
+          className={`w-full h-full object-cover group-hover:scale-110 transition-transform duration-500 ${useLogo ? 'object-contain p-6 bg-gradient-to-br from-primary/10 to-primary/5' : ''}`}
+          onError={() => setImageFailed(true)}
+        />
         <div className="absolute top-4 left-4">
           <span className="px-3 py-1 bg-primary text-primary-foreground text-xs font-semibold rounded-full">
             {item.category}

@@ -42,8 +42,11 @@ type Props = {
   error: string | null;
 };
 
+const FEATURED_MAX = 6;
+
 export default function FeaturedHomestays({ listings, loading, error }: Props) {
   const { format: formatPrice } = useCurrency();
+  const displayListings = listings.slice(0, FEATURED_MAX);
 
   return (
     <section className="py-20 bg-background">
@@ -100,7 +103,7 @@ export default function FeaturedHomestays({ listings, loading, error }: Props) {
             viewport={{ once: true }}
             className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8"
           >
-            {listings.map((listing) => (
+            {displayListings.map((listing) => (
               <motion.div key={listing.id} variants={cardVariants}>
                 <Link
                   to={`/listings/${listing.id}`}

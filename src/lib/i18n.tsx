@@ -5,11 +5,14 @@ export type Locale = 'en' | 'ne';
 const translations: Record<Locale, Record<string, string>> = {
   en: {
     'nav.home': 'Home',
+    'nav.search': 'Search',
+    'nav.festivals': 'Festivals',
+    'nav.tripPlanner': 'Trip Planner',
     'nav.packages': 'Packages',
     'nav.homestays': 'Homestays',
     'nav.videos': 'Videos',
     'nav.blogs': 'Blogs',
-    'nav.about': 'About Us',
+    'nav.about': 'About',
     'nav.contact': 'Contact',
     'nav.signIn': 'Sign In',
     'nav.signUp': 'Sign Up',
@@ -41,6 +44,9 @@ const translations: Record<Locale, Record<string, string>> = {
   },
   ne: {
     'nav.home': 'गृहपृष्ठ',
+    'nav.search': 'खोज',
+    'nav.festivals': 'चाडपर्व',
+    'nav.tripPlanner': 'यात्रा योजना',
     'nav.packages': 'प्याकेज',
     'nav.homestays': 'होमस्टे',
     'nav.videos': 'भिडियो',

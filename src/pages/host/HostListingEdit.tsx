@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
+import { RichTextEditor } from '@/components/RichTextEditor';
 import { api } from '@/lib/api';
 import { getImageDisplayUrl } from '@/lib/image-url';
 import { useToast } from '@/hooks/use-toast';
@@ -22,6 +22,15 @@ const SECTION_KEYS = {
   owners_story: 'Our Story',
   about_us: 'About Us',
   their_community: 'Our Community',
+  itinerary: 'What to Expect (Itinerary)',
+  host_video_intro: 'Host Video Introduction',
+  local_experiences: 'Local Experiences',
+  meet_the_community: 'Meet the Community',
+  price_transparency: 'Price Transparency',
+  weather_best_time: 'Weather / Best Time to Visit',
+  village_stories: 'Stories from the Village',
+  guest_photo_wall: 'Guest Photo Wall',
+  experience_badges: 'Experience Badges (comma-separated ids)',
 } as const;
 
 type Province = { id: number; name: string; slug: string };
@@ -41,6 +50,7 @@ export default function HostListingEdit() {
     title: '',
     type: 'individual',
     category: '' as string,
+    community_houses: '' as string,
     location: '',
     municipality: '' as string,
     price_per_night: '',
@@ -56,6 +66,7 @@ export default function HostListingEdit() {
     image_urls: [] as string[],
     sections: {} as Record<string, string>,
   });
+  const [errors, setErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
     api.get<Province[]>('/api/provinces').then((res) => setProvinces(res.data ?? [])).catch(() => setProvinces([]));
@@ -88,15 +99,20 @@ export default function HostListingEdit() {
         unit: e.unit === 'per_person' || e.unit === 'per_group' ? e.unit : 'fixed',
         description: e.description ?? undefined,
       }));
+      const desc = (d.description as string) || '';
+      const communityMatch = desc.match(/^Community homestay \((\d+) house[s]?\)\.\s*/i);
+      const communityHouses = communityMatch ? communityMatch[1] : '';
+      const descriptionWithoutPrefix = communityMatch ? desc.slice(communityMatch[0].length).trim() : desc;
       setForm({
         title: (d.title as string) ?? '',
         type: (d.type as string) || 'individual',
         category: (d.category as string) ?? '',
+        community_houses: communityHouses,
         location: (d.location as string) ?? '',
         municipality: '',
         price_per_night: String(d.price_per_night ?? ''),
         max_guests: String(d.max_guests ?? '2'),
-        description: (d.description as string) || '',
+        description: descriptionWithoutPrefix,
         way_to_get_there: (d.way_to_get_there as string) || '',
         province_id: d.province_id ?? null,
         district_id: d.district_id ?? null,
@@ -160,12 +176,27 @@ export default function HostListingEdit() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!id) return;
+    const errs: Record<string, string> = {};
+    if (form.type === 'community') {
+      const n = parseInt(form.community_houses, 10);
+      if (Number.isNaN(n) || n < 1) errs.community_houses = 'Enter number of houses (at least 1)';
+    }
+    setErrors(errs);
+    if (Object.keys(errs).length > 0) {
+      toast({ title: 'Please fix the errors below.', variant: 'destructive' });
+      return;
+    }
     setLoading(true);
     const sectionsFiltered: Record<string, string> = {};
     Object.entries(form.sections).forEach(([k, v]) => {
       if (v?.trim()) sectionsFiltered[k] = v.trim();
     });
     const locationStr = form.municipality.trim() ? `${form.municipality.trim()}, ${form.location}` : form.location;
+    let description = form.description?.trim() ?? '';
+    if (form.type === 'community' && form.community_houses.trim()) {
+      const n = form.community_houses.trim();
+      description = `Community homestay (${n} house${n === '1' ? '' : 's'}). ${description}`.trim();
+    }
     api
       .patch(`/api/listings/${id}`, {
         title: form.title,
@@ -174,7 +205,7 @@ export default function HostListingEdit() {
         location: locationStr,
         price_per_night: Number(form.price_per_night),
         max_guests: Number(form.max_guests),
-        description: form.description || undefined,
+        description: description || undefined,
         way_to_get_there: form.way_to_get_there || undefined,
         province_id: form.province_id ?? undefined,
         district_id: form.district_id ?? undefined,
@@ -214,6 +245,13 @@ export default function HostListingEdit() {
                   <option value={form.type}>{form.type}</option>
                 )}
               </select>
+              {form.type === 'community' && (
+                <div className="mt-2">
+                  <Label htmlFor="community_houses" className="text-primary-800">Number of houses</Label>
+                  <Input id="community_houses" type="number" min={1} value={form.community_houses} onChange={(e) => setForm((f) => ({ ...f, community_houses: e.target.value }))} className={`mt-1 w-32 ${errors.community_houses ? 'border-destructive' : ''}`} />
+                  {errors.community_houses && <p className="mt-1 text-xs text-destructive">{errors.community_houses}</p>}
+                </div>
+              )}
             </div>
             <div>
               <Label>Homestay category</Label>
@@ -265,11 +303,11 @@ export default function HostListingEdit() {
             </div>
             <div>
               <Label>Description</Label>
-              <Textarea value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} className="mt-1" />
+              <RichTextEditor value={form.description} onChange={(html) => setForm((f) => ({ ...f, description: html }))} placeholder="Describe your homestay…" className="mt-1" minHeight="140px" />
             </div>
             <div>
               <Label>Way to get there</Label>
-              <Textarea value={form.way_to_get_there} onChange={(e) => setForm((f) => ({ ...f, way_to_get_there: e.target.value }))} className="mt-1" />
+              <RichTextEditor value={form.way_to_get_there} onChange={(html) => setForm((f) => ({ ...f, way_to_get_there: html }))} placeholder="Directions for guests…" className="mt-1" minHeight="120px" />
             </div>
             <div>
               <Label className="text-primary-800">Map location (optional)</Label>
@@ -328,7 +366,7 @@ export default function HostListingEdit() {
                 {(Object.entries(SECTION_KEYS) as [keyof typeof SECTION_KEYS, string][]).map(([key, label]) => (
                   <div key={key}>
                     <Label htmlFor={`section-${key}`} className="text-primary-800">{label}</Label>
-                    <Textarea id={`section-${key}`} value={form.sections[key] ?? ''} onChange={(e) => setForm((f) => ({ ...f, sections: { ...f.sections, [key]: e.target.value } }))} rows={3} className="mt-1" placeholder={`Write about ${label.toLowerCase()}...`} />
+                    <RichTextEditor id={`section-${key}`} value={form.sections[key] ?? ''} onChange={(html) => setForm((f) => ({ ...f, sections: { ...f.sections, [key]: html } }))} placeholder={`Write about ${label.toLowerCase()}…`} className="mt-1" minHeight="100px" />
                   </div>
                 ))}
               </CardContent>

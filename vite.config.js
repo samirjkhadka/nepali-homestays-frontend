@@ -1,5 +1,10 @@
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
+// Dev: proxy /api to local backend (has news/feed with imageUrl). Override to hit staging, e.g.:
+//   VITE_DEV_API_PROXY=https://testcmsapi.dghub.io npm run dev
+//var devApiProxy = process.env.VITE_DEV_API_PROXY || 'http://127.0.0.1:3000';
+var devApiProxy = process.env.VITE_DEV_API_PROXY 
+var devImagesProxy = process.env.VITE_DEV_IMAGES_PROXY || devApiProxy;
 export default defineConfig({
     plugins: [react()],
     publicDir: 'assets',
@@ -7,13 +12,10 @@ export default defineConfig({
         alias: { '@': '/src' },
     },
     server: {
-        port: 5173, proxy: {
-            '/api': 
-            // { target: 'http://localhost:3000', changeOrigin: true }, 
-            { target: 'https://testcmsapi.dghub.io', changeOrigin: true },
-            '/images': 
-            //{ target: 'http://localhost:3000', changeOrigin: true }
-            { target: 'https://testcmsapi.dghub.io', changeOrigin: true }
-        }
+        port: 5173,
+        proxy: {
+            '/api': { target: devApiProxy, changeOrigin: true },
+            '/images': { target: devImagesProxy, changeOrigin: true },
+        },
     },
 });

@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
+import { RichTextEditor } from '@/components/RichTextEditor';
 import { api } from '@/lib/api';
 import { getImageDisplayUrl } from '@/lib/image-url';
 import { useToast } from '@/hooks/use-toast';
@@ -438,11 +438,11 @@ export default function AdminListingNew() {
           <CardContent className="space-y-4 pt-6">
             <div>
               <Label htmlFor="description" className="text-primary-800">Description</Label>
-              <Textarea id="description" value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} rows={4} placeholder="Describe the homestay..." className="mt-1" />
+              <RichTextEditor id="description" value={form.description} onChange={(html) => setForm((f) => ({ ...f, description: html }))} placeholder="Describe the homestay…" className="mt-1" minHeight="140px" />
             </div>
             <div>
               <Label htmlFor="way_to_get_there" className="text-primary-800">Way to get there</Label>
-              <Textarea id="way_to_get_there" value={form.way_to_get_there} onChange={(e) => setForm((f) => ({ ...f, way_to_get_there: e.target.value }))} rows={2} placeholder="Directions, transport..." className="mt-1" />
+              <RichTextEditor id="way_to_get_there" value={form.way_to_get_there} onChange={(html) => setForm((f) => ({ ...f, way_to_get_there: html }))} placeholder="Directions, transport…" className="mt-1" minHeight="100px" />
             </div>
           </CardContent>
         </Card>
@@ -454,7 +454,7 @@ export default function AdminListingNew() {
             {(Object.entries(SECTION_KEYS) as [keyof typeof SECTION_KEYS, string][]).map(([key, label]) => (
               <div key={key}>
                 <Label htmlFor={`section-${key}`} className="text-primary-800">{label}</Label>
-                <Textarea id={`section-${key}`} value={form.sections[key] ?? ''} onChange={(e) => setForm((f) => ({ ...f, sections: { ...f.sections, [key]: e.target.value } }))} rows={3} className="mt-1" />
+                <RichTextEditor id={`section-${key}`} value={form.sections[key] ?? ''} onChange={(html) => setForm((f) => ({ ...f, sections: { ...f.sections, [key]: html } }))} placeholder={`Write about ${label.toLowerCase()}…`} className="mt-1" minHeight="100px" />
               </div>
             ))}
           </CardContent>

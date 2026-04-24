@@ -1,40 +1,10 @@
-import { useState, useMemo } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Star, ChevronDown, ChevronUp, AlertCircle, Check, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Star, ChevronDown, ChevronUp, AlertCircle, Check, Calendar } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useCurrency } from '@/lib/currency';
-
-const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-
-function toLocalDateStr(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
-}
-
-function getCalendarDays(year: number, month: number): { date: Date; dateStr: string; isCurrentMonth: boolean }[] {
-  const first = new Date(year, month, 1);
-  const last = new Date(year, month + 1, 0);
-  const startPad = first.getDay();
-  const daysInMonth = last.getDate();
-  const result: { date: Date; dateStr: string; isCurrentMonth: boolean }[] = [];
-  const pad = (d: Date) => toLocalDateStr(d);
-  for (let i = 0; i < startPad; i++) {
-    const d = new Date(year, month, 1 - (startPad - i));
-    result.push({ date: d, dateStr: pad(d), isCurrentMonth: false });
-  }
-  for (let day = 1; day <= daysInMonth; day++) {
-    const d = new Date(year, month, day);
-    result.push({ date: d, dateStr: pad(d), isCurrentMonth: true });
-  }
-  const remaining = 42 - result.length;
-  for (let i = 1; i <= remaining; i++) {
-    const d = new Date(year, month + 1, i);
-    result.push({ date: d, dateStr: pad(d), isCurrentMonth: false });
-  }
-  return result;
-}
+import { toYMD } from '@/lib/date';
+import { DateRangePicker } from '@/components/DateRangePicker';
 
 export interface BookingCardProps {
   pricePerNight: string;
@@ -101,19 +71,19 @@ export function BookingCard({
   const { format: formatPrice } = useCurrency();
   const displayPrice = priceFormatted ?? formatPrice(pricePerNight);
   const [showGuestPicker, setShowGuestPicker] = useState(false);
-  const today = useMemo(() => new Date(), []);
-  const [calendarMonth, setCalendarMonth] = useState(() => {
-    if (checkIn) {
-      const d = new Date(checkIn + 'T12:00:00');
-      return new Date(d.getFullYear(), d.getMonth(), 1);
-    }
-    return new Date(today.getFullYear(), today.getMonth(), 1);
-  });
-  const calendarDays = useMemo(
-    () => getCalendarDays(calendarMonth.getFullYear(), calendarMonth.getMonth()),
-    [calendarMonth]
-  );
-  const todayStr = toLocalDateStr(today);
+  const [showCalendarPopup, setShowCalendarPopup] = useState(false);
+  const calendarPopupRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!showCalendarPopup) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (calendarPopupRef.current && !calendarPopupRef.current.contains(e.target as Node)) {
+        setShowCalendarPopup(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showCalendarPopup]);
 
   const priceNum = parseFloat(String(pricePerNight));
   const checkInDate = checkIn ? new Date(checkIn) : null;
@@ -128,7 +98,7 @@ export function BookingCard({
     if (nights <= 0 || !checkInDate || !checkOutDate) return false;
     const d = new Date(checkInDate.getTime());
     while (d < checkOutDate) {
-      if (blockedSet.has(toLocalDateStr(d))) return true;
+      if (blockedSet.has(toYMD(d))) return true;
       d.setDate(d.getDate() + 1);
     }
     return false;
@@ -199,117 +169,54 @@ export function BookingCard({
       </div>
 
       {/* Date and Guest Selection */}
-      <form onSubmit={onSubmit} className="space-y-0">
-        <div className="border border-border rounded-xl overflow-hidden mb-4">
-          <div className="grid grid-cols-2 divide-x divide-border">
-            <div className="p-3 hover:bg-muted/50 transition-colors">
-              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide block">
-                Check-in
-              </label>
-              <input
-                type="date"
-                value={checkIn}
-                onChange={(e) => onCheckInChange(e.target.value)}
-                className="text-sm mt-1 flex items-center gap-2 w-full bg-transparent border-0 p-0 text-foreground focus:outline-none focus:ring-0"
-                min={new Date().toISOString().slice(0, 10)}
-              />
-            </div>
-            <div className="p-3 hover:bg-muted/50 transition-colors">
-              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide block">
-                Check-out
-              </label>
-              <input
-                type="date"
-                value={checkOut}
-                onChange={(e) => onCheckOutChange(e.target.value)}
-                className="text-sm mt-1 w-full bg-transparent border-0 p-0 text-foreground focus:outline-none focus:ring-0"
-                min={checkIn || new Date().toISOString().slice(0, 10)}
-              />
-            </div>
-          </div>
-
-          {/* Calendar grid: blocked dates are disabled and visually marked */}
-          <div className="border-t border-border p-3">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                {calendarMonth.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })}
-              </span>
-              <div className="flex items-center gap-0">
-                <button
-                  type="button"
-                  aria-label="Previous month"
-                  onClick={() => setCalendarMonth((m) => new Date(m.getFullYear(), m.getMonth() - 1, 1))}
-                  className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground"
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                </button>
-                <button
-                  type="button"
-                  aria-label="Next month"
-                  onClick={() => setCalendarMonth((m) => new Date(m.getFullYear(), m.getMonth() + 1, 1))}
-                  className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground"
-                >
-                  <ChevronRight className="h-4 w-4" />
-                </button>
+      <form onSubmit={onSubmit} className="flex flex-col gap-6">
+        <div className="border border-border rounded-xl overflow-visible">
+          <div className="relative overflow-visible" ref={calendarPopupRef}>
+            <button
+              type="button"
+              onClick={() => setShowCalendarPopup((v) => !v)}
+              className="w-full grid grid-cols-2 divide-x divide-border hover:bg-muted/30 transition-colors rounded-t-xl overflow-hidden"
+              aria-expanded={showCalendarPopup}
+              aria-label="Select check-in and check-out dates"
+            >
+              <div className="p-3 text-left">
+                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide block">
+                  Check-in
+                </label>
+                <span className="text-sm mt-1 flex items-center gap-1.5 text-foreground">
+                  <Calendar className="w-4 h-4 text-muted-foreground shrink-0" />
+                  {checkIn ? new Date(checkIn + 'T12:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : 'Add date'}
+                </span>
               </div>
-            </div>
-            <div className="grid grid-cols-7 gap-0.5 text-center">
-              {WEEKDAYS.map((wd) => (
-                <div key={wd} className="text-[10px] font-medium text-muted-foreground py-1">
-                  {wd}
-                </div>
-              ))}
-              {calendarDays.map(({ date, dateStr, isCurrentMonth }) => {
-                const isPast = dateStr < todayStr;
-                const isBlocked = blockedSet.has(dateStr);
-                const disabled = isPast || isBlocked;
-                const isCheckIn = dateStr === checkIn;
-                const isCheckOut = dateStr === checkOut;
-                const inRange =
-                  checkIn &&
-                  checkOut &&
-                  dateStr > checkIn &&
-                  dateStr < checkOut;
-                return (
-                  <button
-                    key={dateStr}
-                    type="button"
-                    disabled={disabled}
-                    onClick={() => {
-                      if (disabled) return;
-                      if (!checkIn || dateStr <= checkIn) {
-                        onCheckInChange(dateStr);
-                        onCheckOutChange('');
-                      } else {
-                        const from = new Date(checkIn);
-                        const to = new Date(dateStr);
-                        for (let d = new Date(from); d < to; d.setDate(d.getDate() + 1)) {
-                          if (blockedSet.has(toLocalDateStr(d))) return;
-                        }
-                        onCheckOutChange(dateStr);
-                      }
-                    }}
-                    className={`
-                      min-w-[28px] h-7 text-xs rounded-md transition-colors
-                      ${!isCurrentMonth ? 'text-muted-foreground/60' : ''}
-                      ${disabled ? 'cursor-not-allowed' : 'hover:bg-muted cursor-pointer'}
-                      ${isBlocked ? 'bg-muted/80 text-muted-foreground line-through' : ''}
-                      ${isPast && !isBlocked ? 'opacity-50' : ''}
-                      ${!disabled && (isCheckIn || isCheckOut) ? 'bg-primary text-primary-foreground font-semibold' : ''}
-                      ${!disabled && inRange ? 'bg-primary/20 text-primary-foreground' : ''}
-                    `}
-                    title={isBlocked ? 'Unavailable' : disabled ? 'Past' : undefined}
-                  >
-                    {date.getDate()}
-                  </button>
-                );
-              })}
-            </div>
-            {blockedDates.length > 0 && (
-              <p className="text-[10px] text-muted-foreground mt-2 flex items-center gap-1">
-                <span className="inline-block w-3 h-3 rounded bg-muted/80 border border-border" />
-                Unavailable dates
-              </p>
+              <div className="p-3 text-left">
+                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide block">
+                  Check-out
+                </label>
+                <span className="text-sm mt-1 flex items-center gap-1.5 text-foreground">
+                  <Calendar className="w-4 h-4 text-muted-foreground shrink-0" />
+                  {checkOut ? new Date(checkOut + 'T12:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : 'Add date'}
+                </span>
+              </div>
+            </button>
+            {showCalendarPopup && (
+              <div className="absolute right-0 top-full z-[100] mt-1 bg-card border border-border rounded-xl shadow-xl p-3 calendar-popup">
+                <DateRangePicker
+                  checkIn={checkIn}
+                  checkOut={checkOut}
+                  onCheckInChange={onCheckInChange}
+                  onCheckOutChange={(v) => {
+                    onCheckOutChange(v);
+                    if (v) setShowCalendarPopup(false);
+                  }}
+                  blockedDates={blockedDates}
+                />
+                {blockedDates.length > 0 && (
+                  <p className="text-[10px] text-muted-foreground mt-3 flex items-center gap-1 w-full">
+                    <span className="inline-block w-3 h-3 rounded bg-muted/80 border border-border shrink-0" />
+                    Unavailable dates
+                  </p>
+                )}
+              </div>
             )}
           </div>
 
@@ -369,25 +276,27 @@ export function BookingCard({
         </div>
 
         {extraServices && extraServices.length > 0 && onExtraServicesChange && (
-          <div className="mb-6 p-3 rounded-xl border border-border bg-muted/30 space-y-2">
+          <div className="p-3 rounded-xl border border-border bg-muted/30 space-y-3">
             <p className="text-sm font-medium text-foreground">Add extra services</p>
             {extraServices.map((s) => {
               const sel = selectedExtraServices.find((e) => e.extra_service_id === s.id);
               const qty = sel?.quantity ?? 0;
-              const priceNum = Number(s.price_npr);
+              const linePrice = Number(s.price_npr);
               const unitLabel = s.unit === 'per_person' ? 'per person' : s.unit === 'per_group' ? 'per group' : 'fixed';
               return (
                 <div
                   key={s.id}
-                  className="flex items-center justify-between gap-3 py-2 min-h-[44px]"
+                  className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between sm:gap-3 py-2 border-b border-border/50 last:border-b-0 last:pb-0"
                 >
-                  <div className="flex items-center gap-2 flex-1 min-w-0">
-                    <span className="text-sm text-foreground truncate">{s.name}</span>
-                    <span className="text-xs text-muted-foreground shrink-0">
-                      {formatPrice(String(priceNum))} {unitLabel}
-                    </span>
+                  <div className="min-w-0 flex-1 space-y-1">
+                    <p className="text-sm text-foreground break-words leading-snug" title={s.name}>
+                      {s.name}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {formatPrice(String(linePrice))} {unitLabel}
+                    </p>
                   </div>
-                  <div className="flex items-center gap-2 shrink-0">
+                  <div className="flex items-center gap-2 shrink-0 sm:pl-2">
                     <label className="text-xs text-muted-foreground whitespace-nowrap">No. of days</label>
                     <input
                       type="number"
@@ -414,7 +323,7 @@ export function BookingCard({
         )}
 
         {onPaymentTypeChange && nights > 0 && !hasUnavailableInRange && (
-          <div className="mb-4 p-3 rounded-xl border border-border bg-muted/30 space-y-3">
+          <div className="p-3 rounded-xl border border-border bg-muted/30 space-y-3">
             <p className="text-sm font-medium text-foreground">Payment at reservation</p>
             <div className="flex gap-2">
               <button
@@ -456,7 +365,7 @@ export function BookingCard({
         )}
 
         {hasUnavailableInRange && (
-          <div className="flex items-center gap-2 text-destructive text-sm mb-4 p-3 bg-destructive/10 rounded-lg">
+          <div className="flex items-center gap-2 text-destructive text-sm p-3 bg-destructive/10 rounded-lg">
             <AlertCircle className="w-4 h-4 flex-shrink-0" />
             <span>Some dates in your selection are unavailable</span>
           </div>
@@ -465,7 +374,7 @@ export function BookingCard({
         <Button
           type="submit"
           disabled={isDisabled || submitting}
-          className="w-full mt-6 py-6 text-lg font-semibold bg-primary hover:bg-primary/90 rounded-xl disabled:opacity-50"
+          className="w-full py-6 text-lg font-semibold bg-primary hover:bg-primary/90 rounded-xl disabled:opacity-50"
         >
           {submitting ? 'Redirecting…' : isPartial ? `Pay ${formatPrice(String(payNowAmount.toFixed(2)))} now (${payNowPercent}%)` : 'Reserve Now'}
         </Button>

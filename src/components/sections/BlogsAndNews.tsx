@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Clock, ArrowRight, User, Loader2 } from 'lucide-react';
-import { api } from '@/lib/api';
+import { fetchNewsFeed } from '@/lib/api';
 import { assets } from '@/lib/design-tokens';
-import { HOMESTAY_NEWS, HOMESTAY_NEWS_SOURCE_URL, type NewsItem } from '@/data/homestayNews';
+import { HOMESTAY_NEWS, type NewsItem } from '@/data/homestayNews';
 
 /** Shape returned by GET /api/news/feed */
 type FeedItem = {
@@ -55,7 +56,7 @@ function BlogCard({
       viewport={{ once: true }}
       transition={{ delay: index * 0.15 }}
       whileHover={{ y: -8 }}
-      className="group bg-card rounded-2xl overflow-hidden shadow-md hover:shadow-lg transition-all duration-300 border border-border"
+      className="group bg-card rounded-2xl overflow-hidden border border-border shadow-soft transition-all duration-300 hover:shadow-elevated"
     >
       {/* Image: item image or logo as default / fallback */}
       <div className="relative aspect-[16/10] overflow-hidden bg-muted">
@@ -122,10 +123,9 @@ export default function BlogsAndNews() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    api
-      .get<{ items: FeedItem[] }>('/api/news/feed')
-      .then((res) => {
-        const feedItems = res.data?.items ?? [];
+    fetchNewsFeed<{ items: FeedItem[] }>()
+      .then((data) => {
+        const feedItems = data?.items ?? [];
         if (feedItems.length > 0) {
           setItems(feedItems.slice(0, DISPLAY_LIMIT).map(feedItemToNewsItem));
         }
@@ -138,31 +138,25 @@ export default function BlogsAndNews() {
 
   return (
     <section id="blogs" className="py-20 bg-background">
-      <div className="container mx-auto px-4">
-        {/* Section Header */}
+      <div className="section-container">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
-          className="flex flex-col md:flex-row md:items-end md:justify-between mb-12"
+          className="mb-12 flex flex-col md:flex-row md:items-end md:justify-between"
         >
           <div>
-            <span className="text-primary font-medium text-sm uppercase tracking-wider">
-              Latest Updates
-            </span>
-            <h2 className="font-display text-4xl md:text-5xl font-bold text-foreground mt-2">
-              Blogs & News
-            </h2>
+            <span className="text-sm font-medium uppercase tracking-wider text-primary">Latest Updates</span>
+            <h2 className="font-display mt-2 text-4xl font-bold text-foreground md:text-5xl">Blogs &amp; News</h2>
           </div>
-          <motion.a
-            href={HOMESTAY_NEWS_SOURCE_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            whileHover={{ x: 5 }}
-            className="flex items-center gap-2 text-primary font-medium mt-4 md:mt-0 hover:gap-3 transition-all"
-          >
-            View All Articles <ArrowRight className="w-4 h-4" />
-          </motion.a>
+          <motion.div whileHover={{ x: 5 }} className="mt-4 md:mt-0">
+            <Link
+              to="/blogs"
+              className="flex items-center gap-2 font-medium text-primary transition-all hover:gap-3"
+            >
+              View All Articles <ArrowRight className="h-4 w-4" />
+            </Link>
+          </motion.div>
         </motion.div>
 
         {/* Blog Grid */}

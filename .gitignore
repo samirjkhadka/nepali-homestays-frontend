@@ -31,3 +31,6 @@ npm-debug.log*
 
 # Test and coverage
 coverage/
+
+# One-off GeoJSON sources for nepal map script
+scripts/tmp-nepal-geo/

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, ChevronLeft, ChevronRight, Grid3X3 } from 'lucide-react';
+import { assets } from '@/lib/design-tokens';
 
 export interface PhotoGalleryProps {
   /** Array of image URLs (can be relative; use resolveUrl to get full URL) */
@@ -21,8 +22,8 @@ export function PhotoGallery({ images, title, resolveUrl = (u) => u }: PhotoGall
   if (urls.length === 0) {
     return (
       <div className="grid grid-cols-4 grid-rows-2 gap-2 h-[500px] rounded-2xl overflow-hidden bg-muted">
-        <div className="col-span-2 row-span-2 flex items-center justify-center text-muted-foreground">
-          No photos
+        <div className="col-span-2 row-span-2 flex items-center justify-center bg-muted/50 p-8">
+          <img src={assets.logo} alt={title} className="max-h-52 w-auto max-w-full object-contain" />
         </div>
       </div>
     );

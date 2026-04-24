@@ -1,59 +1,123 @@
 @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
+/* Nepali Homestays – warm earthy design system (aligned with nepal-homestay-connect) */
+
 @layer base {
   :root {
+    /* Warm cream background */
     --background: 35 30% 97%;
     --foreground: 25 30% 12%;
-    --card: 0 0% 100%;
-    --card-foreground: 216 58% 16%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 216 58% 16%;
 
-    /* Logo primary: #0F233E (navy) */
-    --primary: 216 58% 16%;
-    --primary-foreground: 0 0% 100%;
+    --card: 35 25% 99%;
+    --card-foreground: 25 30% 12%;
 
-    /* Logo secondary: blue-gray */
-    --secondary: 216 20% 94%;
-    --secondary-foreground: 216 30% 25%;
+    --popover: 35 25% 99%;
+    --popover-foreground: 25 30% 12%;
 
-    /* Logo accent: #FB6F08 (orange) */
-    --accent: 26 97% 51%;
-    --accent-foreground: 0 0% 100%;
+    /* Primary: Terracotta */
+    --primary: 15 60% 48%;
+    --primary-foreground: 35 30% 98%;
+    --primary-deep: 15 65% 38%;
 
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 0 0% 100%;
-    --muted: 216 20% 96%;
-    --muted-foreground: 216 15% 46%;
-    --border: 216 20% 90%;
-    --input: 216 20% 90%;
-    --ring: 216 58% 16%;
-    --radius: 0.5rem;
+    /* Secondary: Forest */
+    --secondary: 150 35% 25%;
+    --secondary-foreground: 35 30% 98%;
+
+    --muted: 35 20% 92%;
+    --muted-foreground: 25 15% 40%;
+
+    /* Accent: Saffron */
+    --accent: 42 90% 55%;
+    --accent-foreground: 25 30% 12%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 35 30% 98%;
+
+    --border: 35 25% 88%;
+    --input: 35 25% 88%;
+    --ring: 15 60% 48%;
+
+    --radius: 0.75rem;
+
+    --terracotta: 15 60% 48%;
+    --terracotta-light: 15 55% 65%;
+    --forest: 150 35% 25%;
+    --forest-light: 150 30% 35%;
+    --saffron: 42 90% 55%;
+    --saffron-light: 42 85% 70%;
+    --cream: 35 30% 97%;
+    --warm-white: 35 25% 99%;
+    --mountain-blue: 210 45% 55%;
+    --earth-brown: 25 35% 30%;
+
+    --gradient-hero: linear-gradient(135deg, hsl(15 60% 48% / 0.9), hsl(150 35% 25% / 0.8));
+    --gradient-card: linear-gradient(180deg, hsl(35 25% 99%), hsl(35 20% 95%));
+    --gradient-accent: linear-gradient(135deg, hsl(42 90% 55%), hsl(15 60% 50%));
+    --gradient-warm: linear-gradient(135deg, hsl(42 90% 55%), hsl(15 65% 50%));
+    --gradient-dark: linear-gradient(180deg, hsl(25 30% 12%), hsl(25 35% 8%));
+
+    --shadow-sm: 0 2px 8px hsl(25 30% 12% / 0.06);
+    --shadow-md: 0 4px 16px hsl(25 30% 12% / 0.1);
+    --shadow-lg: 0 8px 32px hsl(25 30% 12% / 0.12);
+    --shadow-xl: 0 16px 48px hsl(25 30% 12% / 0.15);
+    --shadow-glow: 0 0 40px hsl(42 90% 55% / 0.3);
+    --shadow-primary-glow: 0 8px 28px -8px hsl(15 60% 48% / 0.45);
+
+    --sidebar-background: 35 25% 99%;
+    --sidebar-foreground: 25 30% 12%;
+    --sidebar-primary: 15 60% 48%;
+    --sidebar-primary-foreground: 35 30% 98%;
+    --sidebar-accent: 35 20% 92%;
+    --sidebar-accent-foreground: 25 30% 12%;
+    --sidebar-border: 35 25% 88%;
+    --sidebar-ring: 15 60% 48%;
   }
 
   .dark {
-    --background: 216 40% 6%;
-    --foreground: 210 40% 98%;
-    --card: 216 40% 8%;
-    --card-foreground: 210 40% 98%;
-    --popover: 216 40% 8%;
-    --popover-foreground: 210 40% 98%;
-    --primary: 26 97% 51%;
-    --primary-foreground: 0 0% 100%;
-    --secondary: 216 30% 18%;
-    --secondary-foreground: 210 40% 98%;
-    --accent: 26 97% 51%;
-    --accent-foreground: 0 0% 100%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-    --muted: 216 30% 18%;
-    --muted-foreground: 215 20% 65%;
-    --border: 216 25% 20%;
-    --input: 216 25% 20%;
-    --ring: 26 97% 51%;
+    --background: 25 30% 8%;
+    --foreground: 35 25% 96%;
+
+    --card: 25 25% 13%;
+    --card-foreground: 35 25% 96%;
+
+    --popover: 25 25% 13%;
+    --popover-foreground: 35 25% 96%;
+
+    --primary: 15 60% 58%;
+    --primary-foreground: 25 30% 8%;
+    --primary-deep: 15 65% 48%;
+
+    --secondary: 150 30% 38%;
+    --secondary-foreground: 35 25% 96%;
+
+    --muted: 25 20% 18%;
+    --muted-foreground: 35 18% 72%;
+
+    --accent: 42 88% 62%;
+    --accent-foreground: 25 30% 8%;
+
+    --destructive: 0 62% 55%;
+    --destructive-foreground: 35 25% 96%;
+
+    --border: 25 20% 24%;
+    --input: 25 20% 24%;
+    --ring: 15 60% 58%;
+
+    --gradient-warm: linear-gradient(135deg, hsl(42 88% 62%), hsl(15 60% 55%));
+    --shadow-primary-glow: 0 8px 28px -8px hsl(15 60% 58% / 0.55);
+
+    --sidebar-background: 25 25% 10%;
+    --sidebar-foreground: 35 25% 96%;
+    --sidebar-primary: 15 60% 58%;
+    --sidebar-primary-foreground: 25 30% 8%;
+    --sidebar-accent: 25 20% 16%;
+    --sidebar-accent-foreground: 35 25% 96%;
+    --sidebar-border: 25 20% 22%;
+    --sidebar-ring: 15 60% 58%;
   }
 }
 
@@ -61,9 +125,117 @@
   * {
     @apply border-border;
   }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
   body {
     @apply bg-background text-foreground antialiased;
-    font-feature-settings: 'rlig' 1, 'calt' 1;
+    font-family: 'Inter', sans-serif;
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-family: 'Playfair Display', serif;
+    letter-spacing: -0.02em;
+    line-height: 1.2;
+  }
+
+  :focus-visible {
+    @apply outline-none ring-2 ring-primary/70 ring-offset-2 ring-offset-background rounded-md;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.001ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.001ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+@layer components {
+  .glass {
+    @apply bg-white/80 dark:bg-black/60 backdrop-blur-md border border-white/20 dark:border-white/10;
+  }
+
+  .gradient-text {
+    @apply bg-clip-text text-transparent;
+    background-image: var(--gradient-accent);
+  }
+
+  .bg-gradient-warm {
+    background-image: var(--gradient-warm);
+  }
+
+  .card-hover {
+    @apply transition-all duration-300 ease-out;
+  }
+
+  .card-hover:hover {
+    @apply -translate-y-2;
+    box-shadow: var(--shadow-lg);
+  }
+
+  .section-container {
+    @apply max-w-7xl mx-auto px-4 sm:px-6 lg:px-8;
+  }
+
+  .section-padding {
+    @apply py-16 md:py-24;
+  }
+
+  .nav-link {
+    @apply relative;
+  }
+
+  .nav-link::after {
+    content: '';
+    @apply absolute bottom-0 left-0 w-full h-0.5 bg-primary scale-x-0 origin-right transition-transform duration-300;
+  }
+
+  .nav-link:hover::after {
+    @apply scale-x-100 origin-left;
+  }
+
+  .btn-cta {
+    @apply transition-all duration-200 hover:scale-[1.03] active:scale-[0.98];
+    box-shadow: var(--shadow-primary-glow);
+  }
+
+  .btn-cta:hover {
+    box-shadow: 0 12px 32px -8px hsl(var(--primary) / 0.55);
+  }
+
+  .pattern-overlay {
+    background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23c4784a' fill-opacity='0.05'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+  }
+
+  .prayer-flag-strip {
+    background: linear-gradient(
+      to right,
+      #2c6fbb 0%,
+      #2c6fbb 20%,
+      #f5f5f5 20%,
+      #f5f5f5 40%,
+      #d94545 40%,
+      #d94545 60%,
+      #2f9e5b 60%,
+      #2f9e5b 80%,
+      #f0c948 80%,
+      #f0c948 100%
+    );
   }
 }
 
@@ -72,16 +244,38 @@
     text-wrap: balance;
   }
 
-  .bg-gradient-nepal {
-    background: linear-gradient(135deg, #0F233E 0%, #4A6286 50%, #FB6F08 100%);
+  .text-shadow-hero {
+    text-shadow: 0 2px 16px hsl(0 0% 0% / 0.55), 0 1px 4px hsl(0 0% 0% / 0.4);
   }
 
-  .bg-gradient-hero {
+  .tap-target {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  @keyframes kenBurns {
+    0% {
+      transform: scale(1);
+    }
+    100% {
+      transform: scale(1.12);
+    }
+  }
+
+  .animate-ken-burns {
+    animation: kenBurns 20s ease-out forwards;
+  }
+
+  .bg-gradient-nepal {
+    background: linear-gradient(135deg, #0f233e 0%, #4a6286 50%, #fb6f08 100%);
+  }
+
+  .bg-gradient-hero-legacy {
     background: linear-gradient(to right, rgba(15, 35, 62, 0.95), rgba(75, 98, 134, 0.85));
   }
 
   .bg-gradient-logo {
-    background: linear-gradient(135deg, #FF6F01 0%, #FF8B00 43%, #FEA501 100%);
+    background: linear-gradient(135deg, #ff6f01 0%, #ff8b00 43%, #fea501 100%);
   }
 
   .animate-fade-in {
@@ -99,7 +293,22 @@
     }
   }
 
-  /* Range slider (min/max price on search) */
+  /* react-day-picker */
+  .rdp-airbnb .rdp-root {
+    --rdp-accent-color: hsl(var(--primary));
+    --rdp-accent-background-color: hsl(var(--primary) / 0.15);
+    --rdp-today-color: hsl(var(--primary));
+  }
+  .rdp-airbnb .rdp-months {
+    flex-direction: row;
+    flex-wrap: nowrap;
+  }
+  .calendar-popup {
+    display: inline-flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+  }
+
   input[type='range'] {
     @apply h-2 w-full cursor-pointer appearance-none rounded-lg bg-primary-200;
   }

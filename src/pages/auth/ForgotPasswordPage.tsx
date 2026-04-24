@@ -1,12 +1,11 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { Mail, Send } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardHeader } from '@/components/ui/card';
+import { AuthPageLayout } from '@/components/auth/AuthPageLayout';
 import { api } from '@/lib/api';
-import { assets } from '@/lib/design-tokens';
-import { Mail, Send } from 'lucide-react';
 
 export default function ForgotPasswordPage() {
   const navigate = useNavigate();
@@ -30,66 +29,53 @@ export default function ForgotPasswordPage() {
   };
 
   return (
-    <div className="mx-auto flex min-h-[80vh] max-w-md flex-col justify-center px-4 py-12">
-      <div className="mb-8 text-center">
-        <Link to="/" className="inline-block">
-          <img src={assets.logo} alt="Nepali Homestays" className="mx-auto h-14 w-auto" />
-        </Link>
-        <p className="mt-2 text-sm text-muted-foreground">Reset your password</p>
-      </div>
-      <Card className="border-primary-200 shadow-lg">
-        <CardHeader className="border-b border-primary-100 bg-primary-50/50">
-          <div className="flex items-center gap-2">
-            <Mail className="h-6 w-6 text-accent-500" />
-            <h1 className="text-2xl font-bold text-primary-800">Forgot password?</h1>
+    <AuthPageLayout
+      header={
+        <div>
+          <div className="flex items-center justify-center gap-2 text-center">
+            <Mail className="h-6 w-6 shrink-0 text-primary" />
+            <h1 className="font-display text-2xl font-bold text-foreground">Forgot password?</h1>
           </div>
-          <p className="text-sm text-muted-foreground">
+          <p className="mt-2 text-center text-sm text-muted-foreground">
             Enter your email and we&apos;ll send you a one-time code to reset your password.
           </p>
-        </CardHeader>
-        <CardContent className="p-6">
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <Label htmlFor="forgot-email" className="text-primary-800">
-                Email
-              </Label>
-              <Input
-                id="forgot-email"
-                type="email"
-                autoComplete="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                placeholder="you@example.com"
-                className="mt-1 border-primary-200"
-              />
-            </div>
-            {error && (
-              <div className="rounded-lg border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-                {error}
-              </div>
-            )}
-            <Button
-              type="submit"
-              className="w-full bg-accent-500 hover:bg-accent-600"
-              disabled={loading}
-            >
-              <Send className="w-4 h-4 mr-2" />
-              {loading ? 'Sending…' : 'Send reset code'}
-            </Button>
-          </form>
-          <p className="mt-6 text-center text-sm text-muted-foreground">
-            <Link to="/login" className="font-medium text-accent-600 hover:text-accent-700 hover:underline">
-              Back to log in
-            </Link>
-          </p>
-        </CardContent>
-      </Card>
-      <p className="mt-6 text-center">
-        <Link to="/" className="text-sm text-muted-foreground hover:text-primary-700">
-          ← Back to home
+        </div>
+      }
+    >
+      <form onSubmit={handleSubmit} className="space-y-5">
+        <div className="space-y-2">
+          <Label htmlFor="forgot-email" className="text-foreground">
+            Email
+          </Label>
+          <div className="relative">
+            <Mail className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              id="forgot-email"
+              type="email"
+              autoComplete="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              placeholder="you@example.com"
+              className="border-0 bg-muted/60 pl-10"
+            />
+          </div>
+        </div>
+        {error && (
+          <div className="rounded-lg border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+            {error}
+          </div>
+        )}
+        <Button type="submit" className="w-full" size="lg" disabled={loading}>
+          <Send className="mr-2 h-4 w-4" />
+          {loading ? 'Sending…' : 'Send reset code'}
+        </Button>
+      </form>
+      <p className="mt-6 text-center text-sm text-muted-foreground">
+        <Link to="/login" className="font-medium text-primary hover:underline">
+          Back to log in
         </Link>
       </p>
-    </div>
+    </AuthPageLayout>
   );
 }

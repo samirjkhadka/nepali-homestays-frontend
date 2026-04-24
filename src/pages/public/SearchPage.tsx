@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
-import { useSearchParams, useNavigate } from 'react-router-dom';
-import { MapPin, LayoutGrid, ChevronLeft, ChevronRight } from 'lucide-react';
+import { useSearchParams, Link } from 'react-router-dom';
+import { motion } from 'framer-motion';
+import { MapPin, LayoutGrid, ChevronLeft, ChevronRight, Search, Filter, X, ChevronDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -11,7 +12,7 @@ import { getImageDisplayUrl } from '@/lib/image-url';
 import { assets } from '@/lib/design-tokens';
 import { PROVINCES, getProvinceBySlug } from '@/data/provinces';
 import type { ProvinceSlug } from '@/data/provinces';
-import { HOMESTAY_TYPES } from '@/data/districts';
+import { HOMESTAY_TYPES, HOMESTAY_CATEGORIES } from '@/data/districts';
 import { useCurrency } from '@/lib/currency';
 
 const PAGE_SIZE = 20;
@@ -19,6 +20,12 @@ const PAGE_SIZE = 20;
 const PRICE_SLIDER_MIN = 0;
 const PRICE_SLIDER_MAX = 25000;
 const PRICE_SLIDER_STEP = 500;
+
+const BADGE_LABELS: Record<string, string> = {
+  recommended: 'Recommended',
+  featured: 'Featured',
+  new: 'New',
+};
 
 type Province = { id: number; name: string; slug: string };
 type District = { id: number; province_id: number; name: string };
@@ -37,12 +44,10 @@ type Listing = {
 
 export default function SearchPage() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const navigate = useNavigate();
   const provinceParam = searchParams.get('province') as ProvinceSlug | null;
   const provinceFromUrl = provinceParam ? getProvinceBySlug(provinceParam) : null;
-  const [location, setLocation] = useState(
-    provinceFromUrl ? provinceFromUrl.name : (searchParams.get('location') || '')
-  );
+  const [nameQuery, setNameQuery] = useState(searchParams.get('name') || '');
+  const [location, setLocation] = useState(searchParams.get('location') || '');
   const [minPrice, setMinPrice] = useState(searchParams.get('minPrice') || '');
   const [maxPrice, setMaxPrice] = useState(searchParams.get('maxPrice') || '');
   const [guests, setGuests] = useState(searchParams.get('guests') || '');
@@ -50,7 +55,9 @@ export default function SearchPage() {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [sort, setSort] = useState<'default' | 'price_asc' | 'price_desc'>('default');
+  const [showFilters, setShowFilters] = useState(false);
   const [district, setDistrict] = useState(searchParams.get('district') || '');
+  const [category, setCategory] = useState(searchParams.get('category') || '');
   const [homestayType, setHomestayType] = useState<string>(searchParams.get('type') || '');
   const { format: formatPrice } = useCurrency();
   const [viewMode, setViewMode] = useState<'list' | 'map'>('list');
@@ -75,24 +82,27 @@ export default function SearchPage() {
   }, [provinceId]);
 
   useEffect(() => {
-    if (provinceFromUrl && !searchParams.get('location') && !searchParams.get('district')) {
-      setLocation(provinceFromUrl.name);
-    }
     const districtParam = searchParams.get('district');
     if (districtParam) setDistrict(districtParam);
     const typeParam = searchParams.get('type');
     if (typeParam) setHomestayType(typeParam);
-  }, [provinceFromUrl, searchParams]);
+    const categoryParam = searchParams.get('category');
+    if (categoryParam) setCategory(categoryParam);
+    const nameParam = searchParams.get('name');
+    if (nameParam) setNameQuery(nameParam);
+  }, [searchParams]);
 
   useEffect(() => {
     setPage(1);
-  }, [provinceId, districtId, district, location, minPrice, maxPrice, guests]);
+  }, [provinceId, districtId, district, location, minPrice, maxPrice, guests, nameQuery, category]);
 
   useEffect(() => {
     const params: Record<string, string | number> = { page, limit: PAGE_SIZE };
     if (provinceId) params.province_id = provinceId;
     if (districtId) params.district_id = districtId;
-    const searchLocation = district || location;
+    if (nameQuery.trim()) params.title = nameQuery.trim();
+    if (category) params.category = category;
+    const searchLocation = location.trim();
     if (searchLocation && !districtId) params.location = searchLocation;
     if (minPrice) params.minPrice = minPrice;
     if (maxPrice) params.maxPrice = maxPrice;
@@ -101,12 +111,14 @@ export default function SearchPage() {
     api
       .get<{ listings: Listing[]; total: number }>('/api/listings', { params })
       .then((res) => {
-        setListings(res.data.listings ?? []);
-        setTotal(res.data.total ?? 0);
+        const list = res.data.listings ?? [];
+        const t = res.data.total ?? 0;
+        setListings(list);
+        setTotal(t);
       })
       .catch(() => { setListings([]); setTotal(0); })
       .finally(() => setLoading(false));
-  }, [page, provinceId, districtId, district, location, minPrice, maxPrice, guests]);
+  }, [page, provinceId, districtId, district, location, minPrice, maxPrice, guests, nameQuery, category]);
 
   const filteredByType = listings.filter((l) => {
     if (homestayType && (l.type || '').toLowerCase() !== homestayType.toLowerCase()) return false;
@@ -126,11 +138,13 @@ export default function SearchPage() {
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     const params = new URLSearchParams();
+    if (nameQuery.trim()) params.set('name', nameQuery.trim());
     if (district) params.set('district', district);
-    else if (location) params.set('location', location);
+    if (location.trim()) params.set('location', location.trim());
     if (minPrice) params.set('minPrice', minPrice);
     if (maxPrice) params.set('maxPrice', maxPrice);
     if (guests) params.set('guests', guests);
+    if (category) params.set('category', category);
     if (provinceParam) params.set('province', provinceParam);
     if (homestayType) params.set('type', homestayType);
     setSearchParams(params);
@@ -140,27 +154,70 @@ export default function SearchPage() {
     const params = new URLSearchParams(searchParams);
     params.delete('province');
     params.delete('district');
-    setLocation('');
     setDistrict('');
     setSearchParams(params);
   };
 
   const minPriceNum = minPrice === '' ? PRICE_SLIDER_MIN : Math.min(PRICE_SLIDER_MAX, Math.max(PRICE_SLIDER_MIN, Number(minPrice) || 0));
   const maxPriceNum = maxPrice === '' ? PRICE_SLIDER_MAX : Math.min(PRICE_SLIDER_MAX, Math.max(PRICE_SLIDER_MIN, Number(maxPrice) || PRICE_SLIDER_MAX));
+  const activeFilterCount =
+    (provinceParam ? 1 : 0) +
+    (district ? 1 : 0) +
+    (location.trim() ? 1 : 0) +
+    (nameQuery.trim() ? 1 : 0) +
+    (category ? 1 : 0) +
+    (homestayType ? 1 : 0) +
+    (minPrice ? 1 : 0) +
+    (maxPrice ? 1 : 0) +
+    (guests ? 1 : 0);
 
   return (
-    <div className="flex flex-col gap-6 lg:flex-row">
-      <aside className="w-full shrink-0 rounded-lg border border-primary-200 bg-card p-4 lg:w-64">
-        <h3 className="font-semibold text-primary-800">Filters</h3>
-        {provinceFromUrl && (
-          <p className="mt-2 flex items-center gap-2 text-sm text-accent-600">
-            <span>Province: {provinceFromUrl.name}</span>
-            <Button type="button" variant="ghost" size="sm" onClick={clearProvince}>
-              Clear
-            </Button>
-          </p>
-        )}
-        <form onSubmit={handleSearch} className="mt-4 space-y-4">
+    <div className="min-h-screen w-full overflow-x-hidden bg-background pb-10">
+      <div className="section-container">
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="mb-8">
+          <h1 className="font-display text-3xl font-bold text-foreground md:text-4xl">Find Your Perfect Homestay</h1>
+          <p className="text-muted-foreground mt-2">Discover authentic Nepali hospitality across the Himalayas</p>
+        </motion.div>
+
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="flex flex-col md:flex-row gap-4 mb-6">
+          <div className="flex-1 relative">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+            <input
+              type="text"
+              placeholder="Search by name, location..."
+              value={nameQuery}
+              onChange={(e) => setNameQuery(e.target.value)}
+              className="w-full pl-12 pr-4 py-3 bg-card rounded-xl border border-border focus:ring-2 focus:ring-primary outline-none transition-all"
+            />
+          </div>
+          <Button type="button" variant="outline" onClick={() => setShowFilters((v) => !v)} className="flex items-center gap-2">
+            <Filter className="w-4 h-4" />
+            Filters
+            {activeFilterCount > 0 && (
+              <span className="w-5 h-5 bg-primary text-primary-foreground rounded-full text-xs flex items-center justify-center">{activeFilterCount}</span>
+            )}
+          </Button>
+          <div className="relative">
+            <select
+              value={sort}
+              onChange={(e) => setSort(e.target.value as 'default' | 'price_asc' | 'price_desc')}
+              className="appearance-none pl-4 pr-10 py-3 bg-card rounded-xl border border-border focus:ring-2 focus:ring-primary outline-none transition-all cursor-pointer"
+            >
+              <option value="default">Recommended</option>
+              <option value="price_asc">Price: Low to High</option>
+              <option value="price_desc">Price: High to Low</option>
+            </select>
+            <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+          </div>
+        </motion.div>
+
+        <motion.div
+          initial={false}
+          animate={{ height: showFilters ? 'auto' : 0, opacity: showFilters ? 1 : 0 }}
+          transition={{ duration: 0.25 }}
+          className="overflow-hidden"
+        >
+          <form onSubmit={handleSearch} className="mb-6 rounded-xl border border-border bg-card p-5 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           <div>
             <Label>Province</Label>
             <select
@@ -168,19 +225,14 @@ export default function SearchPage() {
               onChange={(e) => {
                 const slug = e.target.value as ProvinceSlug | '';
                 if (slug) {
-                  const p = provinces.find((x) => x.slug === slug) ?? getProvinceBySlug(slug);
-                  if (p) {
-                    setLocation(p.name);
-                    setDistrict('');
-                    setSearchParams((prev) => {
-                      const next = new URLSearchParams(prev);
-                      next.set('province', slug);
-                      next.delete('district');
-                      return next;
-                    });
-                  }
+                  setDistrict('');
+                  setSearchParams((prev) => {
+                    const next = new URLSearchParams(prev);
+                    next.set('province', slug);
+                    next.delete('district');
+                    return next;
+                  });
                 } else {
-                  setLocation('');
                   setDistrict('');
                   setSearchParams((prev) => {
                     const next = new URLSearchParams(prev);
@@ -200,7 +252,7 @@ export default function SearchPage() {
               ))}
             </select>
           </div>
-          {districts.length > 0 && (
+          {provinceId && districts.length > 0 && (
             <div>
               <Label>District</Label>
               <select
@@ -217,7 +269,24 @@ export default function SearchPage() {
           )}
           <div>
             <Label>Location (city/area)</Label>
-            <Input placeholder="e.g. Kathmandu" value={district || location} onChange={(e) => { setDistrict(''); setLocation(e.target.value); }} className="mt-1" />
+            <Input placeholder="e.g. Kathmandu, Thamel" value={location} onChange={(e) => setLocation(e.target.value)} className="mt-1" />
+          </div>
+          <div>
+            <Label>Name</Label>
+            <Input placeholder="Search by homestay name" value={nameQuery} onChange={(e) => setNameQuery(e.target.value)} className="mt-1" />
+          </div>
+          <div>
+            <Label>Category</Label>
+            <select
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+              className="mt-1 flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm"
+            >
+              <option value="">Any category</option>
+              {HOMESTAY_CATEGORIES.map((c) => (
+                <option key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>
+              ))}
+            </select>
           </div>
           <div>
             <Label>Homestay type</Label>
@@ -233,7 +302,7 @@ export default function SearchPage() {
             </select>
           </div>
           <div>
-            <Label className="text-primary-800">Price range (NPR)</Label>
+            <Label className="text-foreground">Price range (NPR)</Label>
             <div className="mt-2 space-y-3">
               <div>
                 <div className="flex justify-between text-sm text-muted-foreground">
@@ -281,14 +350,48 @@ export default function SearchPage() {
             <Label>Guests</Label>
             <Input type="number" value={guests} onChange={(e) => setGuests(e.target.value)} className="mt-1" />
           </div>
-          <Button type="submit" className="w-full bg-accent-500 hover:bg-accent-600">Search</Button>
-        </form>
-      </aside>
-      <div className="flex-1">
+          <div className="flex items-end gap-2">
+            <Button type="submit" className="w-full">Apply filters</Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setSearchParams({});
+                setNameQuery('');
+                setLocation('');
+                setMinPrice('');
+                setMaxPrice('');
+                setGuests('');
+                setDistrict('');
+                setCategory('');
+                setHomestayType('');
+              }}
+            >
+              Clear
+            </Button>
+          </div>
+          </form>
+        </motion.div>
+
+        {(provinceParam || district || category || homestayType) && (
+          <div className="flex flex-wrap gap-2 mb-4">
+            {provinceFromUrl && (
+              <span className="inline-flex items-center gap-1 px-3 py-1 bg-primary/10 text-primary rounded-full text-sm">
+                {provinceFromUrl.name}
+                <button type="button" onClick={clearProvince}><X className="w-3 h-3" /></button>
+              </span>
+            )}
+            {district && <span className="inline-flex px-3 py-1 bg-primary/10 text-primary rounded-full text-sm">{district}</span>}
+            {category && <span className="inline-flex px-3 py-1 bg-primary/10 text-primary rounded-full text-sm">{category}</span>}
+            {homestayType && <span className="inline-flex px-3 py-1 bg-primary/10 text-primary rounded-full text-sm">{homestayType}</span>}
+          </div>
+        )}
+
+      <div className="w-full">
         <div className="flex flex-wrap items-center justify-between gap-4">
-          <h1 className="text-2xl font-semibold text-primary-800">
+          <h2 className="font-display text-2xl font-bold text-foreground">
             {provinceFromUrl ? `Homestays in ${provinceFromUrl.name}` : 'Search results'}
-          </h1>
+          </h2>
           {!loading && sortedListings.length > 0 && (
             <div className="flex flex-wrap items-center gap-3">
               <div className="flex items-center gap-2">
@@ -296,7 +399,7 @@ export default function SearchPage() {
                   type="button"
                   aria-label="List view"
                   onClick={() => setViewMode('list')}
-                  className={`rounded-md p-2 ${viewMode === 'list' ? 'bg-accent-100 text-accent-700' : 'text-muted-foreground hover:bg-primary-100'}`}
+                  className={`rounded-md p-2 ${viewMode === 'list' ? 'bg-primary/15 text-primary' : 'text-muted-foreground hover:bg-muted'}`}
                 >
                   <LayoutGrid className="h-5 w-5" />
                 </button>
@@ -304,22 +407,10 @@ export default function SearchPage() {
                   type="button"
                   aria-label="Map view"
                   onClick={() => setViewMode('map')}
-                  className={`rounded-md p-2 ${viewMode === 'map' ? 'bg-accent-100 text-accent-700' : 'text-muted-foreground hover:bg-primary-100'}`}
+                  className={`rounded-md p-2 ${viewMode === 'map' ? 'bg-primary/15 text-primary' : 'text-muted-foreground hover:bg-muted'}`}
                 >
                   <MapPin className="h-5 w-5" />
                 </button>
-              </div>
-              <div className="flex items-center gap-3">
-                <Label className="text-sm text-muted-foreground">Sort</Label>
-                <select
-                  value={sort}
-                  onChange={(e) => setSort(e.target.value as 'default' | 'price_asc' | 'price_desc')}
-                  className="rounded-md border border-primary-200 bg-background px-3 py-2 text-sm"
-                >
-                  <option value="default">Default</option>
-                  <option value="price_asc">Price: low to high</option>
-                  <option value="price_desc">Price: high to low</option>
-                </select>
               </div>
             </div>
           )}
@@ -332,57 +423,59 @@ export default function SearchPage() {
         {loading ? (
           <p className="mt-4 text-muted-foreground">Loading…</p>
         ) : sortedListings.length === 0 ? (
-          <Card className="mt-4 border-primary-200 p-8 text-center">
+          <Card className="mt-4 border-border p-8 text-center shadow-soft">
             <p className="text-muted-foreground">No homestays found. Try broader search.</p>
             <Button variant="outline" className="mt-4" onClick={() => setSearchParams({})}>Clear filters</Button>
           </Card>
         ) : viewMode === 'map' ? (
-          <Card className="mt-4 border-primary-200 p-12 text-center">
-            <MapPin className="mx-auto h-16 w-16 text-primary-300" />
-            <h3 className="mt-4 font-semibold text-primary-800">Map view</h3>
+          <Card className="mt-4 border-border p-12 text-center shadow-soft">
+            <MapPin className="mx-auto h-16 w-16 text-primary/40" />
+            <h3 className="mt-4 font-display font-semibold text-foreground">Map view</h3>
             <p className="mt-2 text-sm text-muted-foreground">Map integration (e.g. Google Maps or Leaflet) can be added here to show homestays by location.</p>
             <p className="mt-2 text-sm text-muted-foreground">{sortedListings.length} homestays available in list view.</p>
             <Button variant="outline" className="mt-4" onClick={() => setViewMode('list')}>Show list view</Button>
           </Card>
         ) : (
-          <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 items-stretch">
             {sortedListings.map((listing) => {
               const imageSrc = getImageDisplayUrl(listing.image_url) || assets.logo;
               const useLogo = !listing.image_url;
               return (
-              <Card key={listing.id} className="overflow-hidden border-primary-200 transition-shadow hover:shadow-lg">
-                <div className="aspect-video bg-primary-100 overflow-hidden">
-                  <img
-                    src={imageSrc}
-                    alt={listing.title}
-                    className={`h-full w-full object-cover ${useLogo ? 'object-contain p-4' : ''}`}
-                    onError={(e) => {
-                      e.currentTarget.src = assets.logo;
-                      e.currentTarget.className = 'h-full w-full object-contain p-4';
-                    }}
-                  />
-                </div>
-                <CardHeader className="pb-2">
-                  <CardContent className="p-0 space-y-1.5">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <h3 className="font-semibold text-primary-800">{listing.title}</h3>
-                      {listing.badge && (
-                        <ListingBadges badge={listing.badge} compact className="shrink-0" />
-                      )}
-                    </div>
-                    <p className="text-sm text-muted-foreground">{listing.location}</p>
-                  </CardContent>
-                </CardHeader>
-                <CardFooter className="flex items-center justify-between pt-0">
-                  <span className="font-medium text-accent-600">{formatPrice(listing.price_per_night)}/night</span>
-                  <Button size="sm" className="bg-primary-600 hover:bg-primary-700" onClick={() => navigate(`/listings/${listing.id}`)}>View Details</Button>
-                </CardFooter>
-              </Card>
+              <Link key={listing.id} to={`/listings/${listing.id}`} className="block h-full focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 rounded-2xl">
+                <Card className="group flex h-full cursor-pointer flex-col overflow-hidden border-border transition-all duration-300 hover:shadow-elevated h-full">
+                  <div className="relative aspect-video overflow-hidden bg-muted/40 shrink-0">
+                    <img
+                      src={imageSrc}
+                      alt={listing.title}
+                      className={`h-full w-full object-cover ${useLogo ? 'object-contain p-4' : ''}`}
+                      onError={(e) => {
+                        e.currentTarget.src = assets.logo;
+                        e.currentTarget.className = 'h-full w-full object-contain p-4';
+                      }}
+                    />
+                    {listing.badge && (
+                      <div className="absolute top-3 left-3 flex flex-wrap gap-1.5">
+                        <ListingBadges badge={listing.badge} badgeLabels={BADGE_LABELS} compact />
+                      </div>
+                    )}
+                  </div>
+                  <CardHeader className="pb-2">
+                    <CardContent className="p-0 space-y-1.5">
+                      <h3 className="font-display font-semibold text-foreground group-hover:text-primary transition-colors">{listing.title}</h3>
+                      <p className="text-sm text-muted-foreground">{listing.location}</p>
+                    </CardContent>
+                  </CardHeader>
+                  <CardFooter className="flex items-center justify-between pt-0 mt-auto shrink-0 border-t border-border/50">
+                    <span className="font-medium text-primary">{formatPrice(listing.price_per_night)}/night</span>
+                    <span className="inline-flex h-9 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground">View</span>
+                  </CardFooter>
+                </Card>
+              </Link>
             );})}
           </div>
         )}
         {!loading && total > 0 && totalPages > 1 && (
-          <div className="mt-6 flex flex-wrap items-center justify-between gap-4 border-t border-primary-200 pt-4">
+          <div className="mt-6 flex flex-wrap items-center justify-between gap-4 border-t border-border pt-4">
             <p className="text-sm text-muted-foreground">
               Page {page} of {totalPages}
             </p>
@@ -406,6 +499,7 @@ export default function SearchPage() {
             </div>
           </div>
         )}
+      </div>
       </div>
     </div>
   );

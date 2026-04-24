@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, useSearchParams, useLocation, Link } from 'react-router-dom';
-import { MapPin, Users, Heart, Star, Award, ArrowLeft, Share, MessageCircle, Calendar, Languages, BadgeCheck } from 'lucide-react';
+import { MapPin, Users, Heart, Star, Award, ArrowLeft, Share, MessageCircle, Calendar, Languages, BadgeCheck, BedDouble, Bath, Landmark, Leaf } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,6 +10,7 @@ import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { useAuth } from '@/lib/auth';
 import { api } from '@/lib/api';
 import { getImageDisplayUrl } from '@/lib/image-url';
+import { assets } from '@/lib/design-tokens';
 import { useToast } from '@/hooks/use-toast';
 import { useCurrency } from '@/lib/currency';
 import { ListingMap } from '@/components/ListingMap';
@@ -18,6 +19,7 @@ import { BookingCard } from '@/components/BookingCard';
 import { ReviewsSection } from '@/components/ReviewsSection';
 import { AmenitiesList } from '@/components/AmenitiesList';
 import { ListingBadges } from '@/components/ListingBadges';
+import { SafeHtml } from '@/components/SafeHtml';
 
 type HostProfile = {
   id: number;
@@ -34,6 +36,8 @@ type HostProfile = {
 
 type Listing = {
   id: number;
+  /** Listing owner; used to block self-booking. */
+  host_id?: number;
   title: string;
   type: string;
   status?: string;
@@ -52,6 +56,15 @@ type Listing = {
   host?: { name: string; avatar_url: string | null; bio: string | null };
   hosts?: HostProfile[];
   sections?: Record<string, string>;
+  bedrooms?: number | null;
+  bathrooms?: number | null;
+};
+type NearbyListing = {
+  id: number;
+  title: string;
+  location: string;
+  image_url?: string | null;
+  price_per_night: string | number;
 };
 
 /** Listing display settings from API (badge labels, section labels, highlights, trust badges, empty fallbacks) */
@@ -72,7 +85,7 @@ type ListingDisplaySettings = {
 
 const DEFAULT_LISTING_DISPLAY: ListingDisplaySettings = {
   badge_labels: { recommended: 'Recommended', featured: 'Featured', new: 'New' },
-  section_labels: { owners_story: "Homestay owner's story", history: 'History', about_us: 'About us', their_community: 'Their community', whats_included_in_price: "What's included in the price", place_history: 'Place history', attractions: 'Attractions', homestay_highlights: 'Homestay highlights', things_to_do_nearby: 'Things to do near the homestay', impact_in_community: 'Impact in the community', how_to_get_there: 'How to get there', nearby_homestays: 'Nearby homestays', faqs: 'FAQs' },
+  section_labels: { owners_story: "Homestay owner's story", history: 'History', about_us: 'About us', their_community: 'Their community', whats_included_in_price: "What's included in the price", place_history: 'Place history', attractions: 'Attractions', homestay_highlights: 'Homestay highlights', things_to_do_nearby: 'Things to do near the homestay', impact_in_community: 'Impact in the community', how_to_get_there: 'How to get there', nearby_homestays: 'Nearby homestays', faqs: 'FAQs', itinerary: 'What to Expect', host_video_intro: 'Host video introduction', local_experiences: 'Local experiences', meet_the_community: 'Meet the community', price_transparency: 'Price transparency', weather_best_time: 'Best time to visit', village_stories: 'Stories from the village', guest_photo_wall: 'Guest photo wall' },
   highlights: {
     free_cancellation_title: 'Free cancellation for 48 hours',
     free_cancellation_description: 'Get a full refund if you change your mind within 48 hours of booking.',
@@ -127,6 +140,7 @@ export default function ListingDetailPage() {
   const [rejectRemarks, setRejectRemarks] = useState('');
   const [adminActionLoading, setAdminActionLoading] = useState(false);
   const [listingDisplay, setListingDisplay] = useState<ListingDisplaySettings>(DEFAULT_LISTING_DISPLAY);
+  const [nearbyListings, setNearbyListings] = useState<NearbyListing[]>([]);
 
   useEffect(() => {
     api.get<ListingDisplaySettings>('/api/settings/listing-display')
@@ -179,6 +193,22 @@ export default function ListingDetailPage() {
       })
       .catch(() => setBookingFee(null));
   }, [id]);
+
+  useEffect(() => {
+    if (!listing?.id || !listing.location?.trim()) {
+      setNearbyListings([]);
+      return;
+    }
+    api
+      .get<{ listings: NearbyListing[] }>('/api/listings', {
+        params: { location: listing.location.trim(), limit: 8, page: 1 },
+      })
+      .then((res) => {
+        const rows = Array.isArray(res.data.listings) ? res.data.listings : [];
+        setNearbyListings(rows.filter((x) => x.id !== listing.id).slice(0, 4));
+      })
+      .catch(() => setNearbyListings([]));
+  }, [listing?.id, listing?.location]);
 
   const listingUrl = user?.role?.toLowerCase() === 'admin' ? `/api/admin/listings/${id}` : `/api/listings/${id}`;
   useEffect(() => {
@@ -338,7 +368,7 @@ export default function ListingDetailPage() {
   if (loaded && !listing)
     return (
       <div className="py-12 text-center">
-        <h2 className="text-xl font-semibold text-primary-800">Listing not found</h2>
+        <h2 className="font-display text-xl font-semibold text-foreground">Listing not found</h2>
         <p className="mt-2 text-muted-foreground">
           This homestay may have been removed or is not available.
         </p>
@@ -349,7 +379,9 @@ export default function ListingDetailPage() {
     );
 
   const listingData = listing as Listing;
-  const images = listingData.images?.length ? listingData.images.map((i) => i.url) : [];
+  const images = listingData.images?.length
+    ? listingData.images.map((i) => i.url).filter((u) => Boolean(u && String(u).trim()))
+    : [];
   const imageUrl = (url: string) => getImageDisplayUrl(url);
   const primaryHost =
     (listingData.hosts?.length && listingData.hosts.find((h) => h.is_primary)) ||
@@ -359,12 +391,25 @@ export default function ListingDetailPage() {
     primaryHost?.name ||
     listingData.host?.name ||
     listingDisplay.empty_fallbacks.default_host_name;
+  const primaryHostAvatarUrl =
+    primaryHost?.avatar_url?.trim() ? getImageDisplayUrl(primaryHost.avatar_url) : '';
   const hostBio = primaryHost?.brief_intro || primaryHost?.bio || null;
   const hostLanguages = primaryHost?.languages_spoken?.trim() || null;
   const isSuperhost = listingData.hosts?.some((h) => h.superhost) ?? false;
   const isCulturalExpert = listingData.hosts?.some((h) => h.local_expert) ?? false;
   const averageRating =
     reviews.length > 0 ? reviews.reduce((s, r) => s + r.rating, 0) / reviews.length : 0;
+  const experienceBadges = (listingData.sections?.experience_badges || 'cultural-heritage,eco-certified')
+    .split(',')
+    .map((x) => x.trim().toLowerCase())
+    .filter(Boolean);
+  const hasCultural = experienceBadges.includes('cultural-heritage');
+  const hasEco = experienceBadges.includes('eco-certified');
+  const isHostViewingOwnListing = Boolean(
+    user &&
+    ((listingData.host_id != null && user.id === Number(listingData.host_id)) ||
+      (listingData.hosts?.some((h) => h.id === user.id) ?? false))
+  );
 
   const handleShare = () => {
     if (navigator.share) {
@@ -376,8 +421,8 @@ export default function ListingDetailPage() {
   };
 
   return (
-    <main className="pt-6 pb-16 min-h-screen bg-background">
-      <div className="container mx-auto px-4">
+    <div className="w-full min-h-screen bg-background pb-16">
+      <div className="section-container pt-4">
         {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -403,7 +448,7 @@ export default function ListingDetailPage() {
             </div>
             {(averageRating > 0 || reviewsTotal > 0) && (
               <div className="flex items-center gap-1">
-                <Star className="w-4 h-4 fill-accent text-accent" />
+                <Star className="h-4 w-4 fill-primary text-primary" />
                 <span className="font-medium">{averageRating.toFixed(1)}</span>
                 <span className="text-muted-foreground">({reviewsTotal} reviews)</span>
               </div>
@@ -441,6 +486,22 @@ export default function ListingDetailPage() {
               </Button>
             </div>
           </div>
+            {(hasCultural || hasEco) && (
+              <div className="mt-4 flex flex-wrap gap-2">
+                {hasCultural && (
+                  <span className="inline-flex items-center gap-1 rounded-full border border-accent/50 bg-accent/20 px-2.5 py-1 text-xs font-medium text-accent-foreground">
+                    <Landmark className="w-3.5 h-3.5" />
+                    Cultural Heritage
+                  </span>
+                )}
+                {hasEco && (
+                  <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/40 bg-emerald-500/15 px-2.5 py-1 text-xs font-medium text-emerald-700 dark:text-emerald-200">
+                    <Leaf className="w-3.5 h-3.5" />
+                    Eco-certified
+                  </span>
+                )}
+              </div>
+            )}
         </motion.div>
 
         {/* Photo Gallery */}
@@ -460,8 +521,17 @@ export default function ListingDetailPage() {
               className="flex items-start gap-4 pb-8 border-b border-border"
             >
               <div className="w-14 h-14 rounded-full overflow-hidden bg-primary/20 flex-shrink-0 flex items-center justify-center text-primary font-display font-bold text-xl">
-                {primaryHost?.avatar_url ? (
-                  <img src={getImageDisplayUrl(primaryHost.avatar_url)} alt="" className="w-full h-full object-cover" />
+                {primaryHostAvatarUrl ? (
+                  <img
+                    src={primaryHostAvatarUrl}
+                    alt=""
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                      e.currentTarget.onerror = null;
+                      e.currentTarget.src = assets.logo;
+                      e.currentTarget.className = 'w-full h-full object-contain p-1.5 bg-card';
+                    }}
+                  />
                 ) : (
                   hostName.charAt(0)
                 )}
@@ -475,6 +545,18 @@ export default function ListingDetailPage() {
                     <Users className="w-4 h-4" />
                     {listingData.max_guests} guests
                   </span>
+                  {typeof listingData.bedrooms === 'number' && listingData.bedrooms > 0 && (
+                    <span className="flex items-center gap-1">
+                      <BedDouble className="w-4 h-4" />
+                      {listingData.bedrooms} bedroom{listingData.bedrooms > 1 ? 's' : ''}
+                    </span>
+                  )}
+                  {typeof listingData.bathrooms === 'number' && listingData.bathrooms > 0 && (
+                    <span className="flex items-center gap-1">
+                      <Bath className="w-4 h-4" />
+                      {listingData.bathrooms} bathroom{listingData.bathrooms > 1 ? 's' : ''}
+                    </span>
+                  )}
                   {hostLanguages && (
                     <span className="flex items-center gap-1">
                       <Languages className="w-4 h-4" />
@@ -519,11 +601,22 @@ export default function ListingDetailPage() {
                   Other hosts who help manage this homestay.
                 </p>
                 <div className="space-y-4">
-                  {[...listingData.hosts.filter((h) => !h.is_primary)].sort((a, b) => a.sort_order - b.sort_order).map((cohost) => (
+                  {[...listingData.hosts.filter((h) => !h.is_primary)].sort((a, b) => a.sort_order - b.sort_order).map((cohost) => {
+                    const cohostAvatarUrl = cohost.avatar_url?.trim() ? getImageDisplayUrl(cohost.avatar_url) : '';
+                    return (
                     <div key={cohost.id} className="flex items-start gap-4">
                       <div className="w-12 h-12 rounded-full overflow-hidden bg-primary/20 flex-shrink-0 flex items-center justify-center text-primary font-display font-semibold text-lg">
-                        {cohost.avatar_url ? (
-                          <img src={getImageDisplayUrl(cohost.avatar_url)} alt="" className="w-full h-full object-cover" />
+                        {cohostAvatarUrl ? (
+                          <img
+                            src={cohostAvatarUrl}
+                            alt=""
+                            className="w-full h-full object-cover"
+                            onError={(e) => {
+                              e.currentTarget.onerror = null;
+                              e.currentTarget.src = assets.logo;
+                              e.currentTarget.className = 'w-full h-full object-contain p-1.5 bg-card';
+                            }}
+                          />
                         ) : (
                           (cohost.name || '?').charAt(0)
                         )}
@@ -543,7 +636,8 @@ export default function ListingDetailPage() {
                         )}
                       </div>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </motion.div>
             )}
@@ -598,15 +692,99 @@ export default function ListingDetailPage() {
               <h3 className="font-display text-2xl font-semibold text-foreground mb-4">
                 About this place
               </h3>
-              <div className="text-foreground/80 leading-relaxed whitespace-pre-line">
-                {listingData.description || listingDisplay.empty_fallbacks.no_description}
-              </div>
+              <SafeHtml html={listingData.description || listingDisplay.empty_fallbacks.no_description} className="text-foreground/80" />
             </motion.div>
 
-            {/* Dynamic sections (except how_to_get_there and facility_* — those are used by AmenitiesList only) */}
+            {/* Reference-style rich sections from host/admin-configurable listing sections */}
+            {listingData.sections?.itinerary?.trim() && (
+              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.33 }} className="pb-8 border-b border-border">
+                <h3 className="font-display text-2xl font-semibold text-foreground mb-4">
+                  {listingDisplay.section_labels.itinerary ?? 'What to Expect'}
+                </h3>
+                <SafeHtml html={listingData.sections.itinerary} className="text-foreground/80" />
+              </motion.div>
+            )}
+
+            {listingData.sections?.host_video_intro?.trim() && (
+              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.34 }} className="pb-8 border-b border-border">
+                <h3 className="font-display text-2xl font-semibold text-foreground mb-4">
+                  {listingDisplay.section_labels.host_video_intro ?? 'Host video introduction'}
+                </h3>
+                <SafeHtml html={listingData.sections.host_video_intro} className="text-foreground/80" />
+              </motion.div>
+            )}
+
+            {listingData.sections?.local_experiences?.trim() && (
+              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }} className="pb-8 border-b border-border">
+                <h3 className="font-display text-2xl font-semibold text-foreground mb-4">
+                  {listingDisplay.section_labels.local_experiences ?? 'Local experiences'}
+                </h3>
+                <SafeHtml html={listingData.sections.local_experiences} className="text-foreground/80" />
+              </motion.div>
+            )}
+
+            {listingData.sections?.meet_the_community?.trim() && (
+              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.36 }} className="pb-8 border-b border-border">
+                <h3 className="font-display text-2xl font-semibold text-foreground mb-4">
+                  {listingDisplay.section_labels.meet_the_community ?? 'Meet the community'}
+                </h3>
+                <SafeHtml html={listingData.sections.meet_the_community} className="text-foreground/80" />
+              </motion.div>
+            )}
+
+            {listingData.sections?.price_transparency?.trim() && (
+              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.37 }} className="pb-8 border-b border-border">
+                <h3 className="font-display text-2xl font-semibold text-foreground mb-4">
+                  {listingDisplay.section_labels.price_transparency ?? 'Price transparency'}
+                </h3>
+                <SafeHtml html={listingData.sections.price_transparency} className="text-foreground/80" />
+              </motion.div>
+            )}
+
+            {listingData.sections?.weather_best_time?.trim() && (
+              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.38 }} className="pb-8 border-b border-border">
+                <h3 className="font-display text-2xl font-semibold text-foreground mb-4">
+                  {listingDisplay.section_labels.weather_best_time ?? 'Best time to visit'}
+                </h3>
+                <SafeHtml html={listingData.sections.weather_best_time} className="text-foreground/80" />
+              </motion.div>
+            )}
+
+            {listingData.sections?.village_stories?.trim() && (
+              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.39 }} className="pb-8 border-b border-border">
+                <h3 className="font-display text-2xl font-semibold text-foreground mb-4">
+                  {listingDisplay.section_labels.village_stories ?? 'Stories from the village'}
+                </h3>
+                <SafeHtml html={listingData.sections.village_stories} className="text-foreground/80" />
+              </motion.div>
+            )}
+
+            {listingData.sections?.guest_photo_wall?.trim() && (
+              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }} className="pb-8 border-b border-border">
+                <h3 className="font-display text-2xl font-semibold text-foreground mb-4">
+                  {listingDisplay.section_labels.guest_photo_wall ?? 'Guest photo wall'}
+                </h3>
+                <SafeHtml html={listingData.sections.guest_photo_wall} className="text-foreground/80" />
+              </motion.div>
+            )}
+
+            {/* Dynamic sections (except special handled and facility_* keys) */}
             {listingData.sections &&
               Object.entries(listingData.sections).map(([key, content]) => {
-                if (key === 'how_to_get_there' || key.startsWith('facility_') || !content?.trim()) return null;
+                if (
+                  key === 'how_to_get_there' ||
+                  key === 'itinerary' ||
+                  key === 'host_video_intro' ||
+                  key === 'local_experiences' ||
+                  key === 'meet_the_community' ||
+                  key === 'price_transparency' ||
+                  key === 'weather_best_time' ||
+                  key === 'village_stories' ||
+                  key === 'guest_photo_wall' ||
+                  key === 'experience_badges' ||
+                  key.startsWith('facility_') ||
+                  !content?.trim()
+                ) return null;
                 const label = listingDisplay.section_labels[key] ?? key.replace(/_/g, ' ');
                 if (key === 'faqs') {
                   try {
@@ -635,7 +813,7 @@ export default function ListingDetailPage() {
                     return (
                       <motion.div key={key} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }} className="pb-8 border-b border-border">
                         <h3 className="font-display text-2xl font-semibold text-foreground mb-4">{label}</h3>
-                        <p className="text-foreground/80 whitespace-pre-line">{content}</p>
+                        <SafeHtml html={content} className="text-foreground/80" />
                       </motion.div>
                     );
                   }
@@ -649,7 +827,7 @@ export default function ListingDetailPage() {
                     className="pb-8 border-b border-border"
                   >
                     <h3 className="font-display text-2xl font-semibold text-foreground mb-4">{label}</h3>
-                    <p className="text-foreground/80 whitespace-pre-line">{content}</p>
+                    <SafeHtml html={content} className="text-foreground/80" />
                   </motion.div>
                 );
               })}
@@ -756,13 +934,33 @@ export default function ListingDetailPage() {
                 className="mb-4 rounded-xl overflow-hidden"
               />
               {(listingData.way_to_get_there || listingData.sections?.how_to_get_there) ? (
-                <p className="text-foreground/80 whitespace-pre-line">
-                  {listingData.sections?.how_to_get_there?.trim() || listingData.way_to_get_there || ''}
-                </p>
+                <SafeHtml html={listingData.sections?.how_to_get_there?.trim() || listingData.way_to_get_there || ''} className="text-foreground/80" />
               ) : (
                 <p className="text-muted-foreground">{listingDisplay.empty_fallbacks.no_directions}</p>
               )}
             </motion.div>
+
+            {nearbyListings.length > 0 && (
+              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.45 }} className="pb-8 border-t border-border pt-8">
+                <h3 className="font-display text-2xl font-semibold text-foreground mb-4">
+                  {listingDisplay.section_labels.nearby_homestays ?? 'Nearby homestays'}
+                </h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {nearbyListings.map((n) => (
+                    <Link key={n.id} to={`/listings/${n.id}`} className="group rounded-xl border border-border bg-card overflow-hidden hover:shadow-lg transition-shadow">
+                      <div className="aspect-[16/10] overflow-hidden">
+                        <img src={getImageDisplayUrl(n.image_url || '')} alt={n.title} className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                      </div>
+                      <div className="p-3">
+                        <p className="font-medium text-foreground line-clamp-1">{n.title}</p>
+                        <p className="text-xs text-muted-foreground mt-1">{n.location}</p>
+                        <p className="text-sm text-primary font-semibold mt-2">{formatPrice(n.price_per_night)}<span className="text-muted-foreground font-normal"> / night</span></p>
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              </motion.div>
+            )}
           </div>
 
           {/* Right Column - Booking Card or Admin */}
@@ -799,38 +997,55 @@ export default function ListingDetailPage() {
                   )}
                 </CardContent>
               </Card>
-            ) : user?.role !== 'admin' && (
-              <BookingCard
-                pricePerNight={listingData.price_per_night}
-                priceFormatted={formatPrice(listingData.price_per_night)}
-                rating={averageRating || undefined}
-                totalReviews={reviewsTotal}
-                maxGuests={listingData.max_guests}
-                checkIn={checkIn}
-                checkOut={checkOut}
-                onCheckInChange={setCheckIn}
-                onCheckOutChange={setCheckOut}
-                guests={guests}
-                onGuestsChange={setGuests}
-                blockedDates={blockedDates}
-                onSubmit={handleMakePayment}
-                submitting={submitting}
-                submitLabel="You won't be charged yet"
-                bookingFee={bookingFee}
-                trustBadges={listingDisplay.trust_badges}
-                paymentType={paymentType}
-                partialPercent={partialPercent}
-                partialPaymentMinPercent={partialPaymentMinPercent}
-                onPaymentTypeChange={setPaymentType}
-                onPartialPercentChange={setPartialPercent}
-                extraServices={listingData.extra_services}
-                selectedExtraServices={selectedExtraServices}
-                onExtraServicesChange={setSelectedExtraServices}
-              />
+            ) : isHostViewingOwnListing ? (
+              <Card className="border-border shadow-lg">
+                <CardHeader>
+                  <h3 className="font-semibold text-foreground">Your homestay</h3>
+                  <p className="text-sm text-muted-foreground">
+                    You can’t book or reserve a stay at your own listing. Open the host dashboard to manage
+                    this homestay, calendar, and guest bookings.
+                  </p>
+                </CardHeader>
+                <CardContent>
+                  <Button asChild className="w-full">
+                    <Link to="/dashboard/host?tab=listings">Go to host dashboard</Link>
+                  </Button>
+                </CardContent>
+              </Card>
+            ) : (
+              user?.role !== 'admin' && (
+                <BookingCard
+                  pricePerNight={listingData.price_per_night}
+                  priceFormatted={formatPrice(listingData.price_per_night)}
+                  rating={averageRating || undefined}
+                  totalReviews={reviewsTotal}
+                  maxGuests={listingData.max_guests}
+                  checkIn={checkIn}
+                  checkOut={checkOut}
+                  onCheckInChange={setCheckIn}
+                  onCheckOutChange={setCheckOut}
+                  guests={guests}
+                  onGuestsChange={setGuests}
+                  blockedDates={blockedDates}
+                  onSubmit={handleMakePayment}
+                  submitting={submitting}
+                  submitLabel="You won't be charged yet"
+                  bookingFee={bookingFee}
+                  trustBadges={listingDisplay.trust_badges}
+                  paymentType={paymentType}
+                  partialPercent={partialPercent}
+                  partialPaymentMinPercent={partialPaymentMinPercent}
+                  onPaymentTypeChange={setPaymentType}
+                  onPartialPercentChange={setPartialPercent}
+                  extraServices={listingData.extra_services}
+                  selectedExtraServices={selectedExtraServices}
+                  onExtraServicesChange={setSelectedExtraServices}
+                />
+              )
             )}
           </div>
         </div>
       </div>
-    </main>
+    </div>
   );
 }

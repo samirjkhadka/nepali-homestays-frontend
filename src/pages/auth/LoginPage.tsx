@@ -1,14 +1,13 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation, useSearchParams } from 'react-router-dom';
+import { Mail, Lock, LogIn } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { PasswordInput } from '@/components/ui/password-input';
 import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardHeader } from '@/components/ui/card';
+import { AuthPageLayout } from '@/components/auth/AuthPageLayout';
 import { useAuth } from '@/lib/auth';
 import { api } from '@/lib/api';
-import { assets } from '@/lib/design-tokens';
-import { LogIn } from 'lucide-react';
 
 export default function LoginPage() {
   const navigate = useNavigate();
@@ -66,93 +65,81 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="mx-auto flex min-h-[80vh] max-w-md flex-col justify-center px-4 py-12">
-      <div className="mb-8 text-center">
-        <Link to="/" className="inline-block">
-          <img src={assets.logo} alt="Nepali Homestays" className="mx-auto h-14 w-auto" />
-        </Link>
-        <p className="mt-2 text-sm text-muted-foreground">Discover authentic Nepal</p>
-      </div>
-      <Card className="border-primary-200 shadow-lg">
-        <CardHeader className="border-b border-primary-100 bg-primary-50/50">
-          <h1 className="text-2xl font-bold text-primary-800">Log in</h1>
-          <p className="text-sm text-muted-foreground">
-            Use your email or mobile number. First-time login: we&apos;ll send a verification code to your email.
-          </p>
-        </CardHeader>
-        <CardContent className="p-6">
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <Label htmlFor="login-email" className="text-primary-800">
-                Email or mobile number
-              </Label>
-              <Input
-                id="login-email"
-                type="text"
-                inputMode="email"
-                autoComplete="username"
-                value={emailOrPhone}
-                onChange={(e) => setEmailOrPhone(e.target.value)}
-                required
-                placeholder="Email or phone"
-                className="mt-1 border-primary-200"
-              />
-            </div>
-            <div>
-              <Label htmlFor="login-password" className="text-primary-800">
-                Password
-              </Label>
-              <PasswordInput
-                id="login-password"
-                autoComplete="current-password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                className="mt-1 border-primary-200"
-              />
-            </div>
-            {becameHost && (
-              <div className="rounded-lg border border-primary-500/50 bg-primary-500/10 px-3 py-2 text-sm text-primary-700">
-                You are now a host. Log in to access the Host Dashboard.
-              </div>
-            )}
-            {successMessage && !becameHost && (
-              <div className="rounded-lg border border-green-500/50 bg-green-500/10 px-3 py-2 text-sm text-green-700">
-                {successMessage}
-              </div>
-            )}
-            {error && (
-              <div className="rounded-lg border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-                {error}
-              </div>
-            )}
-            <Button
-              type="submit"
-              className="w-full bg-accent-500 hover:bg-accent-600"
-              disabled={loading}
-            >
-              <LogIn className="w-4 h-4 mr-2" />
-              {loading ? 'Sending…' : 'Log in'}
-            </Button>
-          </form>
-          <p className="mt-6 text-center text-sm text-muted-foreground">
-            Don&apos;t have an account?{' '}
-            <Link to="/signup" className="font-medium text-accent-600 hover:text-accent-700 hover:underline">
-              Sign up
+    <AuthPageLayout
+      title="Welcome back"
+      description={
+        <>
+          Sign in with your email or mobile. First-time login: we&apos;ll email you a verification code.
+        </>
+      }
+    >
+      <form onSubmit={handleSubmit} className="space-y-5">
+        <div className="space-y-2">
+          <Label htmlFor="login-email" className="text-foreground">
+            Email or mobile number
+          </Label>
+          <div className="relative">
+            <Mail className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              id="login-email"
+              type="text"
+              inputMode="email"
+              autoComplete="username"
+              value={emailOrPhone}
+              onChange={(e) => setEmailOrPhone(e.target.value)}
+              required
+              placeholder="you@example.com or +977…"
+              className="border-0 bg-muted/60 pl-10"
+            />
+          </div>
+        </div>
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <Label htmlFor="login-password" className="text-foreground">
+              Password
+            </Label>
+            <Link to="/forgot-password" className="text-sm text-primary hover:underline">
+              Forgot?
             </Link>
-          </p>
-          <p className="mt-2 text-center text-sm text-muted-foreground">
-            <Link to="/forgot-password" className="font-medium text-accent-600 hover:text-accent-700 hover:underline">
-              Forgot password?
-            </Link>
-          </p>
-        </CardContent>
-      </Card>
-      <p className="mt-6 text-center">
-        <Link to="/" className="text-sm text-muted-foreground hover:text-primary-700">
-          ← Back to home
+          </div>
+          <div className="relative">
+            <Lock className="pointer-events-none absolute left-3 top-1/2 z-10 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
+            <PasswordInput
+              id="login-password"
+              autoComplete="current-password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              className="border-0 bg-muted/60 pl-10"
+            />
+          </div>
+        </div>
+        {becameHost && (
+          <div className="rounded-lg border border-primary/30 bg-primary/5 px-3 py-2 text-sm text-foreground">
+            You are now a host. Log in to access the Host Dashboard.
+          </div>
+        )}
+        {successMessage && !becameHost && (
+          <div className="rounded-lg border border-green-500/40 bg-green-500/10 px-3 py-2 text-sm text-foreground">
+            {successMessage}
+          </div>
+        )}
+        {error && (
+          <div className="rounded-lg border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+            {error}
+          </div>
+        )}
+        <Button type="submit" className="w-full" size="lg" disabled={loading}>
+          <LogIn className="mr-2 h-4 w-4" />
+          {loading ? 'Sending…' : 'Log in'}
+        </Button>
+      </form>
+      <p className="mt-6 text-center text-sm text-muted-foreground">
+        Don&apos;t have an account?{' '}
+        <Link to="/signup" className="font-medium text-primary hover:underline">
+          Sign up
         </Link>
       </p>
-    </div>
+    </AuthPageLayout>
   );
 }

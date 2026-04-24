@@ -25,26 +25,26 @@ import { assets } from '@/lib/design-tokens';
 const footerLinks = {
   company: [
     { key: 'footer.aboutUs', href: '/about' },
-    { key: 'footer.ourTeam', href: '/cms/our-team' },
-    { key: 'footer.careers', href: '/cms/careers' },
-    { key: 'footer.press', href: '/cms/press' },
+    { key: 'footer.ourTeam', href: '/team' },
+    { key: 'footer.careers', href: '/careers' },
+    { key: 'footer.press', href: '/press' },
   ],
   explore: [
     { key: 'footer.allHomestays', href: '/search' },
-    { key: 'footer.travelPackages', href: '/search' },
-    { key: 'footer.destinations', href: '/search' },
-    { key: 'footer.experiences', href: '/search' },
+    { key: 'footer.travelPackages', href: '/packages' },
+    { key: 'footer.destinations', href: '/destinations' },
+    { key: 'footer.experiences', href: '/experiences' },
   ],
   support: [
-    { key: 'footer.helpCenter', href: '/cms/help' },
-    { key: 'footer.safety', href: '/cms/safety' },
-    { key: 'footer.cancellation', href: '/cms/cancellation' },
-    { key: 'footer.faqs', href: '/cms/faqs' },
+    { key: 'footer.helpCenter', href: '/help' },
+    { key: 'footer.safety', href: '/safety' },
+    { key: 'footer.cancellation', href: '/cancellation' },
+    { key: 'footer.faqs', href: '/faqs' },
   ],
   legal: [
-    { key: 'footer.privacy', href: '/cms/privacy' },
-    { key: 'footer.terms', href: '/cms/terms' },
-    { key: 'footer.cookies', href: '/cms/cookies' },
+    { key: 'footer.privacy', href: '/privacy' },
+    { key: 'footer.terms', href: '/terms' },
+    { key: 'footer.cookies', href: '/cookies' },
   ],
 };
 
@@ -54,8 +54,6 @@ const socialLinks = [
   { icon: Youtube, href: '#', label: 'YouTube' },
   { icon: Twitter, href: '#', label: 'Twitter' },
 ];
-
-const sectionContainerClass = 'container mx-auto px-4';
 
 const partnerFormDefaults = {
   name: '',
@@ -156,10 +154,12 @@ export default function Footer() {
   };
 
   return (
-    <footer className="bg-muted/50 text-foreground border-t border-border">
+    <footer className="bg-foreground text-background">
+      <div className="prayer-flag-strip h-1" aria-hidden />
+
       {/* Newsletter Section */}
-      <div className="border-b border-border">
-        <div className={`${sectionContainerClass} py-12`}>
+      <div className="border-b border-background/10">
+        <div className="section-container py-12">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
@@ -167,21 +167,17 @@ export default function Footer() {
             className="flex flex-col md:flex-row items-center justify-between gap-6"
           >
             <div>
-              <h3 className="font-display text-2xl font-bold mb-2">
-                {t('footer.newsletter')}
-              </h3>
-              <p className="text-muted-foreground">
-                {t('footer.newsletterDesc')}
-              </p>
+              <h3 className="font-display text-2xl font-bold mb-2">{t('footer.newsletter')}</h3>
+              <p className="text-background/70">{t('footer.newsletterDesc')}</p>
             </div>
             <div className="flex w-full md:w-auto gap-3">
               <input
                 type="email"
                 placeholder="Enter your email"
-                className="flex-1 md:w-80 px-4 py-3 bg-background rounded-xl border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-accent"
+                className="flex-1 md:w-80 rounded-xl border border-background/20 bg-background/10 px-4 py-3 text-background placeholder:text-background/50 focus:outline-none focus:ring-2 focus:ring-accent"
               />
-              <Button className="px-6 py-3 bg-accent text-accent-foreground hover:bg-accent/90 rounded-xl">
-                <Send className="w-4 h-4 mr-2" />
+              <Button className="rounded-xl bg-accent px-6 py-3 text-accent-foreground hover:bg-accent/90">
+                <Send className="mr-2 h-4 w-4" />
                 {t('footer.subscribe')}
               </Button>
             </div>
@@ -190,24 +186,24 @@ export default function Footer() {
       </div>
 
       {/* CTA: List your Homestay + Be our partner */}
-      <div className="border-b border-border bg-muted/30">
-        <div className={`${sectionContainerClass} py-8`}>
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+      <div className="border-b border-background/10">
+        <div className="section-container py-8">
+          <div className="flex flex-col items-center justify-center gap-4 sm:flex-row">
             <Button
               size="lg"
               onClick={handleListYourHomestay}
-              className="bg-accent text-accent-foreground hover:bg-accent/90 rounded-xl px-8 py-3 text-base font-semibold shadow-lg"
+              className="rounded-xl bg-accent px-8 py-3 text-base font-semibold text-accent-foreground shadow-lg hover:bg-accent/90"
             >
-              <Home className="w-5 h-5 mr-2" />
+              <Home className="mr-2 h-5 w-5" />
               {user?.role === 'host' ? t('footer.addListing') : t('footer.listHomestay')}
             </Button>
             <Button
               size="lg"
               variant="outline"
               onClick={() => setPartnerOpen(true)}
-              className="rounded-xl px-8 py-3 text-base font-semibold border-2 border-primary text-primary hover:bg-primary/10"
+              className="rounded-xl border-2 border-background/30 bg-transparent px-8 py-3 text-base font-semibold text-background hover:bg-background/10"
             >
-              <Handshake className="w-5 h-5 mr-2" />
+              <Handshake className="mr-2 h-5 w-5" />
               {t('footer.bePartner')}
             </Button>
           </div>
@@ -215,33 +211,28 @@ export default function Footer() {
       </div>
 
       {/* Main Footer */}
-      <div className={`${sectionContainerClass} py-16`}>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-12">
-          {/* Brand Column */}
+      <div className="section-container py-16">
+        <div className="grid grid-cols-1 gap-12 md:grid-cols-2 lg:grid-cols-6">
           <div className="lg:col-span-2">
-            <div className="flex items-center gap-3 mb-6">
-              <img src={assets.logo} alt="" className="h-12 w-auto" />
-              <span className="font-display text-2xl font-semibold">
-                Nepali Homestays
-              </span>
+            <div className="mb-6 flex items-center gap-3">
+              <img src={assets.logo} alt="" className="h-12 w-auto rounded-md bg-white/10 p-1" />
+              <span className="font-display text-2xl font-semibold">Nepali Homestays</span>
             </div>
-            <p className="text-muted-foreground mb-6">
-              Experience the warmth of Nepali hospitality. We connect travelers with authentic
-              homestay experiences across Nepal&apos;s beautiful landscapes.
+            <p className="mb-6 leading-relaxed text-background/80">
+              Experience the warmth of Nepali hospitality. We connect travelers with authentic homestay
+              experiences across Nepal&apos;s beautiful landscapes.
             </p>
-
-            {/* Contact Info (from CMS: address, contact_phone, contact_email) */}
-            <div className="space-y-3 text-muted-foreground">
+            <div className="space-y-3 text-background/70">
               <div className="flex items-center gap-3">
-                <MapPin className="w-5 h-5 text-accent shrink-0" />
+                <MapPin className="h-5 w-5 shrink-0 text-accent" />
                 <span>{contactInfo.address}</span>
               </div>
               <div className="flex items-center gap-3">
-                <Phone className="w-5 h-5 text-accent shrink-0" />
+                <Phone className="h-5 w-5 shrink-0 text-accent" />
                 <span>{contactInfo.phone}</span>
               </div>
               <div className="flex items-center gap-3">
-                <Mail className="w-5 h-5 text-accent shrink-0" />
+                <Mail className="h-5 w-5 shrink-0 text-accent" />
                 <a href={`mailto:${contactInfo.email}`} className="text-accent hover:underline">
                   {contactInfo.email}
                 </a>
@@ -249,16 +240,12 @@ export default function Footer() {
             </div>
           </div>
 
-          {/* Links Columns */}
           <div>
-            <h4 className="font-display font-semibold text-lg mb-4">{t('footer.company')}</h4>
+            <h4 className="mb-4 font-display text-lg font-semibold">{t('footer.company')}</h4>
             <ul className="space-y-3">
               {footerLinks.company.map((link) => (
                 <li key={link.key}>
-                  <Link
-                    to={link.href}
-                    className="text-muted-foreground hover:text-accent transition-colors"
-                  >
+                  <Link to={link.href} className="text-background/80 transition-colors hover:text-accent">
                     {t(link.key)}
                   </Link>
                 </li>
@@ -267,14 +254,11 @@ export default function Footer() {
           </div>
 
           <div>
-            <h4 className="font-display font-semibold text-lg mb-4">{t('footer.explore')}</h4>
+            <h4 className="mb-4 font-display text-lg font-semibold">{t('footer.explore')}</h4>
             <ul className="space-y-3">
               {footerLinks.explore.map((link) => (
                 <li key={link.key}>
-                  <Link
-                    to={link.href}
-                    className="text-muted-foreground hover:text-accent transition-colors"
-                  >
+                  <Link to={link.href} className="text-background/70 transition-colors hover:text-accent">
                     {t(link.key)}
                   </Link>
                 </li>
@@ -283,14 +267,11 @@ export default function Footer() {
           </div>
 
           <div>
-            <h4 className="font-display font-semibold text-lg mb-4">{t('footer.support')}</h4>
+            <h4 className="mb-4 font-display text-lg font-semibold">{t('footer.support')}</h4>
             <ul className="space-y-3">
               {footerLinks.support.map((link) => (
                 <li key={link.key}>
-                  <Link
-                    to={link.href}
-                    className="text-muted-foreground hover:text-accent transition-colors"
-                  >
+                  <Link to={link.href} className="text-background/70 transition-colors hover:text-accent">
                     {t(link.key)}
                   </Link>
                 </li>
@@ -299,14 +280,11 @@ export default function Footer() {
           </div>
 
           <div>
-            <h4 className="font-display font-semibold text-lg mb-4">{t('footer.legal')}</h4>
+            <h4 className="mb-4 font-display text-lg font-semibold">{t('footer.legal')}</h4>
             <ul className="space-y-3">
               {footerLinks.legal.map((link) => (
                 <li key={link.key}>
-                  <Link
-                    to={link.href}
-                    className="text-muted-foreground hover:text-accent transition-colors"
-                  >
+                  <Link to={link.href} className="text-background/70 transition-colors hover:text-accent">
                     {t(link.key)}
                   </Link>
                 </li>
@@ -316,36 +294,34 @@ export default function Footer() {
         </div>
       </div>
 
-      {/* Bottom Bar */}
-      <div className="border-t border-border">
-        <div className={`${sectionContainerClass} py-6`}>
-          <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-            <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
-              <p className="text-muted-foreground text-sm">
-                © 2026 Nepali Homestays. All rights reserved.
-              </p>
+      <div className="border-t border-background/10">
+        <div className="section-container py-6">
+          <div className="flex flex-col items-center justify-between gap-4 md:flex-row">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
+              <p className="text-sm text-background/70">© 2026 Nepali Homestays. All rights reserved.</p>
               <p
-                className="flex items-center gap-1.5 text-sm text-foreground"
+                className="flex items-center gap-1.5 text-sm text-background/60"
                 title="Total home page visits"
                 data-visitor-count
               >
-                <Eye className="w-4 h-4 text-muted-foreground shrink-0" aria-hidden />
+                <Eye className="h-4 w-4" aria-hidden />
                 <span className="font-semibold tabular-nums">{visitorCount.toLocaleString()}</span>
-                <span className="text-muted-foreground">visitors</span>
+                <span>visitors</span>
               </p>
+              <span className="text-sm text-background/70">
+                Made with <span className="text-destructive">&#9829;</span> in Nepal &#127475;&#127476;
+              </span>
             </div>
-
-            {/* Social Links */}
             <div className="flex items-center gap-4">
               {socialLinks.map((social) => (
                 <motion.a
                   key={social.label}
                   href={social.href}
                   whileHover={{ scale: 1.1, y: -2 }}
-                  className="w-10 h-10 rounded-full bg-muted flex items-center justify-center hover:bg-accent hover:text-accent-foreground transition-colors"
+                  className="tap-target flex h-10 w-10 items-center justify-center rounded-full bg-background/10 transition-colors hover:bg-accent hover:text-accent-foreground"
                   aria-label={social.label}
                 >
-                  <social.icon className="w-5 h-5" />
+                  <social.icon className="h-5 w-5" />
                 </motion.a>
               ))}
             </div>

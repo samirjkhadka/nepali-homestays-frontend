@@ -1,16 +1,17 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import * as Dialog from '@radix-ui/react-dialog';
 import { jsPDF } from 'jspdf';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { PasswordInput } from '@/components/ui/password-input';
-import { Users, FileCheck, Calendar, CreditCard, BarChart3, FileText, Youtube, X, Download, Home, MessageSquare, Bell, Activity, AlertCircle, Mail, MousePointer, Building2, Plus, RefreshCw, Newspaper } from 'lucide-react';
+import { Users, FileCheck, Calendar, CreditCard, BarChart3, FileText, Youtube, X, Download, Home, MessageSquare, Bell, Activity, AlertCircle, Mail, MousePointer, Building2, Plus, RefreshCw, Newspaper, ChevronUp, ChevronDown } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line, CartesianGrid, Legend } from 'recharts';
 import { api } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
 import { HOMESTAY_CATEGORIES } from '@/data/districts';
 import { AdminTable } from '@/components/admin/AdminTable';
+import { DateRangePicker } from '@/components/DateRangePicker';
 
 type Listing = { id: number; title: string; host_id: number; status: string; created_at: string; badge?: string | null };
 type ApprovedListing = { id: number; title: string; location: string; badge: string | null };
@@ -57,6 +58,244 @@ type HomePlacementSettings = {
   hero_carousel_price: number;
   featured_placement_price: number;
 };
+
+/** Must match public API: GET /api/listings/hero (max 5) and /featured (max 6) + admin zod. */
+const MAX_HOME_HERO_CAROUSEL = 5;
+const MAX_HOME_FEATURED = 6;
+
+const EMPTY_HOME_PLACEMENTS: HomePlacementSettings = {
+  hero_carousel_listing_ids: [],
+  featured_listing_ids: [],
+  hero_carousel_price: 0,
+  featured_placement_price: 0,
+};
+
+type HomePartnerIcon = 'CreditCard' | 'Plane' | 'PartyPopper' | 'Building2';
+type HomePartnerItemForm = { name: string; tag: string; website?: string };
+type HomePartnerCategoryForm = {
+  title: string;
+  description?: string;
+  icon: HomePartnerIcon;
+  partners: HomePartnerItemForm[];
+};
+type HomePartnersForm = {
+  section_badge?: string;
+  section_title?: string;
+  section_subtitle?: string;
+  categories: HomePartnerCategoryForm[];
+};
+type FestivalsPageConfig = {
+  badge?: string;
+  title: string;
+  subtitle?: string;
+  festivals: Array<{
+    id: string;
+    name: string;
+    monthIndex: number;
+    region?: string;
+    duration?: string;
+    description: string;
+    emoji?: string;
+  }>;
+};
+type FestivalItemForm = {
+  id: string;
+  name: string;
+  monthIndex: string;
+  region: string;
+  duration: string;
+  description: string;
+  emoji: string;
+};
+type FestivalsPageForm = {
+  badge: string;
+  title: string;
+  subtitle: string;
+  festivals: FestivalItemForm[];
+};
+type TripPlannerPageConfig = {
+  badge?: string;
+  title: string;
+  subtitle?: string;
+  route_map_title?: string;
+  route_map_description?: string;
+  suggested_routes_title?: string;
+  suggested_routes: Array<{
+    id: string;
+    name: string;
+    days: number;
+    description: string;
+    stops: string[];
+    emoji?: string;
+  }>;
+};
+type SuggestedRouteForm = {
+  id: string;
+  name: string;
+  days: string;
+  description: string;
+  stopsText: string;
+  emoji: string;
+};
+type TripPlannerPageForm = {
+  badge: string;
+  title: string;
+  subtitle: string;
+  route_map_title: string;
+  route_map_description: string;
+  suggested_routes_title: string;
+  suggested_routes: SuggestedRouteForm[];
+};
+
+const HOME_PARTNER_ICONS: HomePartnerIcon[] = ['CreditCard', 'Plane', 'PartyPopper', 'Building2'];
+const EMPTY_PARTNER = (): HomePartnerItemForm => ({ name: '', tag: '', website: '' });
+const EMPTY_CATEGORY = (): HomePartnerCategoryForm => ({
+  title: '',
+  description: '',
+  icon: 'Building2',
+  partners: [EMPTY_PARTNER()],
+});
+const EMPTY_HOME_PARTNERS = (): HomePartnersForm => ({
+  section_badge: 'Our Partners',
+  section_title: 'Powered by Trusted Partners',
+  section_subtitle: '',
+  categories: [EMPTY_CATEGORY()],
+});
+const EMPTY_FESTIVALS_PAGE = (): FestivalsPageConfig => ({
+  badge: 'Cultural Calendar',
+  title: 'Festivals of Nepal',
+  subtitle: "Time your visit with one of Nepal's vibrant festivals to experience the country at its most alive.",
+  festivals: [],
+});
+const EMPTY_FESTIVAL_ITEM = (): FestivalItemForm => ({
+  id: '',
+  name: '',
+  monthIndex: '',
+  region: '',
+  duration: '',
+  description: '',
+  emoji: '',
+});
+const EMPTY_FESTIVALS_FORM = (): FestivalsPageForm => ({
+  badge: 'Cultural Calendar',
+  title: 'Festivals of Nepal',
+  subtitle: "Time your visit with one of Nepal's vibrant festivals to experience the country at its most alive.",
+  festivals: [EMPTY_FESTIVAL_ITEM()],
+});
+const EMPTY_TRIP_PLANNER_PAGE = (): TripPlannerPageConfig => ({
+  badge: 'Trip Planner',
+  title: 'Build your homestay journey',
+  subtitle: 'Chain multiple homestays into a multi-stop trip. Inspired by community routes across Nepal.',
+  route_map_title: 'Route map preview',
+  route_map_description: 'Connect a map provider to render the route between your stops.',
+  suggested_routes_title: 'Suggested routes',
+  suggested_routes: [],
+});
+const EMPTY_ROUTE_FORM = (): SuggestedRouteForm => ({
+  id: '',
+  name: '',
+  days: '',
+  description: '',
+  stopsText: '',
+  emoji: '',
+});
+const EMPTY_TRIP_PLANNER_FORM = (): TripPlannerPageForm => ({
+  badge: 'Trip Planner',
+  title: 'Build your homestay journey',
+  subtitle: 'Chain multiple homestays into a multi-stop trip. Inspired by community routes across Nepal.',
+  route_map_title: 'Route map preview',
+  route_map_description: 'Connect a map provider to render the route between your stops.',
+  suggested_routes_title: 'Suggested routes',
+  suggested_routes: [EMPTY_ROUTE_FORM()],
+});
+
+function normalizeHomePartners(raw: unknown): HomePartnersForm {
+  if (!raw || typeof raw !== 'object') return EMPTY_HOME_PARTNERS();
+  const obj = raw as Record<string, unknown>;
+  const categoriesRaw = Array.isArray(obj.categories) ? obj.categories : [];
+  const categories: HomePartnerCategoryForm[] = categoriesRaw.flatMap((c) => {
+    if (!c || typeof c !== 'object') return [];
+    const co = c as Record<string, unknown>;
+    const partnersRaw = Array.isArray(co.partners) ? co.partners : [];
+    const partners: HomePartnerItemForm[] = partnersRaw.flatMap((p) => {
+      if (!p || typeof p !== 'object') return [];
+      const po = p as Record<string, unknown>;
+      return [{
+        name: typeof po.name === 'string' ? po.name : '',
+        tag: typeof po.tag === 'string' ? po.tag : '',
+        website: typeof po.website === 'string' ? po.website : '',
+      }];
+    });
+    const icon = typeof co.icon === 'string' && HOME_PARTNER_ICONS.includes(co.icon as HomePartnerIcon)
+      ? (co.icon as HomePartnerIcon)
+      : 'Building2';
+    return [{
+      title: typeof co.title === 'string' ? co.title : '',
+      description: typeof co.description === 'string' ? co.description : '',
+      icon,
+      partners: partners.length > 0 ? partners : [EMPTY_PARTNER()],
+    }];
+  });
+  return {
+    section_badge: typeof obj.section_badge === 'string' ? obj.section_badge : 'Our Partners',
+    section_title: typeof obj.section_title === 'string' ? obj.section_title : 'Powered by Trusted Partners',
+    section_subtitle: typeof obj.section_subtitle === 'string' ? obj.section_subtitle : '',
+    categories: categories.length > 0 ? categories : [EMPTY_CATEGORY()],
+  };
+}
+
+function normalizeFestivalsPage(raw: unknown): FestivalsPageForm {
+  if (!raw || typeof raw !== 'object') return EMPTY_FESTIVALS_FORM();
+  const obj = raw as Record<string, unknown>;
+  const items = Array.isArray(obj.festivals) ? obj.festivals : [];
+  const festivals = items.flatMap((it) => {
+    if (!it || typeof it !== 'object') return [];
+    const f = it as Record<string, unknown>;
+    return [{
+      id: typeof f.id === 'string' ? f.id : '',
+      name: typeof f.name === 'string' ? f.name : '',
+      monthIndex: typeof f.monthIndex === 'number' ? String(f.monthIndex) : '',
+      region: typeof f.region === 'string' ? f.region : '',
+      duration: typeof f.duration === 'string' ? f.duration : '',
+      description: typeof f.description === 'string' ? f.description : '',
+      emoji: typeof f.emoji === 'string' ? f.emoji : '',
+    }];
+  });
+  return {
+    badge: typeof obj.badge === 'string' ? obj.badge : 'Cultural Calendar',
+    title: typeof obj.title === 'string' ? obj.title : 'Festivals of Nepal',
+    subtitle: typeof obj.subtitle === 'string' ? obj.subtitle : '',
+    festivals: festivals.length ? festivals : [EMPTY_FESTIVAL_ITEM()],
+  };
+}
+
+function normalizeTripPlannerPage(raw: unknown): TripPlannerPageForm {
+  if (!raw || typeof raw !== 'object') return EMPTY_TRIP_PLANNER_FORM();
+  const obj = raw as Record<string, unknown>;
+  const routesRaw = Array.isArray(obj.suggested_routes) ? obj.suggested_routes : [];
+  const routes = routesRaw.flatMap((it) => {
+    if (!it || typeof it !== 'object') return [];
+    const r = it as Record<string, unknown>;
+    const stops = Array.isArray(r.stops) ? r.stops.filter((s) => typeof s === 'string') as string[] : [];
+    return [{
+      id: typeof r.id === 'string' ? r.id : '',
+      name: typeof r.name === 'string' ? r.name : '',
+      days: typeof r.days === 'number' ? String(r.days) : '',
+      description: typeof r.description === 'string' ? r.description : '',
+      stopsText: stops.join(', '),
+      emoji: typeof r.emoji === 'string' ? r.emoji : '',
+    }];
+  });
+  return {
+    badge: typeof obj.badge === 'string' ? obj.badge : 'Trip Planner',
+    title: typeof obj.title === 'string' ? obj.title : 'Build your homestay journey',
+    subtitle: typeof obj.subtitle === 'string' ? obj.subtitle : '',
+    route_map_title: typeof obj.route_map_title === 'string' ? obj.route_map_title : '',
+    route_map_description: typeof obj.route_map_description === 'string' ? obj.route_map_description : '',
+    suggested_routes_title: typeof obj.suggested_routes_title === 'string' ? obj.suggested_routes_title : 'Suggested routes',
+    suggested_routes: routes.length ? routes : [EMPTY_ROUTE_FORM()],
+  };
+}
 
 const ADMIN_TABS = ['overview', 'listings', 'users', 'bookings', 'corporates', 'payments', 'reports', 'content', 'settings', 'logs'] as const;
 type AdminTab = (typeof ADMIN_TABS)[number];
@@ -142,9 +381,17 @@ export default function AdminDashboard() {
   const [sparrowSmsSaving, setSparrowSmsSaving] = useState(false);
   const [notificationSettings, setNotificationSettings] = useState<NotificationSettings | null>(null);
   const [notificationSettingsSaving, setNotificationSettingsSaving] = useState(false);
-  const [homePlacements, setHomePlacements] = useState<HomePlacementSettings | null>(null);
+  const [homePlacements, setHomePlacements] = useState<HomePlacementSettings>(EMPTY_HOME_PLACEMENTS);
   const [homePlacementsSaving, setHomePlacementsSaving] = useState(false);
+  const [homePartnersForm, setHomePartnersForm] = useState<HomePartnersForm>(EMPTY_HOME_PARTNERS());
+  const [homePartnersSaving, setHomePartnersSaving] = useState(false);
+  const [festivalsPageForm, setFestivalsPageForm] = useState<FestivalsPageForm>(EMPTY_FESTIVALS_FORM());
+  const [festivalsPageSaving, setFestivalsPageSaving] = useState(false);
+  const [tripPlannerPageForm, setTripPlannerPageForm] = useState<TripPlannerPageForm>(EMPTY_TRIP_PLANNER_FORM());
+  const [tripPlannerPageSaving, setTripPlannerPageSaving] = useState(false);
   const [settingsApprovedListings, setSettingsApprovedListings] = useState<ApprovedListing[]>([]);
+  /** Loaded on Settings tab for titles + fallback if /listings/approved fails (same payload as Listings “live” table). */
+  const [homePlacementLabelListings, setHomePlacementLabelListings] = useState<LiveListing[]>([]);
   const [logsSubTab, setLogsSubTab] = useState<LogsSubTab>('email_sms');
   const [logDateFrom, setLogDateFrom] = useState(() => {
     const d = new Date(); d.setDate(d.getDate() - 7); return d.toISOString().slice(0, 10);
@@ -193,6 +440,33 @@ export default function AdminDashboard() {
   const [addAmenityForm, setAddAmenityForm] = useState({ name: '', price_npr: '', charge_type: 'one_time' as 'per_night' | 'one_time' });
   const [addAmenitySaving, setAddAmenitySaving] = useState(false);
   const [corporatesApprovedListings, setCorporatesApprovedListings] = useState<ApprovedListing[]>([]);
+  const [createBookingCalendarOpen, setCreateBookingCalendarOpen] = useState(false);
+  const createBookingCalendarRef = useRef<HTMLDivElement>(null);
+  const [logCalendarOpen, setLogCalendarOpen] = useState(false);
+  const logCalendarRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!createBookingCalendarOpen) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (createBookingCalendarRef.current && !createBookingCalendarRef.current.contains(e.target as Node)) {
+        setCreateBookingCalendarOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [createBookingCalendarOpen]);
+
+  useEffect(() => {
+    if (!logCalendarOpen) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (logCalendarRef.current && !logCalendarRef.current.contains(e.target as Node)) {
+        setLogCalendarOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [logCalendarOpen]);
+
   // CMS (content tab)
   const [cmsSections, setCmsSections] = useState<CmsSection[]>([]);
   const [cmsSectionsLoading, setCmsSectionsLoading] = useState(false);
@@ -315,8 +589,8 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     if (tab !== 'settings') return;
-    Promise.all([
-      api.get<{
+    api
+      .get<{
         booking_fee?: { type: 'service_charge' | 'discount'; kind: 'percent' | 'fixed'; value: number; applies_to?: 'guest' | 'host' } | null;
         booking_fee_by_category?: Record<string, { type: 'service_charge' | 'discount'; kind: 'percent' | 'fixed'; value: number; applies_to?: 'guest' | 'host' }>;
         booking_fee_by_listing?: Record<string, { type: 'service_charge' | 'discount'; kind: 'percent' | 'fixed'; value: number; applies_to?: 'guest' | 'host' }>;
@@ -325,40 +599,95 @@ export default function AdminDashboard() {
         sparrow_sms?: SparrowSmsSettings;
         notification_settings?: NotificationSettings;
         home_placements?: HomePlacementSettings;
-      }>('/api/admin/settings'),
-      api.get<{ listings: ApprovedListing[] }>('/api/admin/listings/approved'),
-    ]).then(([settingsRes, listingsRes]) => {
-      const res = settingsRes.data;
-      const bf = res.booking_fee ?? null;
-      setBookingFee(bf);
-      setBookingFeeForm(bf ? { type: bf.type, kind: bf.kind, value: String(bf.value), applies_to: bf.applies_to ?? 'guest' } : { type: 'service_charge', kind: 'percent', value: '', applies_to: 'guest' });
-      const minPct = res.partial_payment_min_percent;
-      setPartialPaymentMinPercent(typeof minPct === 'number' && minPct >= 1 && minPct <= 100 ? minPct : 25);
-      setBookingFeeByCategory(res.booking_fee_by_category ?? {});
-      setBookingFeeByListing(res.booking_fee_by_listing ?? {});
-      const ld = res.listing_display ?? null;
-      setListingDisplay(ld);
-      const form = ld ? JSON.parse(JSON.stringify(ld)) : null;
-      setListingDisplayForm(form);
-      setSectionLabelsJson(form?.section_labels ? JSON.stringify(form.section_labels, null, 2) : '{}');
-      setSparrowSms(res.sparrow_sms ?? { token: '', from: '' });
-      setNotificationSettings(res.notification_settings ?? null);
-      setHomePlacements(res.home_placements ?? { hero_carousel_listing_ids: [], featured_listing_ids: [], hero_carousel_price: 0, featured_placement_price: 0 });
-      setSettingsApprovedListings(listingsRes.data?.listings ?? []);
-    }).catch(() => {
-      setBookingFee(null);
-      setBookingFeeForm({ type: 'service_charge', kind: 'percent', value: '', applies_to: 'guest' });
-      setBookingFeeByCategory({});
-      setBookingFeeByListing({});
-      setListingDisplay(null);
-      setListingDisplayForm(null);
-      setSectionLabelsJson('{}');
-      setSparrowSms({ token: '', from: '' });
-      setNotificationSettings(null);
-      setHomePlacements(null);
-      setSettingsApprovedListings([]);
-    });
+        home_partners?: Record<string, unknown>;
+        festivals_page?: FestivalsPageConfig;
+        trip_planner_page?: TripPlannerPageConfig;
+      }>('/api/admin/settings')
+      .then((settingsRes) => {
+        const res = settingsRes.data;
+        const bf = res.booking_fee ?? null;
+        setBookingFee(bf);
+        setBookingFeeForm(bf ? { type: bf.type, kind: bf.kind, value: String(bf.value), applies_to: bf.applies_to ?? 'guest' } : { type: 'service_charge', kind: 'percent', value: '', applies_to: 'guest' });
+        const minPct = res.partial_payment_min_percent;
+        setPartialPaymentMinPercent(typeof minPct === 'number' && minPct >= 1 && minPct <= 100 ? minPct : 25);
+        setBookingFeeByCategory(res.booking_fee_by_category ?? {});
+        setBookingFeeByListing(res.booking_fee_by_listing ?? {});
+        const ld = res.listing_display ?? null;
+        setListingDisplay(ld);
+        const form = ld ? JSON.parse(JSON.stringify(ld)) : null;
+        setListingDisplayForm(form);
+        setSectionLabelsJson(form?.section_labels ? JSON.stringify(form.section_labels, null, 2) : '{}');
+        setSparrowSms(res.sparrow_sms ?? { token: '', from: '' });
+        setNotificationSettings(res.notification_settings ?? null);
+        {
+          const hp = res.home_placements;
+          if (hp) {
+            const toIds = (arr: unknown) =>
+              (Array.isArray(arr) ? arr : [])
+                .map((x) => (typeof x === 'number' ? x : parseInt(String(x), 10)))
+                .filter((n) => Number.isFinite(n) && n >= 1);
+            setHomePlacements({
+              ...EMPTY_HOME_PLACEMENTS,
+              ...hp,
+              hero_carousel_listing_ids: toIds(hp.hero_carousel_listing_ids),
+              featured_listing_ids: toIds(hp.featured_listing_ids),
+              hero_carousel_price: Number(hp.hero_carousel_price) || 0,
+              featured_placement_price: Number(hp.featured_placement_price) || 0,
+            });
+          } else {
+            setHomePlacements(EMPTY_HOME_PLACEMENTS);
+          }
+        }
+        setHomePartnersForm(normalizeHomePartners(res.home_partners));
+        setFestivalsPageForm(normalizeFestivalsPage(res.festivals_page ?? EMPTY_FESTIVALS_PAGE()));
+        setTripPlannerPageForm(normalizeTripPlannerPage(res.trip_planner_page ?? EMPTY_TRIP_PLANNER_PAGE()));
+      })
+      .catch(() => {
+        setBookingFee(null);
+        setBookingFeeForm({ type: 'service_charge', kind: 'percent', value: '', applies_to: 'guest' });
+        setBookingFeeByCategory({});
+        setBookingFeeByListing({});
+        setListingDisplay(null);
+        setListingDisplayForm(null);
+        setSectionLabelsJson('{}');
+        setSparrowSms({ token: '', from: '' });
+        setNotificationSettings(null);
+        setHomePlacements(EMPTY_HOME_PLACEMENTS);
+        setHomePartnersForm(EMPTY_HOME_PARTNERS());
+        setFestivalsPageForm(EMPTY_FESTIVALS_FORM());
+        setTripPlannerPageForm(EMPTY_TRIP_PLANNER_FORM());
+      });
   }, [tab]);
+
+  useEffect(() => {
+    if (tab !== 'settings') return;
+    api
+      .get<{ listings: ApprovedListing[] }>('/api/admin/listings/approved')
+      .then((r) => setSettingsApprovedListings(r.data?.listings ?? []))
+      .catch(() => setSettingsApprovedListings([]));
+  }, [tab]);
+
+  useEffect(() => {
+    if (tab !== 'settings') return;
+    api
+      .get<{ listings: LiveListing[] }>('/api/admin/listings/live')
+      .then((r) => setHomePlacementLabelListings(r.data?.listings ?? []))
+      .catch(() => setHomePlacementLabelListings([]));
+  }, [tab]);
+
+  const homePlacementPickerList = useMemo((): ApprovedListing[] => {
+    if (settingsApprovedListings.length > 0) return settingsApprovedListings;
+    return homePlacementLabelListings
+      .filter((l) => l.status === 'approved')
+      .map((l) => ({ id: l.id, title: l.title, location: l.location, badge: l.badge ?? null }));
+  }, [settingsApprovedListings, homePlacementLabelListings]);
+
+  const homePlacementIdLabel = useMemo(() => {
+    const m = new Map<number, string>();
+    for (const l of homePlacementLabelListings) m.set(Number(l.id), l.title);
+    for (const l of settingsApprovedListings) m.set(Number(l.id), l.title);
+    return (id: number) => m.get(Number(id)) ?? `Listing #${id}`;
+  }, [homePlacementLabelListings, settingsApprovedListings]);
 
   // Logs: only fetch when filters are applied (From + To required) to reduce DB load
   useEffect(() => {
@@ -1096,15 +1425,43 @@ export default function AdminDashboard() {
                       ))}
                     </select>
                   </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-sm font-medium text-primary-700">Check-in *</label>
-                      <input type="date" value={createBookingForm.check_in} onChange={(e) => setCreateBookingForm((f) => ({ ...f, check_in: e.target.value }))} className="mt-1 w-full rounded-md border border-primary-200 bg-background px-3 py-2 text-sm" required />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-primary-700">Check-out *</label>
-                      <input type="date" value={createBookingForm.check_out} onChange={(e) => setCreateBookingForm((f) => ({ ...f, check_out: e.target.value }))} className="mt-1 w-full rounded-md border border-primary-200 bg-background px-3 py-2 text-sm" required />
-                    </div>
+                  <div className="relative" ref={createBookingCalendarRef}>
+                    <button
+                      type="button"
+                      onClick={() => setCreateBookingCalendarOpen((v) => !v)}
+                      className="grid grid-cols-2 gap-3 w-full rounded-md border border-primary-200 bg-background px-3 py-2 text-left hover:bg-primary-50/50 transition-colors"
+                      aria-expanded={createBookingCalendarOpen}
+                    >
+                      <div>
+                        <label className="block text-xs font-medium text-muted-foreground">Check-in *</label>
+                        <span className="text-sm text-primary-800">
+                          {createBookingForm.check_in
+                            ? new Date(createBookingForm.check_in + 'T12:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+                            : 'Add date'}
+                        </span>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-muted-foreground">Check-out *</label>
+                        <span className="text-sm text-primary-800">
+                          {createBookingForm.check_out
+                            ? new Date(createBookingForm.check_out + 'T12:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+                            : 'Add date'}
+                        </span>
+                      </div>
+                    </button>
+                    {createBookingCalendarOpen && (
+                      <div className="absolute right-0 z-[100] mt-1 bg-card border border-primary-200 rounded-xl shadow-xl p-3 calendar-popup">
+                        <DateRangePicker
+                          checkIn={createBookingForm.check_in}
+                          checkOut={createBookingForm.check_out}
+                          onCheckInChange={(v) => setCreateBookingForm((f) => ({ ...f, check_in: v }))}
+                          onCheckOutChange={(v) => {
+                            setCreateBookingForm((f) => ({ ...f, check_out: v }));
+                            if (v) setCreateBookingCalendarOpen(false);
+                          }}
+                        />
+                      </div>
+                    )}
                   </div>
                   {createBookingForm.listing_id && (
                     <div>
@@ -1866,129 +2223,849 @@ export default function AdminDashboard() {
             </CardContent>
           </Card>
 
-          {/* Home placements (hero carousel + featured section) */}
-          {homePlacements && (
+          {/* Home placements (hero carousel + featured section) — Admin → Settings → scroll to "Home placements" */}
+          <Card className="border-primary-200">
+            <CardHeader className="border-b border-primary-100 bg-primary-50/50">
+              <div className="flex items-center gap-2">
+                <Home className="h-5 w-5 text-accent-500" />
+                <h2 className="font-semibold text-primary-800">Home placements (Hero &amp; Featured)</h2>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                Choose which homestays appear on the public homepage: hero carousel (max {MAX_HOME_HERO_CAROUSEL} slides) and the featured block (max {MAX_HOME_FEATURED} cards). Order below controls hero slide order. Set placement prices (optional); paid placement for hosts can be added later.
+              </p>
+            </CardHeader>
+            <CardContent className="p-6 space-y-6">
+              <div className="flex flex-wrap gap-3 text-sm text-muted-foreground">
+                <span>
+                  Hero: {homePlacements.hero_carousel_listing_ids.length}/{MAX_HOME_HERO_CAROUSEL} selected
+                </span>
+                <span>·</span>
+                <span>
+                  Featured: {homePlacements.featured_listing_ids.length}/{MAX_HOME_FEATURED} selected
+                </span>
+              </div>
+              <div className="grid gap-6 sm:grid-cols-2">
+                <div>
+                  <h3 className="font-medium text-primary-800 mb-2">Hero carousel</h3>
+                  <div className="space-y-2">
+                    <label className="block text-sm text-muted-foreground">Price (NPR) for this placement</label>
+                    <input
+                      type="number"
+                      min={0}
+                      step={1}
+                      value={homePlacements.hero_carousel_price || ''}
+                      onChange={(e) => setHomePlacements((p) => ({ ...p, hero_carousel_price: Number(e.target.value) || 0 }))}
+                      placeholder="0"
+                      className="flex h-9 w-full rounded-md border border-primary-200 bg-background px-3 py-1 text-sm"
+                    />
+                    <label className="block text-sm text-muted-foreground mt-3">
+                      Add listings (max {MAX_HOME_HERO_CAROUSEL}; then set slide order in the list below)
+                    </label>
+                    <div className="max-h-48 overflow-y-auto rounded border border-primary-200 bg-muted/30 p-2 space-y-1">
+                      {homePlacementPickerList.length === 0 ? (
+                        <p className="text-sm text-muted-foreground">No approved listings. Approve some under the Listings tab first.</p>
+                      ) : (
+                        homePlacementPickerList.map((listing) => {
+                          const lid = Number(listing.id);
+                          const selected = homePlacements.hero_carousel_listing_ids.some((x) => Number(x) === lid);
+                          const atMax = homePlacements.hero_carousel_listing_ids.length >= MAX_HOME_HERO_CAROUSEL && !selected;
+                          return (
+                            <label key={listing.id} className={`flex items-center gap-2 text-sm ${atMax ? 'opacity-60' : ''}`}>
+                              <input
+                                type="checkbox"
+                                checked={selected}
+                                disabled={atMax}
+                                onChange={(e) => {
+                                  if (!e.target.checked) {
+                                    setHomePlacements((p) => ({ ...p, hero_carousel_listing_ids: p.hero_carousel_listing_ids.filter((id) => Number(id) !== lid) }));
+                                  } else if (homePlacements.hero_carousel_listing_ids.length < MAX_HOME_HERO_CAROUSEL) {
+                                    setHomePlacements((p) => ({
+                                      ...p,
+                                      hero_carousel_listing_ids: [...p.hero_carousel_listing_ids, lid].slice(0, MAX_HOME_HERO_CAROUSEL),
+                                    }));
+                                  }
+                                }}
+                                className="rounded border-primary-300"
+                              />
+                              <span className="truncate">{listing.title}</span>
+                              <span className="text-muted-foreground text-xs shrink-0">({listing.location})</span>
+                            </label>
+                          );
+                        })
+                      )}
+                    </div>
+                    {homePlacements.hero_carousel_listing_ids.length > 0 && (
+                      <div className="mt-3 space-y-2">
+                        <p className="text-xs font-medium text-primary-800">Hero slide order (first = first slide)</p>
+                        <ol className="list-none space-y-1 rounded border border-primary-200 bg-background p-2">
+                          {homePlacements.hero_carousel_listing_ids.map((id, idx) => {
+                            return (
+                              <li key={id} className="flex items-center justify-between gap-2 rounded border border-border/50 bg-muted/20 px-2 py-1.5 text-sm">
+                                <span>
+                                  {idx + 1}. {homePlacementIdLabel(Number(id))}
+                                </span>
+                                <div className="flex shrink-0 items-center gap-0.5">
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8"
+                                    disabled={idx === 0}
+                                    onClick={() => {
+                                      setHomePlacements((p) => {
+                                        const next = [...p.hero_carousel_listing_ids];
+                                        [next[idx - 1], next[idx]] = [next[idx], next[idx - 1]];
+                                        return { ...p, hero_carousel_listing_ids: next };
+                                      });
+                                    }}
+                                    aria-label="Move up"
+                                  >
+                                    <ChevronUp className="h-4 w-4" />
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8"
+                                    disabled={idx >= homePlacements.hero_carousel_listing_ids.length - 1}
+                                    onClick={() => {
+                                      setHomePlacements((p) => {
+                                        const next = [...p.hero_carousel_listing_ids];
+                                        [next[idx], next[idx + 1]] = [next[idx + 1], next[idx]];
+                                        return { ...p, hero_carousel_listing_ids: next };
+                                      });
+                                    }}
+                                    aria-label="Move down"
+                                  >
+                                    <ChevronDown className="h-4 w-4" />
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                                    onClick={() => {
+                                      setHomePlacements((p) => ({
+                                        ...p,
+                                        hero_carousel_listing_ids: p.hero_carousel_listing_ids.filter((_, i) => i !== idx),
+                                      }));
+                                    }}
+                                    aria-label="Remove from hero order"
+                                    title="Remove from hero"
+                                  >
+                                    <X className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                              </li>
+                            );
+                          })}
+                        </ol>
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <div>
+                  <h3 className="font-medium text-primary-800 mb-2">Featured section</h3>
+                  <div className="space-y-2">
+                    <label className="block text-sm text-muted-foreground">Price (NPR) for this placement</label>
+                    <input
+                      type="number"
+                      min={0}
+                      step={1}
+                      value={homePlacements.featured_placement_price || ''}
+                      onChange={(e) => setHomePlacements((p) => ({ ...p, featured_placement_price: Number(e.target.value) || 0 }))}
+                      placeholder="0"
+                      className="flex h-9 w-full rounded-md border border-primary-200 bg-background px-3 py-1 text-sm"
+                    />
+                    <label className="block text-sm text-muted-foreground mt-3">Listings (max {MAX_HOME_FEATURED}, grid order on site follows this list)</label>
+                    <div className="max-h-48 overflow-y-auto rounded border border-primary-200 bg-muted/30 p-2 space-y-1">
+                      {homePlacementPickerList.length === 0 ? (
+                        <p className="text-sm text-muted-foreground">No approved listings.</p>
+                      ) : (
+                        homePlacementPickerList.map((listing) => {
+                          const lid = Number(listing.id);
+                          const selected = homePlacements.featured_listing_ids.some((x) => Number(x) === lid);
+                          const atMax = homePlacements.featured_listing_ids.length >= MAX_HOME_FEATURED && !selected;
+                          return (
+                            <label key={listing.id} className={`flex items-center gap-2 text-sm ${atMax ? 'opacity-60' : ''}`}>
+                              <input
+                                type="checkbox"
+                                checked={selected}
+                                disabled={atMax}
+                                onChange={(e) => {
+                                  if (!e.target.checked) {
+                                    setHomePlacements((p) => ({ ...p, featured_listing_ids: p.featured_listing_ids.filter((id) => Number(id) !== lid) }));
+                                  } else if (homePlacements.featured_listing_ids.length < MAX_HOME_FEATURED) {
+                                    setHomePlacements((p) => ({
+                                      ...p,
+                                      featured_listing_ids: [...p.featured_listing_ids, lid].slice(0, MAX_HOME_FEATURED),
+                                    }));
+                                  }
+                                }}
+                                className="rounded border-primary-300"
+                              />
+                              <span className="truncate">{listing.title}</span>
+                              <span className="text-muted-foreground text-xs shrink-0">({listing.location})</span>
+                            </label>
+                          );
+                        })
+                      )}
+                    </div>
+                    {homePlacements.featured_listing_ids.length > 0 && (
+                      <div className="mt-3 space-y-2">
+                        <p className="text-xs font-medium text-primary-800">Card order (first = left / top on homepage)</p>
+                        <ol className="list-none space-y-1 rounded border border-primary-200 bg-background p-2">
+                          {homePlacements.featured_listing_ids.map((id, idx) => {
+                            return (
+                              <li key={id} className="flex items-center justify-between gap-2 rounded border border-border/50 bg-muted/20 px-2 py-1.5 text-sm">
+                                <span>
+                                  {idx + 1}. {homePlacementIdLabel(Number(id))}
+                                </span>
+                                <div className="flex shrink-0 items-center gap-0.5">
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8"
+                                    disabled={idx === 0}
+                                    onClick={() => {
+                                      setHomePlacements((p) => {
+                                        const next = [...p.featured_listing_ids];
+                                        [next[idx - 1], next[idx]] = [next[idx], next[idx - 1]];
+                                        return { ...p, featured_listing_ids: next };
+                                      });
+                                    }}
+                                    aria-label="Move up"
+                                  >
+                                    <ChevronUp className="h-4 w-4" />
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8"
+                                    disabled={idx >= homePlacements.featured_listing_ids.length - 1}
+                                    onClick={() => {
+                                      setHomePlacements((p) => {
+                                        const next = [...p.featured_listing_ids];
+                                        [next[idx], next[idx + 1]] = [next[idx + 1], next[idx]];
+                                        return { ...p, featured_listing_ids: next };
+                                      });
+                                    }}
+                                    aria-label="Move down"
+                                  >
+                                    <ChevronDown className="h-4 w-4" />
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                                    onClick={() => {
+                                      setHomePlacements((p) => ({
+                                        ...p,
+                                        featured_listing_ids: p.featured_listing_ids.filter((_, i) => i !== idx),
+                                      }));
+                                    }}
+                                    aria-label="Remove from featured order"
+                                    title="Remove from featured"
+                                  >
+                                    <X className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                              </li>
+                            );
+                          })}
+                        </ol>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+              <Button
+                type="button"
+                disabled={homePlacementsSaving}
+                onClick={() => {
+                  setHomePlacementsSaving(true);
+                  const payload: HomePlacementSettings = {
+                    ...homePlacements,
+                    hero_carousel_listing_ids: homePlacements.hero_carousel_listing_ids.slice(0, MAX_HOME_HERO_CAROUSEL),
+                    featured_listing_ids: homePlacements.featured_listing_ids.slice(0, MAX_HOME_FEATURED),
+                  };
+                  api.patch('/api/admin/settings', { home_placements: payload })
+                    .then((res) => {
+                      const next = res.data?.home_placements ?? payload;
+                      setHomePlacements({ ...EMPTY_HOME_PLACEMENTS, ...next });
+                      toast({ title: 'Home placements saved.' });
+                    })
+                    .catch(() => toast({ title: 'Failed to save home placements.', variant: 'destructive' }))
+                    .finally(() => setHomePlacementsSaving(false));
+                }}
+                className="bg-accent-500 hover:bg-accent-600"
+              >
+                {homePlacementsSaving ? 'Saving…' : 'Save home placements'}
+              </Button>
+            </CardContent>
+          </Card>
+
+          {/* Homepage partners */}
+          {tab === 'settings' && (
             <Card className="border-primary-200">
               <CardHeader className="border-b border-primary-100 bg-primary-50/50">
-                <div className="flex items-center gap-2">
-                  <Home className="h-5 w-5 text-accent-500" />
-                  <h2 className="font-semibold text-primary-800">Home placements (Hero &amp; Featured)</h2>
-                </div>
+                <h2 className="font-semibold text-primary-800">Homepage — Our Partners</h2>
                 <p className="text-sm text-muted-foreground">
-                  Choose which homestays appear on the homepage hero carousel (max 5) and in the featured section (max 6). Set prices for these placements; hosts will be able to purchase them in a later phase.
+                  Manage homepage partner groups with simple fields. Add categories and partner rows without editing JSON.
                 </p>
               </CardHeader>
               <CardContent className="p-6 space-y-6">
-                <div className="grid gap-6 sm:grid-cols-2">
+                <div className="grid gap-3 sm:grid-cols-3">
                   <div>
-                    <h3 className="font-medium text-primary-800 mb-2">Hero carousel</h3>
-                    <div className="space-y-2">
-                      <label className="block text-sm text-muted-foreground">Price (NPR) for this placement</label>
-                      <input
-                        type="number"
-                        min={0}
-                        step={1}
-                        value={homePlacements.hero_carousel_price || ''}
-                        onChange={(e) => setHomePlacements((p) => p ? { ...p, hero_carousel_price: Number(e.target.value) || 0 } : p)}
-                        placeholder="0"
-                        className="flex h-9 w-full rounded-md border border-primary-200 bg-background px-3 py-1 text-sm"
-                      />
-                      <label className="block text-sm text-muted-foreground mt-3">Listings (max 5, order = slide order)</label>
-                      <div className="max-h-48 overflow-y-auto rounded border border-primary-200 bg-muted/30 p-2 space-y-1">
-                        {settingsApprovedListings.length === 0 ? (
-                          <p className="text-sm text-muted-foreground">No approved listings. Approve some under the Listings tab first.</p>
-                        ) : (
-                          settingsApprovedListings.map((listing) => {
-                            const selected = homePlacements.hero_carousel_listing_ids.includes(listing.id);
-                            const atMax = homePlacements.hero_carousel_listing_ids.length >= 5 && !selected;
-                            return (
-                              <label key={listing.id} className={`flex items-center gap-2 text-sm ${atMax ? 'opacity-60' : ''}`}>
-                                <input
-                                  type="checkbox"
-                                  checked={selected}
-                                  disabled={atMax}
-                                  onChange={(e) => {
-                                    if (!e.target.checked) {
-                                      setHomePlacements((p) => p ? { ...p, hero_carousel_listing_ids: p.hero_carousel_listing_ids.filter((id) => id !== listing.id) } : p);
-                                    } else if (homePlacements.hero_carousel_listing_ids.length < 5) {
-                                      setHomePlacements((p) => p ? { ...p, hero_carousel_listing_ids: [...p.hero_carousel_listing_ids, listing.id].slice(0, 5) } : p);
-                                    }
-                                  }}
-                                  className="rounded border-primary-300"
-                                />
-                                <span className="truncate">{listing.title}</span>
-                                <span className="text-muted-foreground text-xs shrink-0">({listing.location})</span>
-                              </label>
-                            );
-                          })
-                        )}
-                      </div>
-                    </div>
+                    <label className="mb-1 block text-xs text-muted-foreground">Section badge</label>
+                    <input
+                      value={homePartnersForm.section_badge ?? ''}
+                      onChange={(e) => setHomePartnersForm((f) => ({ ...f, section_badge: e.target.value }))}
+                      className="flex h-9 w-full rounded-md border border-primary-200 bg-background px-3 py-1 text-sm"
+                    />
                   </div>
-                  <div>
-                    <h3 className="font-medium text-primary-800 mb-2">Featured section</h3>
-                    <div className="space-y-2">
-                      <label className="block text-sm text-muted-foreground">Price (NPR) for this placement</label>
-                      <input
-                        type="number"
-                        min={0}
-                        step={1}
-                        value={homePlacements.featured_placement_price || ''}
-                        onChange={(e) => setHomePlacements((p) => p ? { ...p, featured_placement_price: Number(e.target.value) || 0 } : p)}
-                        placeholder="0"
-                        className="flex h-9 w-full rounded-md border border-primary-200 bg-background px-3 py-1 text-sm"
-                      />
-                      <label className="block text-sm text-muted-foreground mt-3">Listings (max 6)</label>
-                      <div className="max-h-48 overflow-y-auto rounded border border-primary-200 bg-muted/30 p-2 space-y-1">
-                        {settingsApprovedListings.length === 0 ? (
-                          <p className="text-sm text-muted-foreground">No approved listings.</p>
-                        ) : (
-                          settingsApprovedListings.map((listing) => {
-                            const selected = homePlacements.featured_listing_ids.includes(listing.id);
-                            const atMax = homePlacements.featured_listing_ids.length >= 6 && !selected;
-                            return (
-                              <label key={listing.id} className={`flex items-center gap-2 text-sm ${atMax ? 'opacity-60' : ''}`}>
-                                <input
-                                  type="checkbox"
-                                  checked={selected}
-                                  disabled={atMax}
-                                  onChange={(e) => {
-                                    if (!e.target.checked) {
-                                      setHomePlacements((p) => p ? { ...p, featured_listing_ids: p.featured_listing_ids.filter((id) => id !== listing.id) } : p);
-                                    } else if (homePlacements.featured_listing_ids.length < 6) {
-                                      setHomePlacements((p) => p ? { ...p, featured_listing_ids: [...p.featured_listing_ids, listing.id].slice(0, 6) } : p);
-                                    }
-                                  }}
-                                  className="rounded border-primary-300"
-                                />
-                                <span className="truncate">{listing.title}</span>
-                                <span className="text-muted-foreground text-xs shrink-0">({listing.location})</span>
-                              </label>
-                            );
-                          })
-                        )}
-                      </div>
-                    </div>
+                  <div className="sm:col-span-2">
+                    <label className="mb-1 block text-xs text-muted-foreground">Section title</label>
+                    <input
+                      value={homePartnersForm.section_title ?? ''}
+                      onChange={(e) => setHomePartnersForm((f) => ({ ...f, section_title: e.target.value }))}
+                      className="flex h-9 w-full rounded-md border border-primary-200 bg-background px-3 py-1 text-sm"
+                    />
                   </div>
                 </div>
-                <Button
-                  type="button"
-                  disabled={homePlacementsSaving}
-                  onClick={() => {
-                    setHomePlacementsSaving(true);
-                    api.patch('/api/admin/settings', { home_placements: homePlacements })
-                      .then((res) => {
-                        const next = res.data?.home_placements ?? homePlacements;
-                        setHomePlacements(next);
-                        toast({ title: 'Home placements saved.' });
-                      })
-                      .catch(() => toast({ title: 'Failed to save home placements.', variant: 'destructive' }))
-                      .finally(() => setHomePlacementsSaving(false));
-                  }}
-                  className="bg-accent-500 hover:bg-accent-600"
-                >
-                  {homePlacementsSaving ? 'Saving…' : 'Save home placements'}
-                </Button>
+                <div>
+                  <label className="mb-1 block text-xs text-muted-foreground">Section subtitle</label>
+                  <textarea
+                    value={homePartnersForm.section_subtitle ?? ''}
+                    onChange={(e) => setHomePartnersForm((f) => ({ ...f, section_subtitle: e.target.value }))}
+                    rows={2}
+                    className="flex w-full rounded-md border border-primary-200 bg-background px-3 py-2 text-sm"
+                  />
+                </div>
+
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between gap-2">
+                    <h3 className="font-medium text-primary-800">Partner categories</h3>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setHomePartnersForm((f) => ({ ...f, categories: [...f.categories, EMPTY_CATEGORY()] }))}
+                    >
+                      Add category
+                    </Button>
+                  </div>
+                  {homePartnersForm.categories.map((category, cIdx) => (
+                    <div key={`partner-category-${cIdx}`} className="rounded-lg border border-primary-200 p-4 space-y-3 bg-muted/20">
+                      <div className="grid gap-3 sm:grid-cols-3">
+                        <div>
+                          <label className="mb-1 block text-xs text-muted-foreground">Category title</label>
+                          <input
+                            value={category.title}
+                            onChange={(e) =>
+                              setHomePartnersForm((f) => ({
+                                ...f,
+                                categories: f.categories.map((c, i) => (i === cIdx ? { ...c, title: e.target.value } : c)),
+                              }))
+                            }
+                            className="flex h-9 w-full rounded-md border border-primary-200 bg-background px-3 py-1 text-sm"
+                          />
+                        </div>
+                        <div>
+                          <label className="mb-1 block text-xs text-muted-foreground">Icon</label>
+                          <select
+                            value={category.icon}
+                            onChange={(e) =>
+                              setHomePartnersForm((f) => ({
+                                ...f,
+                                categories: f.categories.map((c, i) => (i === cIdx ? { ...c, icon: e.target.value as HomePartnerIcon } : c)),
+                              }))
+                            }
+                            className="flex h-9 w-full rounded-md border border-primary-200 bg-background px-3 py-1 text-sm"
+                          >
+                            {HOME_PARTNER_ICONS.map((icon) => (
+                              <option key={icon} value={icon}>
+                                {icon}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="flex items-end justify-end">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() =>
+                              setHomePartnersForm((f) => {
+                                const next = f.categories.filter((_, i) => i !== cIdx);
+                                return { ...f, categories: next.length ? next : [EMPTY_CATEGORY()] };
+                              })
+                            }
+                          >
+                            Remove category
+                          </Button>
+                        </div>
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-xs text-muted-foreground">Category description</label>
+                        <input
+                          value={category.description ?? ''}
+                          onChange={(e) =>
+                            setHomePartnersForm((f) => ({
+                              ...f,
+                              categories: f.categories.map((c, i) => (i === cIdx ? { ...c, description: e.target.value } : c)),
+                            }))
+                          }
+                          className="flex h-9 w-full rounded-md border border-primary-200 bg-background px-3 py-1 text-sm"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="text-xs text-muted-foreground">Partners</p>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() =>
+                              setHomePartnersForm((f) => ({
+                                ...f,
+                                categories: f.categories.map((c, i) =>
+                                  i === cIdx ? { ...c, partners: [...c.partners, EMPTY_PARTNER()] } : c
+                                ),
+                              }))
+                            }
+                          >
+                            Add partner
+                          </Button>
+                        </div>
+                        {category.partners.map((partner, pIdx) => (
+                          <div key={`partner-row-${cIdx}-${pIdx}`} className="grid gap-2 sm:grid-cols-12 items-end">
+                            <div className="sm:col-span-3">
+                              <label className="mb-1 block text-xs text-muted-foreground">Name</label>
+                              <input
+                                value={partner.name}
+                                onChange={(e) =>
+                                  setHomePartnersForm((f) => ({
+                                    ...f,
+                                    categories: f.categories.map((c, i) =>
+                                      i === cIdx
+                                        ? {
+                                            ...c,
+                                            partners: c.partners.map((p, j) => (j === pIdx ? { ...p, name: e.target.value } : p)),
+                                          }
+                                        : c
+                                    ),
+                                  }))
+                                }
+                                className="flex h-9 w-full rounded-md border border-primary-200 bg-background px-3 py-1 text-sm"
+                              />
+                            </div>
+                            <div className="sm:col-span-3">
+                              <label className="mb-1 block text-xs text-muted-foreground">Tag</label>
+                              <input
+                                value={partner.tag}
+                                onChange={(e) =>
+                                  setHomePartnersForm((f) => ({
+                                    ...f,
+                                    categories: f.categories.map((c, i) =>
+                                      i === cIdx
+                                        ? {
+                                            ...c,
+                                            partners: c.partners.map((p, j) => (j === pIdx ? { ...p, tag: e.target.value } : p)),
+                                          }
+                                        : c
+                                    ),
+                                  }))
+                                }
+                                className="flex h-9 w-full rounded-md border border-primary-200 bg-background px-3 py-1 text-sm"
+                              />
+                            </div>
+                            <div className="sm:col-span-5">
+                              <label className="mb-1 block text-xs text-muted-foreground">Website (optional)</label>
+                              <input
+                                value={partner.website ?? ''}
+                                onChange={(e) =>
+                                  setHomePartnersForm((f) => ({
+                                    ...f,
+                                    categories: f.categories.map((c, i) =>
+                                      i === cIdx
+                                        ? {
+                                            ...c,
+                                            partners: c.partners.map((p, j) => (j === pIdx ? { ...p, website: e.target.value } : p)),
+                                          }
+                                        : c
+                                    ),
+                                  }))
+                                }
+                                className="flex h-9 w-full rounded-md border border-primary-200 bg-background px-3 py-1 text-sm"
+                              />
+                            </div>
+                            <div className="sm:col-span-1">
+                              <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() =>
+                                  setHomePartnersForm((f) => ({
+                                    ...f,
+                                    categories: f.categories.map((c, i) =>
+                                      i === cIdx
+                                        ? {
+                                            ...c,
+                                            partners: c.partners.length > 1 ? c.partners.filter((_, j) => j !== pIdx) : c.partners,
+                                          }
+                                        : c
+                                    ),
+                                  }))
+                                }
+                              >
+                                Remove
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    disabled={homePartnersSaving}
+                    onClick={() => {
+                      const payload = {
+                        section_badge: (homePartnersForm.section_badge || '').trim(),
+                        section_title: (homePartnersForm.section_title || '').trim(),
+                        section_subtitle: (homePartnersForm.section_subtitle || '').trim(),
+                        categories: homePartnersForm.categories
+                          .map((c) => ({
+                            title: c.title.trim(),
+                            description: (c.description || '').trim(),
+                            icon: c.icon,
+                            partners: c.partners
+                              .map((p) => ({ name: p.name.trim(), tag: p.tag.trim(), website: (p.website || '').trim() }))
+                              .filter((p) => p.name && p.tag)
+                              .map((p) => ({ ...p, website: p.website || undefined })),
+                          }))
+                          .filter((c) => c.title && c.partners.length > 0),
+                      };
+                      if (!payload.section_title || payload.categories.length === 0) {
+                        toast({ title: 'Add at least one category with one partner and a section title.', variant: 'destructive' });
+                        return;
+                      }
+                      setHomePartnersSaving(true);
+                      api
+                        .patch('/api/admin/settings', { home_partners: payload })
+                        .then((r) => {
+                          const o = r.data as { home_partners?: unknown };
+                          setHomePartnersForm(normalizeHomePartners(o.home_partners));
+                          toast({ title: 'Partners saved.' });
+                        })
+                        .catch((err) =>
+                          toast({ title: err.response?.data?.message || 'Failed to save partners.', variant: 'destructive' })
+                        )
+                        .finally(() => setHomePartnersSaving(false));
+                    }}
+                    className="bg-accent-500 hover:bg-accent-600"
+                  >
+                    {homePartnersSaving ? 'Saving…' : 'Save partners'}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={homePartnersSaving}
+                    onClick={() => {
+                      setHomePartnersSaving(true);
+                      api
+                        .patch('/api/admin/settings', { home_partners: null })
+                        .then((r) => {
+                          const o = r.data as { home_partners?: unknown };
+                          setHomePartnersForm(normalizeHomePartners(o.home_partners));
+                          toast({ title: 'Cleared — site now uses default partner list.' });
+                        })
+                        .catch(() => toast({ title: 'Failed to clear.', variant: 'destructive' }))
+                        .finally(() => setHomePartnersSaving(false));
+                    }}
+                  >
+                    Clear to defaults
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {tab === 'settings' && (
+            <Card className="border-primary-200">
+              <CardHeader className="border-b border-primary-100 bg-primary-50/50">
+                <h2 className="font-semibold text-primary-800">Festivals Page Configuration</h2>
+                <p className="text-sm text-muted-foreground">
+                  Configure hero text and the month-wise festival cards shown on `/festivals`.
+                </p>
+              </CardHeader>
+              <CardContent className="p-6 space-y-6">
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <div>
+                    <label className="mb-1 block text-xs text-muted-foreground">Badge</label>
+                    <input value={festivalsPageForm.badge} onChange={(e) => setFestivalsPageForm((f) => ({ ...f, badge: e.target.value }))} className="flex h-9 w-full rounded-md border border-primary-200 bg-background px-3 py-1 text-sm" />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="mb-1 block text-xs text-muted-foreground">Title</label>
+                    <input value={festivalsPageForm.title} onChange={(e) => setFestivalsPageForm((f) => ({ ...f, title: e.target.value }))} className="flex h-9 w-full rounded-md border border-primary-200 bg-background px-3 py-1 text-sm" />
+                  </div>
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs text-muted-foreground">Subtitle</label>
+                  <textarea value={festivalsPageForm.subtitle} onChange={(e) => setFestivalsPageForm((f) => ({ ...f, subtitle: e.target.value }))} rows={2} className="flex w-full rounded-md border border-primary-200 bg-background px-3 py-2 text-sm" />
+                </div>
+
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between gap-2">
+                    <h3 className="font-medium text-primary-800">Festivals</h3>
+                    <Button type="button" variant="outline" onClick={() => setFestivalsPageForm((f) => ({ ...f, festivals: [...f.festivals, EMPTY_FESTIVAL_ITEM()] }))}>
+                      Add festival
+                    </Button>
+                  </div>
+                  {festivalsPageForm.festivals.map((festival, idx) => (
+                    <div key={`festival-${idx}`} className="rounded-lg border border-primary-200 p-4 space-y-3 bg-muted/20">
+                      <div className="grid gap-3 sm:grid-cols-12">
+                        <div className="sm:col-span-3">
+                          <label className="mb-1 block text-xs text-muted-foreground">ID</label>
+                          <input value={festival.id} onChange={(e) => setFestivalsPageForm((f) => ({ ...f, festivals: f.festivals.map((x, i) => i === idx ? { ...x, id: e.target.value } : x) }))} className="flex h-9 w-full rounded-md border border-primary-200 bg-background px-3 py-1 text-sm" />
+                        </div>
+                        <div className="sm:col-span-4">
+                          <label className="mb-1 block text-xs text-muted-foreground">Name</label>
+                          <input value={festival.name} onChange={(e) => setFestivalsPageForm((f) => ({ ...f, festivals: f.festivals.map((x, i) => i === idx ? { ...x, name: e.target.value } : x) }))} className="flex h-9 w-full rounded-md border border-primary-200 bg-background px-3 py-1 text-sm" />
+                        </div>
+                        <div className="sm:col-span-2">
+                          <label className="mb-1 block text-xs text-muted-foreground">Month (0-11)</label>
+                          <input type="number" min={0} max={11} value={festival.monthIndex} onChange={(e) => setFestivalsPageForm((f) => ({ ...f, festivals: f.festivals.map((x, i) => i === idx ? { ...x, monthIndex: e.target.value } : x) }))} className="flex h-9 w-full rounded-md border border-primary-200 bg-background px-3 py-1 text-sm" />
+                        </div>
+                        <div className="sm:col-span-2">
+                          <label className="mb-1 block text-xs text-muted-foreground">Emoji</label>
+                          <input value={festival.emoji} onChange={(e) => setFestivalsPageForm((f) => ({ ...f, festivals: f.festivals.map((x, i) => i === idx ? { ...x, emoji: e.target.value } : x) }))} className="flex h-9 w-full rounded-md border border-primary-200 bg-background px-3 py-1 text-sm" />
+                        </div>
+                        <div className="sm:col-span-1 flex items-end justify-end">
+                          <Button type="button" variant="outline" onClick={() => setFestivalsPageForm((f) => ({ ...f, festivals: f.festivals.length > 1 ? f.festivals.filter((_, i) => i !== idx) : f.festivals }))}>Remove</Button>
+                        </div>
+                      </div>
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <div>
+                          <label className="mb-1 block text-xs text-muted-foreground">Region</label>
+                          <input value={festival.region} onChange={(e) => setFestivalsPageForm((f) => ({ ...f, festivals: f.festivals.map((x, i) => i === idx ? { ...x, region: e.target.value } : x) }))} className="flex h-9 w-full rounded-md border border-primary-200 bg-background px-3 py-1 text-sm" />
+                        </div>
+                        <div>
+                          <label className="mb-1 block text-xs text-muted-foreground">Duration</label>
+                          <input value={festival.duration} onChange={(e) => setFestivalsPageForm((f) => ({ ...f, festivals: f.festivals.map((x, i) => i === idx ? { ...x, duration: e.target.value } : x) }))} className="flex h-9 w-full rounded-md border border-primary-200 bg-background px-3 py-1 text-sm" />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-xs text-muted-foreground">Description</label>
+                        <textarea value={festival.description} onChange={(e) => setFestivalsPageForm((f) => ({ ...f, festivals: f.festivals.map((x, i) => i === idx ? { ...x, description: e.target.value } : x) }))} rows={2} className="flex w-full rounded-md border border-primary-200 bg-background px-3 py-2 text-sm" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    disabled={festivalsPageSaving}
+                    onClick={() => {
+                      const payload: FestivalsPageConfig = {
+                        badge: festivalsPageForm.badge.trim(),
+                        title: festivalsPageForm.title.trim(),
+                        subtitle: festivalsPageForm.subtitle.trim(),
+                        festivals: festivalsPageForm.festivals
+                          .map((f) => ({
+                            id: f.id.trim(),
+                            name: f.name.trim(),
+                            monthIndex: Number(f.monthIndex),
+                            region: f.region.trim() || undefined,
+                            duration: f.duration.trim() || undefined,
+                            description: f.description.trim(),
+                            emoji: f.emoji.trim() || undefined,
+                          }))
+                          .filter((f) => f.id && f.name && Number.isInteger(f.monthIndex) && f.monthIndex >= 0 && f.monthIndex <= 11 && f.description),
+                      };
+                      if (!payload.title || payload.festivals.length === 0) {
+                        toast({ title: 'Add title and at least one valid festival.', variant: 'destructive' });
+                        return;
+                      }
+                      setFestivalsPageSaving(true);
+                      api.patch('/api/admin/settings', { festivals_page: payload })
+                        .then((r) => {
+                          const next = (r.data?.festivals_page ?? payload) as FestivalsPageConfig;
+                          setFestivalsPageForm(normalizeFestivalsPage(next));
+                          toast({ title: 'Festivals page settings saved.' });
+                        })
+                        .catch((err) => toast({ title: err.response?.data?.message || 'Failed to save festivals settings.', variant: 'destructive' }))
+                        .finally(() => setFestivalsPageSaving(false));
+                    }}
+                    className="bg-accent-500 hover:bg-accent-600"
+                  >
+                    {festivalsPageSaving ? 'Saving…' : 'Save festivals settings'}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={festivalsPageSaving}
+                    onClick={() => {
+                      setFestivalsPageSaving(true);
+                      api.patch('/api/admin/settings', { festivals_page: null })
+                        .then((r) => {
+                          const next = (r.data?.festivals_page ?? EMPTY_FESTIVALS_PAGE()) as FestivalsPageConfig;
+                          setFestivalsPageForm(normalizeFestivalsPage(next));
+                          toast({ title: 'Festivals page reset to defaults.' });
+                        })
+                        .catch(() => toast({ title: 'Failed to reset festivals settings.', variant: 'destructive' }))
+                        .finally(() => setFestivalsPageSaving(false));
+                    }}
+                  >
+                    Reset to defaults
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {tab === 'settings' && (
+            <Card className="border-primary-200">
+              <CardHeader className="border-b border-primary-100 bg-primary-50/50">
+                <h2 className="font-semibold text-primary-800">Trip Planner Page Configuration</h2>
+                <p className="text-sm text-muted-foreground">
+                  Configure hero text, route map copy, and suggested route cards shown on `/trip-planner`.
+                </p>
+              </CardHeader>
+              <CardContent className="p-6 space-y-6">
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <div>
+                    <label className="mb-1 block text-xs text-muted-foreground">Badge</label>
+                    <input value={tripPlannerPageForm.badge} onChange={(e) => setTripPlannerPageForm((f) => ({ ...f, badge: e.target.value }))} className="flex h-9 w-full rounded-md border border-primary-200 bg-background px-3 py-1 text-sm" />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="mb-1 block text-xs text-muted-foreground">Title</label>
+                    <input value={tripPlannerPageForm.title} onChange={(e) => setTripPlannerPageForm((f) => ({ ...f, title: e.target.value }))} className="flex h-9 w-full rounded-md border border-primary-200 bg-background px-3 py-1 text-sm" />
+                  </div>
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs text-muted-foreground">Subtitle</label>
+                  <textarea value={tripPlannerPageForm.subtitle} onChange={(e) => setTripPlannerPageForm((f) => ({ ...f, subtitle: e.target.value }))} rows={2} className="flex w-full rounded-md border border-primary-200 bg-background px-3 py-2 text-sm" />
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div>
+                    <label className="mb-1 block text-xs text-muted-foreground">Route map title</label>
+                    <input value={tripPlannerPageForm.route_map_title} onChange={(e) => setTripPlannerPageForm((f) => ({ ...f, route_map_title: e.target.value }))} className="flex h-9 w-full rounded-md border border-primary-200 bg-background px-3 py-1 text-sm" />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs text-muted-foreground">Suggested routes title</label>
+                    <input value={tripPlannerPageForm.suggested_routes_title} onChange={(e) => setTripPlannerPageForm((f) => ({ ...f, suggested_routes_title: e.target.value }))} className="flex h-9 w-full rounded-md border border-primary-200 bg-background px-3 py-1 text-sm" />
+                  </div>
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs text-muted-foreground">Route map description</label>
+                  <textarea value={tripPlannerPageForm.route_map_description} onChange={(e) => setTripPlannerPageForm((f) => ({ ...f, route_map_description: e.target.value }))} rows={2} className="flex w-full rounded-md border border-primary-200 bg-background px-3 py-2 text-sm" />
+                </div>
+
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between gap-2">
+                    <h3 className="font-medium text-primary-800">Suggested routes</h3>
+                    <Button type="button" variant="outline" onClick={() => setTripPlannerPageForm((f) => ({ ...f, suggested_routes: [...f.suggested_routes, EMPTY_ROUTE_FORM()] }))}>
+                      Add route
+                    </Button>
+                  </div>
+                  {tripPlannerPageForm.suggested_routes.map((route, idx) => (
+                    <div key={`trip-route-${idx}`} className="rounded-lg border border-primary-200 p-4 space-y-3 bg-muted/20">
+                      <div className="grid gap-3 sm:grid-cols-12">
+                        <div className="sm:col-span-3">
+                          <label className="mb-1 block text-xs text-muted-foreground">ID</label>
+                          <input value={route.id} onChange={(e) => setTripPlannerPageForm((f) => ({ ...f, suggested_routes: f.suggested_routes.map((x, i) => i === idx ? { ...x, id: e.target.value } : x) }))} className="flex h-9 w-full rounded-md border border-primary-200 bg-background px-3 py-1 text-sm" />
+                        </div>
+                        <div className="sm:col-span-4">
+                          <label className="mb-1 block text-xs text-muted-foreground">Name</label>
+                          <input value={route.name} onChange={(e) => setTripPlannerPageForm((f) => ({ ...f, suggested_routes: f.suggested_routes.map((x, i) => i === idx ? { ...x, name: e.target.value } : x) }))} className="flex h-9 w-full rounded-md border border-primary-200 bg-background px-3 py-1 text-sm" />
+                        </div>
+                        <div className="sm:col-span-2">
+                          <label className="mb-1 block text-xs text-muted-foreground">Days</label>
+                          <input type="number" min={1} value={route.days} onChange={(e) => setTripPlannerPageForm((f) => ({ ...f, suggested_routes: f.suggested_routes.map((x, i) => i === idx ? { ...x, days: e.target.value } : x) }))} className="flex h-9 w-full rounded-md border border-primary-200 bg-background px-3 py-1 text-sm" />
+                        </div>
+                        <div className="sm:col-span-2">
+                          <label className="mb-1 block text-xs text-muted-foreground">Emoji</label>
+                          <input value={route.emoji} onChange={(e) => setTripPlannerPageForm((f) => ({ ...f, suggested_routes: f.suggested_routes.map((x, i) => i === idx ? { ...x, emoji: e.target.value } : x) }))} className="flex h-9 w-full rounded-md border border-primary-200 bg-background px-3 py-1 text-sm" />
+                        </div>
+                        <div className="sm:col-span-1 flex items-end justify-end">
+                          <Button type="button" variant="outline" onClick={() => setTripPlannerPageForm((f) => ({ ...f, suggested_routes: f.suggested_routes.length > 1 ? f.suggested_routes.filter((_, i) => i !== idx) : f.suggested_routes }))}>Remove</Button>
+                        </div>
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-xs text-muted-foreground">Description</label>
+                        <textarea value={route.description} onChange={(e) => setTripPlannerPageForm((f) => ({ ...f, suggested_routes: f.suggested_routes.map((x, i) => i === idx ? { ...x, description: e.target.value } : x) }))} rows={2} className="flex w-full rounded-md border border-primary-200 bg-background px-3 py-2 text-sm" />
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-xs text-muted-foreground">Stops (comma separated)</label>
+                        <input value={route.stopsText} onChange={(e) => setTripPlannerPageForm((f) => ({ ...f, suggested_routes: f.suggested_routes.map((x, i) => i === idx ? { ...x, stopsText: e.target.value } : x) }))} className="flex h-9 w-full rounded-md border border-primary-200 bg-background px-3 py-1 text-sm" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    disabled={tripPlannerPageSaving}
+                    onClick={() => {
+                      const payload: TripPlannerPageConfig = {
+                        badge: tripPlannerPageForm.badge.trim(),
+                        title: tripPlannerPageForm.title.trim(),
+                        subtitle: tripPlannerPageForm.subtitle.trim(),
+                        route_map_title: tripPlannerPageForm.route_map_title.trim(),
+                        route_map_description: tripPlannerPageForm.route_map_description.trim(),
+                        suggested_routes_title: tripPlannerPageForm.suggested_routes_title.trim(),
+                        suggested_routes: tripPlannerPageForm.suggested_routes
+                          .map((r) => ({
+                            id: r.id.trim(),
+                            name: r.name.trim(),
+                            days: Number(r.days),
+                            description: r.description.trim(),
+                            stops: r.stopsText.split(',').map((s) => s.trim()).filter(Boolean),
+                            emoji: r.emoji.trim() || undefined,
+                          }))
+                          .filter((r) => r.id && r.name && Number.isInteger(r.days) && r.days > 0 && r.description && r.stops.length > 0),
+                      };
+                      if (!payload.title || payload.suggested_routes.length === 0) {
+                        toast({ title: 'Add title and at least one valid suggested route.', variant: 'destructive' });
+                        return;
+                      }
+                      setTripPlannerPageSaving(true);
+                      api.patch('/api/admin/settings', { trip_planner_page: payload })
+                        .then((r) => {
+                          const next = (r.data?.trip_planner_page ?? payload) as TripPlannerPageConfig;
+                          setTripPlannerPageForm(normalizeTripPlannerPage(next));
+                          toast({ title: 'Trip planner settings saved.' });
+                        })
+                        .catch((err) => toast({ title: err.response?.data?.message || 'Failed to save trip planner settings.', variant: 'destructive' }))
+                        .finally(() => setTripPlannerPageSaving(false));
+                    }}
+                    className="bg-accent-500 hover:bg-accent-600"
+                  >
+                    {tripPlannerPageSaving ? 'Saving…' : 'Save trip planner settings'}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={tripPlannerPageSaving}
+                    onClick={() => {
+                      setTripPlannerPageSaving(true);
+                      api.patch('/api/admin/settings', { trip_planner_page: null })
+                        .then((r) => {
+                          const next = (r.data?.trip_planner_page ?? EMPTY_TRIP_PLANNER_PAGE()) as TripPlannerPageConfig;
+                          setTripPlannerPageForm(normalizeTripPlannerPage(next));
+                          toast({ title: 'Trip planner page reset to defaults.' });
+                        })
+                        .catch(() => toast({ title: 'Failed to reset trip planner settings.', variant: 'destructive' }))
+                        .finally(() => setTripPlannerPageSaving(false));
+                    }}
+                  >
+                    Reset to defaults
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           )}
@@ -2422,14 +3499,42 @@ export default function AdminDashboard() {
       {tab === 'logs' && (
         <div className="mt-6 space-y-4">
           <div className="flex flex-wrap items-center gap-4">
-            <label className="flex items-center gap-2 text-sm">
-              <span className="text-muted-foreground">From</span>
-              <input type="date" value={logDateFrom} onChange={(e) => { setLogDateFrom(e.target.value); setLogsFiltersApplied(false); }} className="rounded border border-primary-200 px-2 py-1 text-sm" />
-            </label>
-            <label className="flex items-center gap-2 text-sm">
-              <span className="text-muted-foreground">To</span>
-              <input type="date" value={logDateTo} onChange={(e) => { setLogDateTo(e.target.value); setLogsFiltersApplied(false); }} className="rounded border border-primary-200 px-2 py-1 text-sm" />
-            </label>
+            <div className="relative" ref={logCalendarRef}>
+              <button
+                type="button"
+                onClick={() => setLogCalendarOpen((v) => !v)}
+                className="flex items-center gap-3 rounded border border-primary-200 bg-background px-3 py-2 text-sm hover:bg-primary-50/50 transition-colors"
+                aria-expanded={logCalendarOpen}
+              >
+                <div className="flex items-center gap-2">
+                  <span className="text-muted-foreground">From</span>
+                  <span className="text-foreground">
+                    {logDateFrom ? new Date(logDateFrom + 'T12:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-muted-foreground">To</span>
+                  <span className="text-foreground">
+                    {logDateTo ? new Date(logDateTo + 'T12:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'}
+                  </span>
+                </div>
+                <Calendar className="w-4 h-4 text-muted-foreground" />
+              </button>
+              {logCalendarOpen && (
+                <div className="absolute right-0 z-[100] mt-1 bg-card border border-primary-200 rounded-xl shadow-xl p-3 calendar-popup">
+                  <DateRangePicker
+                    checkIn={logDateFrom}
+                    checkOut={logDateTo}
+                    onCheckInChange={(v) => { setLogDateFrom(v); setLogsFiltersApplied(false); }}
+                    onCheckOutChange={(v) => {
+                      setLogDateTo(v);
+                      setLogsFiltersApplied(false);
+                      if (v) setLogCalendarOpen(false);
+                    }}
+                  />
+                </div>
+              )}
+            </div>
             <Button size="sm" className="bg-accent-500 hover:bg-accent-600" disabled={!logDateFrom || !logDateTo} onClick={() => setLogsFiltersApplied(true)}>
               Apply filters
             </Button>

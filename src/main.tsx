@@ -4,6 +4,8 @@ import { BrowserRouter } from 'react-router-dom';
 import { AuthProvider } from '@/lib/auth';
 import { CurrencyProvider } from '@/lib/currency';
 import { I18nProvider } from '@/lib/i18n';
+import { ThemeProvider } from '@/components/system/ThemeProvider';
+import { ScrollToTop } from '@/components/system/ScrollToTop';
 import { reportError, flushJourneyOnUnload } from '@/lib/logging';
 import App from './App';
 import './index.css';
@@ -24,10 +26,13 @@ window.addEventListener('beforeunload', flushJourneyOnUnload);
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <BrowserRouter>
+      <ScrollToTop />
       <AuthProvider>
         <CurrencyProvider>
           <I18nProvider>
-            <App />
+            <ThemeProvider>
+              <App />
+            </ThemeProvider>
           </I18nProvider>
         </CurrencyProvider>
       </AuthProvider>

@@ -134,6 +134,7 @@ export default function ListingDetailPage() {
   const [reviewsTotal, setReviewsTotal] = useState(0);
   const [bookingFee, setBookingFee] = useState<{ type: 'service_charge' | 'discount'; kind: 'percent' | 'fixed'; value: number } | null>(null);
   const [partialPaymentMinPercent, setPartialPaymentMinPercent] = useState(25);
+  const [paymentGatewayEnabled, setPaymentGatewayEnabled] = useState(true);
   const [paymentType, setPaymentType] = useState<'full' | 'partial'>('full');
   const [partialPercent, setPartialPercent] = useState(25);
   const [showRejectForm, setShowRejectForm] = useState(false);
@@ -182,7 +183,12 @@ export default function ListingDetailPage() {
 
   useEffect(() => {
     if (!id) return;
-    api.get<{ booking_fee: { type: 'service_charge' | 'discount'; kind: 'percent' | 'fixed'; value: number } | null; partial_payment_min_percent?: number }>(`/api/listings/${id}/booking-fee`)
+    api
+      .get<{
+        booking_fee: { type: 'service_charge' | 'discount'; kind: 'percent' | 'fixed'; value: number } | null;
+        partial_payment_min_percent?: number;
+        payment_gateway_enabled?: boolean;
+      }>(`/api/listings/${id}/booking-fee`)
       .then((res) => {
         setBookingFee(res.data.booking_fee ?? null);
         const min = res.data.partial_payment_min_percent;
@@ -190,9 +196,14 @@ export default function ListingDetailPage() {
           setPartialPaymentMinPercent(min);
           setPartialPercent(min);
         }
+        setPaymentGatewayEnabled(res.data.payment_gateway_enabled !== false);
       })
       .catch(() => setBookingFee(null));
   }, [id]);
+
+  useEffect(() => {
+    if (!paymentGatewayEnabled) setPaymentType('full');
+  }, [paymentGatewayEnabled]);
 
   useEffect(() => {
     if (!listing?.id || !listing.location?.trim()) {
@@ -328,8 +339,17 @@ export default function ListingDetailPage() {
         booking_id: number;
         payment_id: number;
         reference: string;
+        reservation_without_payment?: boolean;
+        confirmation_message?: string;
       }>('/api/bookings/initiate-payment', payload)
       .then((res) => {
+        if (res.data?.reservation_without_payment) {
+          const msg = res.data.confirmation_message || 'Your reservation has been received.';
+          toast({ title: 'Reservation received', description: msg });
+          navigate('/dashboard/guest');
+          setSubmitting(false);
+          return;
+        }
         if (res.data?.redirect_url) {
           window.location.href = res.data.redirect_url;
           return;
@@ -1029,9 +1049,12 @@ export default function ListingDetailPage() {
                   blockedDates={blockedDates}
                   onSubmit={handleMakePayment}
                   submitting={submitting}
-                  submitLabel="You won't be charged yet"
+                  submitLabel={
+                    paymentGatewayEnabled ? "You won't be charged yet" : 'We will confirm your stay by phone or email.'
+                  }
                   bookingFee={bookingFee}
                   trustBadges={listingDisplay.trust_badges}
+                  paymentGatewayEnabled={paymentGatewayEnabled}
                   paymentType={paymentType}
                   partialPercent={partialPercent}
                   partialPaymentMinPercent={partialPaymentMinPercent}

@@ -365,6 +365,9 @@ export default function AdminDashboard() {
   const [bookingFeeForm, setBookingFeeForm] = useState({ type: 'service_charge' as 'service_charge' | 'discount', kind: 'percent' as 'percent' | 'fixed', value: '', applies_to: 'guest' as 'guest' | 'host' });
   const [partialPaymentMinPercent, setPartialPaymentMinPercent] = useState(25);
   const [partialPaymentMinSaving, setPartialPaymentMinSaving] = useState(false);
+  const [paymentGatewayEnabled, setPaymentGatewayEnabled] = useState(true);
+  const [offlineBookingGuestMessage, setOfflineBookingGuestMessage] = useState('');
+  const [paymentGatewaySaving, setPaymentGatewaySaving] = useState(false);
   type FeeRule = { type: 'service_charge' | 'discount'; kind: 'percent' | 'fixed'; value: number; applies_to?: 'guest' | 'host' };
   const [bookingFeeByCategory, setBookingFeeByCategory] = useState<Record<string, FeeRule>>({});
   const [bookingFeeByListing, setBookingFeeByListing] = useState<Record<string, FeeRule>>({});
@@ -595,6 +598,8 @@ export default function AdminDashboard() {
         booking_fee_by_category?: Record<string, { type: 'service_charge' | 'discount'; kind: 'percent' | 'fixed'; value: number; applies_to?: 'guest' | 'host' }>;
         booking_fee_by_listing?: Record<string, { type: 'service_charge' | 'discount'; kind: 'percent' | 'fixed'; value: number; applies_to?: 'guest' | 'host' }>;
         partial_payment_min_percent?: number;
+        payment_gateway_enabled?: boolean;
+        offline_booking_guest_message?: string;
         listing_display?: ListingDisplaySettings;
         sparrow_sms?: SparrowSmsSettings;
         notification_settings?: NotificationSettings;
@@ -610,6 +615,8 @@ export default function AdminDashboard() {
         setBookingFeeForm(bf ? { type: bf.type, kind: bf.kind, value: String(bf.value), applies_to: bf.applies_to ?? 'guest' } : { type: 'service_charge', kind: 'percent', value: '', applies_to: 'guest' });
         const minPct = res.partial_payment_min_percent;
         setPartialPaymentMinPercent(typeof minPct === 'number' && minPct >= 1 && minPct <= 100 ? minPct : 25);
+        setPaymentGatewayEnabled(res.payment_gateway_enabled !== false);
+        setOfflineBookingGuestMessage(typeof res.offline_booking_guest_message === 'string' ? res.offline_booking_guest_message : '');
         setBookingFeeByCategory(res.booking_fee_by_category ?? {});
         setBookingFeeByListing(res.booking_fee_by_listing ?? {});
         const ld = res.listing_display ?? null;
@@ -2181,6 +2188,64 @@ export default function AdminDashboard() {
                 <Button type="button" variant="outline" size="sm" onClick={() => setBookingFeeByListing((prev) => ({ ...prev, ['']: { type: 'service_charge', kind: 'percent', value: 0, applies_to: 'guest' } }))}>Add listing rule</Button>
               </div>
               <p className="mt-2 text-xs text-muted-foreground">Save using the &quot;Save category &amp; listing rules&quot; button above.</p>
+            </CardContent>
+          </Card>
+
+          <Card className="border-primary-200">
+            <CardHeader className="border-b border-primary-100 bg-primary-50/50">
+              <h2 className="font-semibold text-primary-800">Online payment gateway</h2>
+              <p className="text-sm text-muted-foreground">
+                When on, guests pay via your configured gateway when they reserve. When off, they submit a reservation request only; they receive a confirmation email and see a message that your team will call them (or they can use your contact details).
+              </p>
+            </CardHeader>
+            <CardContent className="p-6 space-y-4">
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={paymentGatewayEnabled}
+                  onChange={(e) => setPaymentGatewayEnabled(e.target.checked)}
+                  className="h-4 w-4 rounded border-primary-200"
+                />
+                <span className="text-sm font-medium text-primary-800">Require online payment when reserving</span>
+              </label>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-primary-800">Extra message for guests (optional)</label>
+                <p className="text-xs text-muted-foreground mb-2">
+                  Shown in the confirmation email and appended to the on-screen confirmation. Use for phone numbers, office hours, or “call us on …”.
+                </p>
+                <textarea
+                  value={offlineBookingGuestMessage}
+                  onChange={(e) => setOfflineBookingGuestMessage(e.target.value)}
+                  rows={4}
+                  maxLength={2000}
+                  placeholder="e.g. Call us on +977-1-XXXXXXX (10am–6pm) to confirm your stay."
+                  className="w-full min-h-[100px] rounded-md border border-primary-200 bg-background px-3 py-2 text-sm"
+                />
+              </div>
+              <Button
+                type="button"
+                disabled={paymentGatewaySaving}
+                className="bg-accent-500 hover:bg-accent-600"
+                onClick={() => {
+                  setPaymentGatewaySaving(true);
+                  api
+                    .patch('/api/admin/settings', {
+                      payment_gateway_enabled: paymentGatewayEnabled,
+                      offline_booking_guest_message: offlineBookingGuestMessage.trim() || null,
+                    })
+                    .then((res) => {
+                      setPaymentGatewayEnabled(res.data?.payment_gateway_enabled !== false);
+                      setOfflineBookingGuestMessage(
+                        typeof res.data?.offline_booking_guest_message === 'string' ? res.data.offline_booking_guest_message : ''
+                      );
+                      toast({ title: 'Payment options saved.' });
+                    })
+                    .catch(() => toast({ title: 'Failed to save.', variant: 'destructive' }))
+                    .finally(() => setPaymentGatewaySaving(false));
+                }}
+              >
+                {paymentGatewaySaving ? 'Saving…' : 'Save payment options'}
+              </Button>
             </CardContent>
           </Card>
 

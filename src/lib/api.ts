@@ -12,57 +12,12 @@ export const api = axios.create({
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('token');
   if (token) config.headers.Authorization = `Bearer ${token}`;
-  // #region agent log
-  if (typeof window !== 'undefined') {
-    const fullUrl = `${config.baseURL ?? ''}${config.url ?? ''}`;
-    void fetch('http://127.0.0.1:7920/ingest/6d2d555f-4cb3-4e85-9948-c4a61e386fc0', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '9beb33' },
-      body: JSON.stringify({
-        sessionId: '9beb33',
-        location: 'api.ts:request',
-        message: 'axios outgoing',
-        data: {
-          hypothesisId: 'H1',
-          method: config.method,
-          fullUrl,
-          pageOrigin: window.location.origin,
-          withCredentials: config.withCredentials,
-        },
-        timestamp: Date.now(),
-      }),
-    }).catch(() => {});
-  }
-  // #endregion
   return config;
 });
 
 api.interceptors.response.use(
   (res) => res,
   (err) => {
-    // #region agent log
-    if (typeof window !== 'undefined') {
-      const ax = err as { message?: string; code?: string; response?: { status?: number } };
-      void fetch('http://127.0.0.1:7920/ingest/6d2d555f-4cb3-4e85-9948-c4a61e386fc0', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '9beb33' },
-        body: JSON.stringify({
-          sessionId: '9beb33',
-          location: 'api.ts:response-error',
-          message: 'axios error',
-          data: {
-            hypothesisId: 'H2',
-            errMessage: ax.message ?? String(err),
-            errCode: ax.code,
-            hasResponse: !!ax.response,
-            status: ax.response?.status,
-            pageOrigin: window.location.origin,
-          },
-          timestamp: Date.now(),
-        }),
-      }).catch(() => {});
-    }
-    // #endregion
     if (err.response?.status === 401) {
       const requestUrl = err.config?.url ?? '';
       const isAuthRequest = /\/api\/auth\//.test(requestUrl);

@@ -34,6 +34,8 @@ export interface BookingCardProps {
   partialPaymentMinPercent?: number;
   onPaymentTypeChange?: (type: 'full' | 'partial') => void;
   onPartialPercentChange?: (percent: number) => void;
+  /** When false, hide online payment options; guest submits reservation without gateway (admin setting). */
+  paymentGatewayEnabled?: boolean;
   /** Optional extra services (paid add-ons) from listing */
   extraServices?: { id: number; name: string; price_npr: number; unit: string; description?: string | null }[];
   selectedExtraServices?: { extra_service_id: number; quantity: number }[];
@@ -63,11 +65,16 @@ export function BookingCard({
   partialPaymentMinPercent = 25,
   onPaymentTypeChange,
   onPartialPercentChange,
+  paymentGatewayEnabled = true,
   extraServices,
   selectedExtraServices = [],
   onExtraServicesChange,
 }: BookingCardProps) {
-  const badges = trustBadges?.length ? trustBadges : ['Free cancellation for 48 hours', 'Verified homestay host', 'Secure payment process'];
+  const defaultBadges = ['Free cancellation for 48 hours', 'Verified homestay host', 'Secure payment process'];
+  const rawBadges = trustBadges?.length ? trustBadges : defaultBadges;
+  const badges = paymentGatewayEnabled
+    ? rawBadges
+    : rawBadges.filter((b) => !/secure payment/i.test(b));
   const { format: formatPrice } = useCurrency();
   const displayPrice = priceFormatted ?? formatPrice(pricePerNight);
   const [showGuestPicker, setShowGuestPicker] = useState(false);
@@ -322,7 +329,7 @@ export function BookingCard({
           </div>
         )}
 
-        {onPaymentTypeChange && nights > 0 && !hasUnavailableInRange && (
+        {onPaymentTypeChange && paymentGatewayEnabled && nights > 0 && !hasUnavailableInRange && (
           <div className="p-3 rounded-xl border border-border bg-muted/30 space-y-3">
             <p className="text-sm font-medium text-foreground">Payment at reservation</p>
             <div className="flex gap-2">
@@ -376,12 +383,24 @@ export function BookingCard({
           disabled={isDisabled || submitting}
           className="w-full py-6 text-lg font-semibold bg-primary hover:bg-primary/90 rounded-xl disabled:opacity-50"
         >
-          {submitting ? 'Redirecting…' : isPartial ? `Pay ${formatPrice(String(payNowAmount.toFixed(2)))} now (${payNowPercent}%)` : 'Reserve Now'}
+          {submitting
+            ? paymentGatewayEnabled
+              ? 'Redirecting…'
+              : 'Sending…'
+            : paymentGatewayEnabled
+              ? isPartial
+                ? `Pay ${formatPrice(String(payNowAmount.toFixed(2)))} now (${payNowPercent}%)`
+                : 'Reserve Now'
+              : 'Submit reservation'}
         </Button>
       </form>
 
       <p className="text-center text-sm text-muted-foreground mt-3">
-        {isPartial ? 'Rest to be paid at checkout. Host will mark as paid.' : submitLabel}
+        {!paymentGatewayEnabled
+          ? 'No online payment for this site. Submit your dates and details; we will confirm by phone or email.'
+          : isPartial
+            ? 'Rest to be paid at checkout. Host will mark as paid.'
+            : submitLabel}
       </p>
 
       {nights > 0 && !hasUnavailableInRange && (

@@ -106,13 +106,18 @@ export default function AdminListingEdit() {
       const communityMatch = desc.match(/^Community homestay \((\d+) house[s]?\)\.\s*/i);
       const communityHouses = communityMatch ? communityMatch[1] : '';
       const descriptionWithoutPrefix = communityMatch ? desc.slice(communityMatch[0].length).trim() : desc;
+      const locationRaw = ((d.location as string) ?? '').trim();
+      const inferredMunicipality = locationRaw
+        .split(',')
+        .map((x) => x.trim())
+        .find((x) => /municipality|rural municipality|sub-metropolitan|metropolitan/i.test(x)) || '';
       setForm({
         title: (d.title as string) ?? '',
         type: (d.type as string) || 'individual',
         category: (d.category as string) ?? '',
         community_houses: communityHouses,
         location: (d.location as string) ?? '',
-        municipality: '',
+        municipality: inferredMunicipality,
         price_per_night: String(d.price_per_night ?? ''),
         max_guests: String(d.max_guests ?? '2'),
         description: descriptionWithoutPrefix,

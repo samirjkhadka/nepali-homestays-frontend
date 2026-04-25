@@ -25,6 +25,15 @@ const SECTION_KEYS = {
   owners_story: 'Our Story',
   about_us: 'About Us',
   their_community: 'Our Community',
+  itinerary: 'What to Expect (Itinerary)',
+  host_video_intro: 'Host Video Introduction',
+  local_experiences: 'Local Experiences',
+  meet_the_community: 'Meet the Community',
+  price_transparency: 'Price Transparency',
+  weather_best_time: 'Weather / Best Time to Visit',
+  village_stories: 'Stories from the Village',
+  guest_photo_wall: 'Guest Photo Wall',
+  experience_badges: 'Experience Badges (comma-separated ids)',
 } as const;
 
 export default function AdminListingNew() {

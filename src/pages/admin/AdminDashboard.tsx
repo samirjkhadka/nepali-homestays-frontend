@@ -344,7 +344,7 @@ export default function AdminDashboard() {
   const [reportsSearch, setReportsSearch] = useState('');
   const [cmsSearch, setCmsSearch] = useState('');
   const [users, setUsers] = useState<User[]>([]);
-  const [stats, setStats] = useState<{ total_users?: number; total_listings?: number; total_bookings?: number; total_revenue?: number }>({});
+  const [stats, setStats] = useState<{ total_users?: number; total_listings?: number; approved_listings?: number; disabled_listings?: number; total_bookings?: number; total_revenue?: number }>({});
   const [adminBookings, setAdminBookings] = useState<AdminBooking[]>([]);
   const [adminBookingsTotal, setAdminBookingsTotal] = useState(0);
   const [adminBookingsStatus, setAdminBookingsStatus] = useState<string>('');
@@ -488,13 +488,17 @@ export default function AdminDashboard() {
   useEffect(() => {
     api.get<{
       pending_listings?: Listing[]; listings?: Listing[]; users?: User[];
-      total_users?: number; total_listings?: number; total_bookings?: number; total_revenue?: number;
+      total_users?: number; total_listings?: number; approved_listings?: number; disabled_listings?: number; total_bookings?: number; total_revenue?: number;
     }>('/api/admin/dashboard').then((res) => {
-      setPendingListings(res.data.pending_listings || res.data.listings || []);
+      const dashboardPending = (res.data as { pending_listings?: unknown }).pending_listings;
+      const dashboardListings = (res.data as { listings?: unknown }).listings;
+      setPendingListings(Array.isArray(dashboardPending) ? dashboardPending : Array.isArray(dashboardListings) ? dashboardListings : []);
       setUsers(res.data.users || []);
       setStats({
         total_users: res.data.total_users,
         total_listings: res.data.total_listings,
+        approved_listings: res.data.approved_listings,
+        disabled_listings: res.data.disabled_listings,
         total_bookings: res.data.total_bookings,
         total_revenue: res.data.total_revenue,
       });
@@ -842,7 +846,7 @@ export default function AdminDashboard() {
   };
 
   const handleReject = (id: number) => {
-    api.patch(`/api/admin/listings/${id}/reject`).then(() => {
+    api.patch(`/api/admin/listings/${id}/reject`, {}).then(() => {
       toast({ title: 'Listing rejected.' });
       setPendingListings((list) => list.filter((l) => l.id !== id));
     }).catch(() => toast({ title: 'Failed.', variant: 'destructive' }));
@@ -888,7 +892,7 @@ export default function AdminDashboard() {
             className={`px-4 py-2 font-medium capitalize transition-colors ${tab === t ? 'border-b-2 border-accent-500 text-accent-600' : 'text-muted-foreground hover:text-primary-700'}`}
             onClick={() => setTab(t)}
           >
-            {t === 'listings' ? 'Pending listings' : t === 'corporates' ? 'Corporates' : t}
+            {t === 'listings' ? 'Listings' : t === 'corporates' ? 'Corporates' : t}
           </button>
         ))}
       </div>
@@ -913,8 +917,19 @@ export default function AdminDashboard() {
                   <Home className="h-8 w-8 text-primary-600" />
                 </div>
                 <div>
-                  <p className="text-2xl font-bold text-primary-800">{stats.total_listings ?? '—'}</p>
-                  <p className="text-sm text-muted-foreground">Total listings</p>
+                  <p className="text-2xl font-bold text-primary-800">{stats.approved_listings ?? '—'}</p>
+                  <p className="text-sm text-muted-foreground">Approved listings</p>
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="cursor-pointer border-primary-200 transition-shadow hover:shadow-md" onClick={() => setTab('listings')}>
+              <CardContent className="flex items-center gap-4 p-6">
+                <div className="rounded-full bg-primary-100 p-3">
+                  <AlertCircle className="h-8 w-8 text-primary-600" />
+                </div>
+                <div>
+                  <p className="text-2xl font-bold text-primary-800">{stats.disabled_listings ?? '—'}</p>
+                  <p className="text-sm text-muted-foreground">Disabled listings</p>
                 </div>
               </CardContent>
             </Card>
@@ -984,7 +999,7 @@ export default function AdminDashboard() {
               <div>
                 <div className="flex items-center gap-2">
                   <FileCheck className="h-5 w-5 text-accent-500" />
-                  <span className="font-semibold text-primary-800 text-lg">Pending listings</span>
+                  <span className="font-semibold text-primary-800 text-lg">Listings</span>
                 </div>
                 <p className="text-sm text-muted-foreground">Approve or reject new homestay listings</p>
               </div>
@@ -999,7 +1014,7 @@ export default function AdminDashboard() {
           </CardHeader>
           <CardContent className="p-6">
             {pendingListings.filter((l) => !pendingListingsSearch.trim() || l.title.toLowerCase().includes(pendingListingsSearch.toLowerCase()) || String(l.id).includes(pendingListingsSearch)).length === 0 ? (
-              <p className="text-muted-foreground">No pending listings.</p>
+              <p className="text-muted-foreground">No listings found.</p>
             ) : (
               <div className="space-y-4">
                 {pendingListings.filter((l) => !pendingListingsSearch.trim() || l.title.toLowerCase().includes(pendingListingsSearch.toLowerCase()) || String(l.id).includes(pendingListingsSearch)).map((l) => {

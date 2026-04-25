@@ -22,8 +22,11 @@ Optional: create `.env` from `.env.example`:
 
 | Variable | Description |
 |----------|-------------|
-| `VITE_API_URL` | Backend API base URL. Leave **empty** in dev to use Vite proxy; set in production (e.g. `https://api.example.com`) |
+| `VITE_API_URL` | API origin (scheme + host, no path). Leave **empty** in dev to use the Vite proxy; set for production (e.g. `https://testcms.dghub.io`) so the browser calls that host. |
+| `VITE_API_USE_V1` | Set to `true` when the server exposes versioned routes at `/api/v1/...` (not `/api/...`); the client maps paths accordingly. |
 | `VITE_STRIPE_PUBLISHABLE_KEY` | Stripe publishable key for payments |
+| `VITE_DEV_API_PROXY` / `VITE_DEV_IMAGES_PROXY` | Dev-only: proxy targets for `/api` and `/images` (default local backend). |
+| `VITE_DEV_NEWS_USE_REMOTE_API` | Dev-only: if `true`, news/settings fetches use `VITE_API_URL` instead of the dev proxy. See `src/lib/api.ts`. |
 
 ## Scripts
 
@@ -53,7 +56,11 @@ Optional: create `.env` from `.env.example`:
 Point the app at your backend by either:
 
 - **Development:** Run backend on `http://localhost:3000`; Vite proxy handles `/api` and `/images`.
-- **Production:** Set `VITE_API_URL` to your API base URL (e.g. `https://api.yoursite.com`).
+- **Production:** Set `VITE_API_URL` to the API origin and `VITE_API_USE_V1=true` if routes live under `/api/v1/...` (e.g. `https://testcms.dghub.io`).
+
+## Verification (new API host)
+
+After a deploy, smoke-check: `POST` login (expect `/api/v1/auth/...` on the wire), a public `GET` (e.g. listings or CMS), and an image that uses the API host for a relative path. The API must allow your site origin in **CORS** and, if you rely on cookies, support **credentials** with the axios client (`src/lib/api.ts` uses `withCredentials: true`).
 
 ## Pushing to GitHub
 

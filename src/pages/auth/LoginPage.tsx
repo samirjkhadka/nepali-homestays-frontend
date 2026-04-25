@@ -53,8 +53,10 @@ export default function LoginPage() {
       })
       .catch((err) => {
         const apiMessage = err.response?.data?.message;
+        const status = err.response?.status;
         const isAuthError = err.response?.status === 401 || err.response?.status === 400;
         const message =
+          (status === 429 ? 'Too many login attempts. Please wait a minute and try again.' : null) ||
           apiMessage ||
           (isAuthError ? 'Invalid email/mobile or password. Please check and try again.' : null) ||
           err.message ||

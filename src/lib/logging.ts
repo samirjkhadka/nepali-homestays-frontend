@@ -2,7 +2,7 @@
  * User journey and error logging for analytics and error tracking.
  * Sends events to backend /api/logs/journey and /api/logs/error.
  */
-import { api } from './api';
+import { api, apiPath } from './api';
 
 const SESSION_KEY = 'nh_session_id';
 const JOURNEY_BUFFER_MAX = 20;
@@ -33,8 +33,8 @@ function flushJourney(): void {
     clearTimeout(flushTimer);
     flushTimer = null;
   }
-  api.post('/api/logs/journey', { session_id: getSessionId(), events }).catch(() => {
-    // Re-queue on failure (optional: could drop or retry)
+  api.post('/api/logs/journey', { session_id: getSessionId(), events }).catch((err) => {
+    void err;
   });
 }
 
@@ -67,7 +67,7 @@ export function reportError(message: string, options?: { stack?: string; level?:
 export function flushJourneyOnUnload(): void {
   if (journeyBuffer.length === 0) return;
   const base = (api.defaults.baseURL as string) || '';
-  const url = (base.startsWith('http') ? base : `${window.location.origin}${base}`) + '/api/logs/journey';
+  const url = (base.startsWith('http') ? base : `${window.location.origin}${base}`) + apiPath('/api/logs/journey');
   const body = JSON.stringify({
     session_id: getSessionId(),
     events: journeyBuffer.splice(0, journeyBuffer.length),

@@ -11,6 +11,8 @@ node_modules/
 # Build
 dist/
 build/
+.vite/
+.cache/
 
 # Vite
 *.local
@@ -18,6 +20,9 @@ build/
 # Logs and debug
 *.log
 npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
 
 # OS and IDE
 .DS_Store
@@ -28,9 +33,12 @@ npm-debug.log*
 
 # TypeScript and tooling
 *.tsbuildinfo
+.eslintcache
 
 # Test and coverage
 coverage/
+test-results/
+playwright-report/
 
 # One-off GeoJSON sources for nepal map script
 scripts/tmp-nepal-geo/

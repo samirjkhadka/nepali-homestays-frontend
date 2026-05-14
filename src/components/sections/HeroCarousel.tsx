@@ -169,7 +169,7 @@ export default function HeroCarousel({ listings, heroLoaded = true }: Props) {
             alt={s.name}
             className="w-full h-full object-cover animate-ken-burns"
             loading="eager"
-            fetchpriority="high"
+            fetchPriority="high"
             decoding="async"
           />
           <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/25 to-black/45" aria-hidden />

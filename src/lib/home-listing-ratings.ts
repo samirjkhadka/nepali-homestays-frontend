@@ -16,15 +16,19 @@ function pseudoRatingOverFour(listingId: number): string {
 export function getHomeDisplayRating(
   listingId: number,
   averageRating: number | null | undefined,
-  reviewCount: number
+  reviewCount: number | null | undefined
 ): string {
-  if (reviewCount === 0) {
+  const n = reviewCount == null || !Number.isFinite(Number(reviewCount)) ? 0 : Number(reviewCount);
+  if (n === 0) {
     return pseudoRatingOverFour(listingId);
   }
-  return Number(averageRating ?? 0).toFixed(1);
+  const avg = Number(averageRating);
+  if (!Number.isFinite(avg) || avg <= 0) return pseudoRatingOverFour(listingId);
+  return avg.toFixed(1);
 }
 
-export function getHomeDisplayReviewCountLabel(reviewCount: number): string {
-  if (reviewCount < 100) return '100+';
-  return String(reviewCount);
+export function getHomeDisplayReviewCountLabel(reviewCount: number | null | undefined): string {
+  const n = reviewCount == null || !Number.isFinite(Number(reviewCount)) ? 0 : Number(reviewCount);
+  if (n < 100) return '100+';
+  return String(n);
 }

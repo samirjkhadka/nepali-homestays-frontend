@@ -30,10 +30,14 @@ export default function LoginPage() {
     setError('');
     setLoading(true);
     api
-      .post<{ requireOtp?: boolean; token?: string; user?: { id: number; email: string; role: string }; message?: string; email?: string }>(
-        '/api/auth/login',
-        { email: emailOrPhone.trim(), password }
-      )
+      .post<{
+        requireOtp?: boolean;
+        token?: string;
+        user?: { id: number; email: string; role: string; must_change_password?: boolean };
+        mustChangePassword?: boolean;
+        message?: string;
+        email?: string;
+      }>('/api/auth/login', { email: emailOrPhone.trim(), password })
       .then((res) => {
         if (res.data.requireOtp !== false) {
           const emailForVerify = res.data.email ?? (emailOrPhone.includes('@') ? emailOrPhone : '');
@@ -45,7 +49,14 @@ export default function LoginPage() {
           return;
         }
         if (res.data.token && res.data.user) {
-          login(res.data.token, res.data.user);
+          const mustChange =
+            Boolean(res.data.user.must_change_password) || Boolean(res.data.mustChangePassword);
+          const user = { ...res.data.user, must_change_password: mustChange };
+          login(res.data.token, user);
+          if (mustChange) {
+            navigate('/profile/change-password', { replace: true });
+            return;
+          }
           navigate(res.data.user.role === 'host' ? '/dashboard/host' : '/');
           return;
         }

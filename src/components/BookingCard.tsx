@@ -36,6 +36,11 @@ export interface BookingCardProps {
   onPartialPercentChange?: (percent: number) => void;
   /** When false, hide online payment options; guest submits reservation without gateway (admin setting). */
   paymentGatewayEnabled?: boolean;
+  /** Which gateways are actually available (admin + server env). */
+  paymentMethodsAvailable?: { npx: boolean; himalpay: boolean };
+  /** Selected checkout rail when reserving online. */
+  paymentProvider?: 'npx' | 'himalpay';
+  onPaymentProviderChange?: (provider: 'npx' | 'himalpay') => void;
   /** Optional extra services (paid add-ons) from listing */
   extraServices?: { id: number; name: string; price_npr: number; unit: string; description?: string | null }[];
   selectedExtraServices?: { extra_service_id: number; quantity: number }[];
@@ -66,6 +71,9 @@ export function BookingCard({
   onPaymentTypeChange,
   onPartialPercentChange,
   paymentGatewayEnabled = true,
+  paymentMethodsAvailable = { npx: true, himalpay: false },
+  paymentProvider = 'npx',
+  onPaymentProviderChange,
   extraServices,
   selectedExtraServices = [],
   onExtraServicesChange,
@@ -328,6 +336,40 @@ export function BookingCard({
             })}
           </div>
         )}
+
+        {paymentGatewayEnabled &&
+          nights > 0 &&
+          !hasUnavailableInRange &&
+          (paymentMethodsAvailable.npx || paymentMethodsAvailable.himalpay) &&
+          paymentMethodsAvailable.npx &&
+          paymentMethodsAvailable.himalpay &&
+          onPaymentProviderChange && (
+            <div className="p-3 rounded-xl border border-border bg-muted/30 space-y-2">
+              <p className="text-sm font-medium text-foreground">Pay with</p>
+              <div className="flex flex-col gap-2">
+                <label className="flex cursor-pointer items-center gap-2 text-sm text-foreground">
+                  <input
+                    type="radio"
+                    name="payment_provider"
+                    checked={paymentProvider === 'npx'}
+                    onChange={() => onPaymentProviderChange('npx')}
+                    className="h-4 w-4 border-border"
+                  />
+                  Pay via e-bank, m-bank
+                </label>
+                <label className="flex cursor-pointer items-center gap-2 text-sm text-foreground">
+                  <input
+                    type="radio"
+                    name="payment_provider"
+                    checked={paymentProvider === 'himalpay'}
+                    onChange={() => onPaymentProviderChange('himalpay')}
+                    className="h-4 w-4 border-border"
+                  />
+                  Pay via N-cash
+                </label>
+              </div>
+            </div>
+          )}
 
         {onPaymentTypeChange && paymentGatewayEnabled && nights > 0 && !hasUnavailableInRange && (
           <div className="p-3 rounded-xl border border-border bg-muted/30 space-y-3">

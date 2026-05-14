@@ -309,7 +309,7 @@ export default function Footer() {
                 <span>visitors</span>
               </p>
               <span className="text-sm text-background/70">
-                Made with <span className="text-destructive">&#9829;</span> in Nepal &#127475;&#127476;
+                Made with <span className="text-destructive">&#9829;</span> in Nepal &#127475;&#127477;
               </span>
             </div>
             <div className="flex items-center gap-4">

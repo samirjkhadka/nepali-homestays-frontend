@@ -35,6 +35,11 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (res) => res,
   (err) => {
+    if (err.response?.status === 403 && err.response?.data?.code === 'MUST_CHANGE_PASSWORD') {
+      if (typeof window !== 'undefined' && !window.location.pathname.includes('/profile/change-password')) {
+        window.location.href = '/profile/change-password';
+      }
+    }
     if (err.response?.status === 401) {
       const requestUrl = err.config?.url ?? '';
       const isAuthRequest = /\/api\/(?:v1\/)?auth\//.test(requestUrl);

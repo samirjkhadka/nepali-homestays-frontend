@@ -4,14 +4,25 @@ import * as Dialog from '@radix-ui/react-dialog';
 import { jsPDF } from 'jspdf';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
 import { PasswordInput } from '@/components/ui/password-input';
 import { Users, FileCheck, Calendar, CreditCard, BarChart3, FileText, Youtube, X, Download, Home, MessageSquare, Bell, Activity, AlertCircle, Mail, MousePointer, Building2, Plus, RefreshCw, Newspaper, ChevronUp, ChevronDown } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line, CartesianGrid, Legend } from 'recharts';
 import { api } from '@/lib/api';
+import { bookingFeeDelta, parseAmenityChargesJson } from '@/lib/booking-price-breakdown';
+import { OfflineProofPreview } from '@/components/booking/OfflineProofPreview';
 import { useToast } from '@/hooks/use-toast';
 import { HOMESTAY_CATEGORIES } from '@/data/districts';
 import { AdminTable } from '@/components/admin/AdminTable';
 import { DateRangePicker } from '@/components/DateRangePicker';
+
+function formatBookingPaymentMethod(raw: string | null | undefined): string {
+  const s = (raw ?? '').trim().toLowerCase();
+  if (s === 'npx') return 'NPX';
+  if (s === 'himalpay') return 'N-Cash (HimalPay)';
+  if (!s) return '—';
+  return (raw ?? '').trim();
+}
 
 type Listing = { id: number; title: string; host_id: number; status: string; created_at: string; badge?: string | null };
 type ApprovedListing = { id: number; title: string; location: string; badge: string | null };
@@ -19,10 +30,40 @@ type LiveListing = { id: number; title: string; location: string; badge: string 
 type User = { id: number; name: string; email: string; phone: string | null; role: string; created_at?: string; blocked?: boolean; host_listing_id?: number | null; host_listing_title?: string | null };
 type VideoEntry = { url: string; title?: string };
 type ChargeableAmenity = { id: number; listing_id: number; name: string; price_npr: number; charge_type: 'per_night' | 'one_time' };
-type AdminBooking = { id: number; listing_id: number; listing_title: string; guest_name: string; guest_email: string; check_in: string; check_out: string; guests: number; status: string; created_at: string; corporate_name?: string | null; subtotal_npr?: number | null; total_amount?: number | null; amenity_charges_json?: string | null; listing_price_per_night?: number | null };
-type AdminPayment = { id: number; booking_id: number; amount: number; service_charge?: number; status: string; created_at: string; listing_title: string; guest_name: string };
+type AdminBooking = {
+  id: number;
+  listing_id: number;
+  listing_title: string;
+  guest_name: string;
+  guest_email: string;
+  check_in: string;
+  check_out: string;
+  guests: number;
+  status: string;
+  created_at: string;
+  corporate_name?: string | null;
+  subtotal_npr?: number | null;
+  total_amount?: number | null;
+  amenity_charges_json?: string | null;
+  listing_price_per_night?: number | null;
+  offline_payment_proof_url?: string | null;
+  offline_payment_remarks?: string | null;
+  payment_provider?: string | null;
+};
+type AdminPayment = { id: number; booking_id: number; amount: number; service_charge?: number; status: string; created_at: string; listing_title: string; guest_name: string; payment_provider?: string | null };
 type Corporate = { id: number; name: string; status: string; contact_name: string | null; contact_email: string | null; contact_phone: string | null; billing_method: string | null; approval_required: boolean; max_nightly_rate: number | null; notes: string | null; created_at: string; updated_at: string };
 type CmsSection = { id: number; section_key: string; title: string | null; content: string | null; display_place: string; sort_order: number; created_at: string; updated_at: string };
+
+function isValidCmsSection(s: unknown): s is CmsSection {
+  if (typeof s !== 'object' || s === null) return false;
+  const o = s as Record<string, unknown>;
+  return (
+    typeof o.id === 'number' &&
+    typeof o.section_key === 'string' &&
+    typeof o.display_place === 'string' &&
+    typeof o.sort_order === 'number'
+  );
+}
 
 type ListingDisplaySettings = {
   badge_labels: Record<string, string>;
@@ -297,6 +338,21 @@ function normalizeTripPlannerPage(raw: unknown): TripPlannerPageForm {
   };
 }
 
+/** Keys must match backend `email-templates` / `email_template_overrides`. */
+const ADMIN_EMAIL_TEMPLATE_KEYS = [
+  'otp',
+  'password_reset',
+  'admin_password_reset',
+  'listing_approved',
+  'listing_rejected',
+  'booking_request',
+  'booking_approved',
+  'booking_declined',
+  'payment_received',
+  'payment_received_host',
+  'offline_booking_confirmed',
+] as const;
+
 const ADMIN_TABS = ['overview', 'listings', 'users', 'bookings', 'corporates', 'payments', 'reports', 'content', 'settings', 'logs'] as const;
 type AdminTab = (typeof ADMIN_TABS)[number];
 
@@ -336,9 +392,13 @@ export default function AdminDashboard() {
     const stateTab = (location.state as { tab?: string } | null)?.tab;
     if (stateTab && ADMIN_TABS.includes(stateTab as AdminTab)) setTab(stateTab as AdminTab);
   }, [location.state]);
+
   const [pendingListings, setPendingListings] = useState<Listing[]>([]);
   const [pendingListingsSearch, setPendingListingsSearch] = useState('');
   const [liveListingsSearch, setLiveListingsSearch] = useState('');
+  /** When opening Listings from overview cards, narrow the live table. */
+  const [adminLiveListingsFilter, setAdminLiveListingsFilter] = useState<'all' | 'disabled' | 'enabled'>('all');
+  const [adminConfirm, setAdminConfirm] = useState<{ title: string; description: string; action: () => void } | null>(null);
   const [adminBookingsSearch, setAdminBookingsSearch] = useState('');
   const [adminPaymentsSearch, setAdminPaymentsSearch] = useState('');
   const [reportsSearch, setReportsSearch] = useState('');
@@ -366,6 +426,8 @@ export default function AdminDashboard() {
   const [partialPaymentMinPercent, setPartialPaymentMinPercent] = useState(25);
   const [partialPaymentMinSaving, setPartialPaymentMinSaving] = useState(false);
   const [paymentGatewayEnabled, setPaymentGatewayEnabled] = useState(true);
+  const [paymentNpxEnabled, setPaymentNpxEnabled] = useState(true);
+  const [paymentHimalpayEnabled, setPaymentHimalpayEnabled] = useState(false);
   const [offlineBookingGuestMessage, setOfflineBookingGuestMessage] = useState('');
   const [paymentGatewaySaving, setPaymentGatewaySaving] = useState(false);
   type FeeRule = { type: 'service_charge' | 'discount'; kind: 'percent' | 'fixed'; value: number; applies_to?: 'guest' | 'host' };
@@ -378,6 +440,17 @@ export default function AdminDashboard() {
   const [sectionLabelsJson, setSectionLabelsJson] = useState('');
   const [newTrustBadge, setNewTrustBadge] = useState('');
   const [selectedBooking, setSelectedBooking] = useState<AdminBooking | null>(null);
+  const [offlineProofUrl, setOfflineProofUrl] = useState('');
+  const [offlineRemarks, setOfflineRemarks] = useState('');
+  const [offlineApproving, setOfflineApproving] = useState(false);
+
+  useEffect(() => {
+    if (selectedBooking) {
+      setOfflineProofUrl('');
+      setOfflineRemarks('');
+    }
+  }, [selectedBooking?.id]);
+
   const [selectedPayment, setSelectedPayment] = useState<AdminPayment | null>(null);
   const [liveListings, setLiveListings] = useState<LiveListing[]>([]);
   const [sparrowSms, setSparrowSms] = useState<SparrowSmsSettings>({ token: '', from: '' });
@@ -392,6 +465,14 @@ export default function AdminDashboard() {
   const [festivalsPageSaving, setFestivalsPageSaving] = useState(false);
   const [tripPlannerPageForm, setTripPlannerPageForm] = useState<TripPlannerPageForm>(EMPTY_TRIP_PLANNER_FORM());
   const [tripPlannerPageSaving, setTripPlannerPageSaving] = useState(false);
+  const [emailTemplatesMap, setEmailTemplatesMap] = useState<Record<string, { subject?: string; innerHtml?: string; bodyText?: string }>>({});
+  const [emailTemplateKey, setEmailTemplateKey] = useState<string>(ADMIN_EMAIL_TEMPLATE_KEYS[0]);
+  const [emailTemplateSubject, setEmailTemplateSubject] = useState('');
+  const [emailTemplateInnerHtml, setEmailTemplateInnerHtml] = useState('');
+  const [emailTemplateBodyText, setEmailTemplateBodyText] = useState('');
+  const [emailTemplatesSaving, setEmailTemplatesSaving] = useState(false);
+  const [userResetPwId, setUserResetPwId] = useState<number | null>(null);
+  const [userResetPwSaving, setUserResetPwSaving] = useState(false);
   const [settingsApprovedListings, setSettingsApprovedListings] = useState<ApprovedListing[]>([]);
   /** Loaded on Settings tab for titles + fallback if /listings/approved fails (same payload as Listings “live” table). */
   const [homePlacementLabelListings, setHomePlacementLabelListings] = useState<LiveListing[]>([]);
@@ -477,6 +558,16 @@ export default function AdminDashboard() {
   const [cmsSectionForm, setCmsSectionForm] = useState<{ section_key: string; title: string; content: string; display_place: string; sort_order: number }>({ section_key: '', title: '', content: '', display_place: 'footer', sort_order: 0 });
   const [cmsSectionSaving, setCmsSectionSaving] = useState(false);
   const [newCmsSectionKey, setNewCmsSectionKey] = useState('');
+  const filteredCmsSections = useMemo(() => {
+    const valid = cmsSections.filter(isValidCmsSection);
+    const q = cmsSearch.trim().toLowerCase();
+    if (!q) return valid;
+    return valid.filter(
+      (s) =>
+        (s.section_key && s.section_key.toLowerCase().includes(q)) ||
+        !!(s.title && s.title.toLowerCase().includes(q))
+    );
+  }, [cmsSections, cmsSearch]);
   // Users tab
   const [usersSearch, setUsersSearch] = useState('');
   const [usersLoading, setUsersLoading] = useState(false);
@@ -590,7 +681,8 @@ export default function AdminDashboard() {
     if (tab !== 'content') return;
     setCmsSectionsLoading(true);
     api.get<{ sections: CmsSection[] }>('/api/admin/cms/sections').then((res) => {
-      setCmsSections(res.data.sections || []);
+      const raw = Array.isArray(res.data.sections) ? res.data.sections : [];
+      setCmsSections(raw.filter(isValidCmsSection));
     }).catch(() => setCmsSections([])).finally(() => setCmsSectionsLoading(false));
   }, [tab]);
 
@@ -603,6 +695,8 @@ export default function AdminDashboard() {
         booking_fee_by_listing?: Record<string, { type: 'service_charge' | 'discount'; kind: 'percent' | 'fixed'; value: number; applies_to?: 'guest' | 'host' }>;
         partial_payment_min_percent?: number;
         payment_gateway_enabled?: boolean;
+        payment_npx_enabled?: boolean;
+        payment_himalpay_enabled?: boolean;
         offline_booking_guest_message?: string;
         listing_display?: ListingDisplaySettings;
         sparrow_sms?: SparrowSmsSettings;
@@ -611,6 +705,7 @@ export default function AdminDashboard() {
         home_partners?: Record<string, unknown>;
         festivals_page?: FestivalsPageConfig;
         trip_planner_page?: TripPlannerPageConfig;
+        email_template_overrides?: Record<string, { subject?: string; innerHtml?: string; bodyText?: string }>;
       }>('/api/admin/settings')
       .then((settingsRes) => {
         const res = settingsRes.data;
@@ -620,6 +715,8 @@ export default function AdminDashboard() {
         const minPct = res.partial_payment_min_percent;
         setPartialPaymentMinPercent(typeof minPct === 'number' && minPct >= 1 && minPct <= 100 ? minPct : 25);
         setPaymentGatewayEnabled(res.payment_gateway_enabled !== false);
+        setPaymentNpxEnabled(res.payment_npx_enabled !== false);
+        setPaymentHimalpayEnabled(res.payment_himalpay_enabled === true);
         setOfflineBookingGuestMessage(typeof res.offline_booking_guest_message === 'string' ? res.offline_booking_guest_message : '');
         setBookingFeeByCategory(res.booking_fee_by_category ?? {});
         setBookingFeeByListing(res.booking_fee_by_listing ?? {});
@@ -652,6 +749,11 @@ export default function AdminDashboard() {
         setHomePartnersForm(normalizeHomePartners(res.home_partners));
         setFestivalsPageForm(normalizeFestivalsPage(res.festivals_page ?? EMPTY_FESTIVALS_PAGE()));
         setTripPlannerPageForm(normalizeTripPlannerPage(res.trip_planner_page ?? EMPTY_TRIP_PLANNER_PAGE()));
+        setEmailTemplatesMap(
+          res.email_template_overrides && typeof res.email_template_overrides === 'object' && !Array.isArray(res.email_template_overrides)
+            ? (res.email_template_overrides as Record<string, { subject?: string; innerHtml?: string; bodyText?: string }>)
+            : {}
+        );
       })
       .catch(() => {
         setBookingFee(null);
@@ -667,8 +769,17 @@ export default function AdminDashboard() {
         setHomePartnersForm(EMPTY_HOME_PARTNERS());
         setFestivalsPageForm(EMPTY_FESTIVALS_FORM());
         setTripPlannerPageForm(EMPTY_TRIP_PLANNER_FORM());
+        setEmailTemplatesMap({});
       });
   }, [tab]);
+
+  useEffect(() => {
+    if (tab !== 'settings') return;
+    const o = emailTemplatesMap[emailTemplateKey] ?? {};
+    setEmailTemplateSubject(typeof o.subject === 'string' ? o.subject : '');
+    setEmailTemplateInnerHtml(typeof o.innerHtml === 'string' ? o.innerHtml : '');
+    setEmailTemplateBodyText(typeof o.bodyText === 'string' ? o.bodyText : '');
+  }, [tab, emailTemplateKey, emailTemplatesMap]);
 
   useEffect(() => {
     if (tab !== 'settings') return;
@@ -741,12 +852,33 @@ export default function AdminDashboard() {
         setAnalyticsData(res.data);
       }).catch(() => setAnalyticsData(null));
     } else if (logsSubTab === 'heatmap') {
-      api.get<{ rows: typeof heatmapPageViews }>(`/api/admin/logs/heatmap/page-views?from_date=${encodeURIComponent(from)}&to_date=${encodeURIComponent(to)}&limit=50`).then((res) => {
-        setHeatmapPageViews(res.data.rows || []);
-      }).catch(() => setHeatmapPageViews([]));
-      api.get<{ rows: typeof heatmapClicks }>(`/api/admin/logs/heatmap/clicks?from_date=${encodeURIComponent(from)}&to_date=${encodeURIComponent(to)}&limit=200`).then((res) => {
-        setHeatmapClicks(res.data.rows || []);
-      }).catch(() => setHeatmapClicks([]));
+      api
+        .get<{ rows: Record<string, unknown>[] }>(`/api/admin/logs/heatmap/page-views?from_date=${encodeURIComponent(from)}&to_date=${encodeURIComponent(to)}&limit=50`)
+        .then((res) => {
+          const raw = res.data.rows || [];
+          setHeatmapPageViews(
+            raw.map((row) => ({
+              path: String(row.path ?? row.page_or_route ?? ''),
+              views: Number(row.views ?? row.cnt ?? row.count ?? 0) || 0,
+            }))
+          );
+        })
+        .catch(() => setHeatmapPageViews([]));
+      api
+        .get<{ rows: Record<string, unknown>[] }>(`/api/admin/logs/heatmap/clicks?from_date=${encodeURIComponent(from)}&to_date=${encodeURIComponent(to)}&limit=200`)
+        .then((res) => {
+          const raw = res.data.rows || [];
+          setHeatmapClicks(
+            raw.map((row, i) => ({
+              id: Number(row.id ?? i),
+              session_id: String(row.session_id ?? ''),
+              page_or_route: row.page_or_route != null ? String(row.page_or_route) : null,
+              payload: row.payload != null ? String(row.payload) : null,
+              created_at: String(row.created_at ?? new Date().toISOString()),
+            }))
+          );
+        })
+        .catch(() => setHeatmapClicks([]));
     }
   }, [tab, logsSubTab, logsFiltersApplied, logDateFrom, logDateTo, logPage, logChannel, logSearch, logEventType, logPath, logSource]);
 
@@ -838,18 +970,39 @@ export default function AdminDashboard() {
       .finally(() => setYoutubeChannelIdSaving(false));
   };
 
+  const liveListingsFiltered = useMemo(() => {
+    let rows = liveListings;
+    if (adminLiveListingsFilter === 'disabled') rows = rows.filter((l) => l.status === 'disabled');
+    else if (adminLiveListingsFilter === 'enabled') rows = rows.filter((l) => l.status === 'approved');
+    return rows;
+  }, [liveListings, adminLiveListingsFilter]);
+
   const handleApprove = (id: number) => {
-    api.patch(`/api/admin/listings/${id}/approve`).then(() => {
-      toast({ title: 'Listing approved.' });
-      setPendingListings((list) => list.filter((l) => l.id !== id));
-    }).catch(() => toast({ title: 'Failed.', variant: 'destructive' }));
+    setAdminConfirm({
+      title: 'Approve this homestay?',
+      description: 'Guests will be able to find it and book (subject to your payment settings).',
+      action: () => {
+        setAdminConfirm(null);
+        api.patch(`/api/admin/listings/${id}/approve`).then(() => {
+          toast({ title: 'Listing approved.' });
+          setPendingListings((list) => list.filter((l) => l.id !== id));
+        }).catch(() => toast({ title: 'Failed.', variant: 'destructive' }));
+      },
+    });
   };
 
   const handleReject = (id: number) => {
-    api.patch(`/api/admin/listings/${id}/reject`, {}).then(() => {
-      toast({ title: 'Listing rejected.' });
-      setPendingListings((list) => list.filter((l) => l.id !== id));
-    }).catch(() => toast({ title: 'Failed.', variant: 'destructive' }));
+    setAdminConfirm({
+      title: 'Reject this listing?',
+      description: 'The host will need to submit a new application.',
+      action: () => {
+        setAdminConfirm(null);
+        api.patch(`/api/admin/listings/${id}/reject`, {}).then(() => {
+          toast({ title: 'Listing rejected.' });
+          setPendingListings((list) => list.filter((l) => l.id !== id));
+        }).catch(() => toast({ title: 'Failed.', variant: 'destructive' }));
+      },
+    });
   };
 
   const handleBadgeChange = (id: number, badges: string[]) => {
@@ -865,12 +1018,25 @@ export default function AdminDashboard() {
   };
 
   const handleStatusChange = (id: number, status: 'approved' | 'disabled') => {
-    api.patch(`/api/admin/listings/${id}/status`, { status })
-      .then((res) => {
-        toast({ title: status === 'approved' ? 'Listing enabled.' : 'Listing disabled.' });
-        setLiveListings((list) => list.map((l) => l.id === id ? { ...l, status: res.data.listing?.status ?? status } : l));
-      })
-      .catch(() => toast({ title: 'Failed to update status.', variant: 'destructive' }));
+    setAdminConfirm({
+      title: status === 'disabled' ? 'Disable this homestay?' : 'Enable this homestay?',
+      description:
+        status === 'disabled'
+          ? 'It will be hidden from search and the site until you enable it again.'
+          : 'It will become visible to guests again.',
+      action: () => {
+        setAdminConfirm(null);
+        api
+          .patch<{ listing?: { status?: string } }>(`/api/admin/listings/${id}/status`, { status })
+          .then((res) => {
+            toast({ title: status === 'approved' ? 'Listing enabled.' : 'Listing disabled.' });
+            setLiveListings((list) =>
+              list.map((l) => (l.id === id ? { ...l, status: res.data.listing?.status ?? status } : l))
+            );
+          })
+          .catch(() => toast({ title: 'Failed to update status.', variant: 'destructive' }));
+      },
+    });
   };
 
   const handleRoleChange = (userId: number, role: string) => {
@@ -882,6 +1048,20 @@ export default function AdminDashboard() {
 
   return (
     <div>
+      <Dialog.Root open={!!adminConfirm} onOpenChange={(open) => { if (!open) setAdminConfirm(null); }}>
+        <Dialog.Portal>
+          <Dialog.Overlay className="fixed inset-0 bg-black/50 z-50" />
+          <Dialog.Content aria-describedby={undefined} className="fixed left-1/2 top-1/2 z-[60] w-full max-w-md -translate-x-1/2 -translate-y-1/2 rounded-lg border border-primary-200 bg-background p-6 shadow-lg">
+            <Dialog.Title className="text-lg font-semibold text-primary-800">{adminConfirm?.title}</Dialog.Title>
+            <p className="mt-2 text-sm text-muted-foreground">{adminConfirm?.description}</p>
+            <div className="mt-6 flex justify-end gap-2">
+              <Button type="button" variant="outline" onClick={() => setAdminConfirm(null)}>Cancel</Button>
+              <Button type="button" className="bg-accent-500 hover:bg-accent-600" onClick={() => adminConfirm?.action()}>Confirm</Button>
+            </div>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
+
       <h1 className="text-3xl font-bold text-primary-800">Admin dashboard</h1>
       <p className="mt-1 text-muted-foreground">Moderate listings and manage users</p>
       <div className="mt-6 flex flex-wrap gap-2 border-b border-primary-200">
@@ -890,7 +1070,10 @@ export default function AdminDashboard() {
             key={t}
             type="button"
             className={`px-4 py-2 font-medium capitalize transition-colors ${tab === t ? 'border-b-2 border-accent-500 text-accent-600' : 'text-muted-foreground hover:text-primary-700'}`}
-            onClick={() => setTab(t)}
+            onClick={() => {
+              setTab(t);
+              if (t === 'listings') setAdminLiveListingsFilter('all');
+            }}
           >
             {t === 'listings' ? 'Listings' : t === 'corporates' ? 'Corporates' : t}
           </button>
@@ -900,7 +1083,7 @@ export default function AdminDashboard() {
       {tab === 'overview' && (
         <div className="mt-6 space-y-6">
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
-            <Card className="cursor-pointer border-primary-200 transition-shadow hover:shadow-md" onClick={() => setTab('listings')}>
+            <Card className="cursor-pointer border-primary-200 transition-shadow hover:shadow-md" onClick={() => { setTab('listings'); setAdminLiveListingsFilter('all'); }}>
               <CardContent className="flex items-center gap-4 p-6">
                 <div className="rounded-full bg-accent-100 p-3">
                   <FileCheck className="h-8 w-8 text-accent-600" />
@@ -911,7 +1094,7 @@ export default function AdminDashboard() {
                 </div>
               </CardContent>
             </Card>
-            <Card className="cursor-pointer border-primary-200 transition-shadow hover:shadow-md" onClick={() => setTab('listings')}>
+            <Card className="cursor-pointer border-primary-200 transition-shadow hover:shadow-md" onClick={() => { setTab('listings'); setAdminLiveListingsFilter('enabled'); }}>
               <CardContent className="flex items-center gap-4 p-6">
                 <div className="rounded-full bg-primary-100 p-3">
                   <Home className="h-8 w-8 text-primary-600" />
@@ -922,7 +1105,7 @@ export default function AdminDashboard() {
                 </div>
               </CardContent>
             </Card>
-            <Card className="cursor-pointer border-primary-200 transition-shadow hover:shadow-md" onClick={() => setTab('listings')}>
+            <Card className="cursor-pointer border-primary-200 transition-shadow hover:shadow-md" onClick={() => { setTab('listings'); setAdminLiveListingsFilter('disabled'); }}>
               <CardContent className="flex items-center gap-4 p-6">
                 <div className="rounded-full bg-primary-100 p-3">
                   <AlertCircle className="h-8 w-8 text-primary-600" />
@@ -1058,6 +1241,20 @@ export default function AdminDashboard() {
               <div>
                 <h2 className="font-semibold text-primary-800">Approved & disabled listings</h2>
                 <p className="text-sm text-muted-foreground">Enable or disable homestays. Disabled listings are hidden from search and the site. Set badges for approved listings.</p>
+                <div className="flex flex-wrap gap-2 mt-3">
+                  {(['all', 'enabled', 'disabled'] as const).map((f) => (
+                    <Button
+                      key={f}
+                      type="button"
+                      size="sm"
+                      variant={adminLiveListingsFilter === f ? 'default' : 'outline'}
+                      className={adminLiveListingsFilter === f ? 'bg-accent-500 hover:bg-accent-600' : ''}
+                      onClick={() => setAdminLiveListingsFilter(f)}
+                    >
+                      {f === 'all' ? 'All' : f === 'enabled' ? 'Enabled only' : 'Disabled only'}
+                    </Button>
+                  ))}
+                </div>
               </div>
               <input
                 type="text"
@@ -1070,7 +1267,7 @@ export default function AdminDashboard() {
           </CardHeader>
           <CardContent className="p-0">
             <AdminTable<LiveListing>
-              data={liveListings.filter((l) => !liveListingsSearch.trim() || l.title.toLowerCase().includes(liveListingsSearch.toLowerCase()) || l.location?.toLowerCase().includes(liveListingsSearch.toLowerCase()) || String(l.id).includes(liveListingsSearch))}
+              data={liveListingsFiltered.filter((l) => !liveListingsSearch.trim() || l.title.toLowerCase().includes(liveListingsSearch.toLowerCase()) || l.location?.toLowerCase().includes(liveListingsSearch.toLowerCase()) || String(l.id).includes(liveListingsSearch))}
               keyExtractor={(l) => l.id}
               pageSize={15}
               emptyMessage="No approved or disabled listings."
@@ -1134,7 +1331,62 @@ export default function AdminDashboard() {
                     { key: 'role', label: 'Role', sortable: true, render: (u) => (<><span className={`rounded-full px-2 py-1 text-xs font-medium ${u.role === 'admin' ? 'bg-accent-100 text-accent-800' : u.role === 'host' ? 'bg-primary-100 text-primary-800' : 'bg-secondary-200 text-secondary-800'}`}>{u.role === 'admin' ? 'Admin' : u.role === 'host' ? 'Host' : 'Guest'}</span>{u.blocked && <span className="ml-1 rounded-full bg-red-100 px-2 py-0.5 text-xs text-red-800">Blocked</span>}</>) },
                     { key: 'host_listing_id', label: 'Host listing', render: (u) => u.host_listing_id != null && u.host_listing_title != null ? <span title={u.host_listing_title ?? ''}>#{u.host_listing_id} – {u.host_listing_title}</span> : '—' },
                     { key: 'change_role', label: 'Change role', render: (u) => (<select value={u.role} onChange={(e) => handleRoleChange(u.id, e.target.value)} className="rounded-md border border-primary-200 bg-background px-2 py-1.5 text-sm"><option value="guest">Guest</option><option value="host">Host</option><option value="admin">Admin</option></select>) },
-                    { key: 'actions', label: 'Actions', render: (u) => (<div className="flex flex-wrap items-center gap-2"><Button type="button" variant="outline" size="sm" onClick={() => setSelectedUserDetail(u)}>View detail</Button>{u.blocked ? (<Button type="button" size="sm" className="bg-green-600 hover:bg-green-700" onClick={() => api.patch(`/api/admin/users/${u.id}/block`, { blocked: false }).then(() => { setUsers((prev) => prev.map((x) => x.id === u.id ? { ...x, blocked: false } : x)); toast({ title: 'User unblocked.' }); }).catch((err) => toast({ title: err.response?.data?.message || 'Failed', variant: 'destructive' }))}>Unblock</Button>) : (<Button type="button" variant="destructive" size="sm" onClick={() => api.patch(`/api/admin/users/${u.id}/block`, { blocked: true }).then(() => { setUsers((prev) => prev.map((x) => x.id === u.id ? { ...x, blocked: true } : x)); toast({ title: 'User blocked.' }); }).catch((err) => toast({ title: err.response?.data?.message || 'Failed', variant: 'destructive' }))}>Block</Button>)}</div>) },
+                    {
+                      key: 'actions',
+                      label: 'Actions',
+                      render: (u) => (
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Button type="button" variant="outline" size="sm" onClick={() => setSelectedUserDetail(u)}>
+                            View detail
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            title={!u.email?.trim() ? 'User has no email' : undefined}
+                            disabled={!u.email?.trim()}
+                            onClick={() => setUserResetPwId(u.id)}
+                          >
+                            Reset password
+                          </Button>
+                          {u.blocked ? (
+                            <Button
+                              type="button"
+                              size="sm"
+                              className="bg-green-600 hover:bg-green-700"
+                              onClick={() =>
+                                api
+                                  .patch(`/api/admin/users/${u.id}/block`, { blocked: false })
+                                  .then(() => {
+                                    setUsers((prev) => prev.map((x) => (x.id === u.id ? { ...x, blocked: false } : x)));
+                                    toast({ title: 'User unblocked.' });
+                                  })
+                                  .catch((err) => toast({ title: err.response?.data?.message || 'Failed', variant: 'destructive' }))
+                              }
+                            >
+                              Unblock
+                            </Button>
+                          ) : (
+                            <Button
+                              type="button"
+                              variant="destructive"
+                              size="sm"
+                              onClick={() =>
+                                api
+                                  .patch(`/api/admin/users/${u.id}/block`, { blocked: true })
+                                  .then(() => {
+                                    setUsers((prev) => prev.map((x) => (x.id === u.id ? { ...x, blocked: true } : x)));
+                                    toast({ title: 'User blocked.' });
+                                  })
+                                  .catch((err) => toast({ title: err.response?.data?.message || 'Failed', variant: 'destructive' }))
+                              }
+                            >
+                              Block
+                            </Button>
+                          )}
+                        </div>
+                      ),
+                    },
                   ]}
                 />
               )}
@@ -1144,7 +1396,7 @@ export default function AdminDashboard() {
           <Dialog.Root open={!!selectedUserDetail} onOpenChange={(open) => !open && setSelectedUserDetail(null)}>
             <Dialog.Portal>
               <Dialog.Overlay className="fixed inset-0 bg-black/50" />
-              <Dialog.Content className="fixed left-1/2 top-1/2 z-50 w-full max-w-md -translate-x-1/2 -translate-y-1/2 rounded-lg border border-primary-200 bg-background p-6 shadow-lg">
+              <Dialog.Content aria-describedby={undefined} className="fixed left-1/2 top-1/2 z-50 w-full max-w-md -translate-x-1/2 -translate-y-1/2 rounded-lg border border-primary-200 bg-background p-6 shadow-lg">
                 <Dialog.Title className="text-lg font-semibold text-primary-800">User detail</Dialog.Title>
                 {selectedUserDetail && (
                   <div className="mt-4 space-y-2 text-sm">
@@ -1164,10 +1416,53 @@ export default function AdminDashboard() {
             </Dialog.Portal>
           </Dialog.Root>
 
+          <Dialog.Root open={userResetPwId !== null} onOpenChange={(open) => !open && setUserResetPwId(null)}>
+            <Dialog.Portal>
+              <Dialog.Overlay className="fixed inset-0 bg-black/50" />
+              <Dialog.Content aria-describedby={undefined} className="fixed left-1/2 top-1/2 z-50 w-full max-w-md -translate-x-1/2 -translate-y-1/2 rounded-lg border border-primary-200 bg-background p-6 shadow-lg">
+                <Dialog.Title className="text-lg font-semibold text-primary-800">Reset user password</Dialog.Title>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  A strong temporary password will be emailed to the user. They must choose a new password the next time they sign in.
+                </p>
+                {userResetPwId != null && (
+                  <p className="mt-3 text-sm">
+                    <span className="font-medium text-primary-800">{users.find((x) => x.id === userResetPwId)?.name ?? 'User'}</span>
+                    {' · '}
+                    <span className="text-muted-foreground">{users.find((x) => x.id === userResetPwId)?.email}</span>
+                  </p>
+                )}
+                <div className="mt-6 flex justify-end gap-2">
+                  <Button type="button" variant="outline" onClick={() => setUserResetPwId(null)} disabled={userResetPwSaving}>
+                    Cancel
+                  </Button>
+                  <Button
+                    type="button"
+                    className="bg-accent-500 hover:bg-accent-600"
+                    disabled={userResetPwId == null || userResetPwSaving}
+                    onClick={() => {
+                      if (userResetPwId == null) return;
+                      setUserResetPwSaving(true);
+                      api
+                        .post(`/api/admin/users/${userResetPwId}/reset-password`)
+                        .then((res) => {
+                          toast({ title: res.data?.message || 'Password reset email sent.' });
+                          setUserResetPwId(null);
+                        })
+                        .catch((err) => toast({ title: err.response?.data?.message || 'Failed to reset password.', variant: 'destructive' }))
+                        .finally(() => setUserResetPwSaving(false));
+                    }}
+                  >
+                    {userResetPwSaving ? 'Sending…' : 'Send reset email'}
+                  </Button>
+                </div>
+              </Dialog.Content>
+            </Dialog.Portal>
+          </Dialog.Root>
+
           <Dialog.Root open={addAdminOpen} onOpenChange={setAddAdminOpen}>
             <Dialog.Portal>
               <Dialog.Overlay className="fixed inset-0 bg-black/50" />
-              <Dialog.Content className="fixed left-1/2 top-1/2 z-50 w-full max-w-md -translate-x-1/2 -translate-y-1/2 rounded-lg border border-primary-200 bg-background p-6 shadow-lg">
+              <Dialog.Content aria-describedby={undefined} className="fixed left-1/2 top-1/2 z-50 w-full max-w-md -translate-x-1/2 -translate-y-1/2 rounded-lg border border-primary-200 bg-background p-6 shadow-lg">
                 <Dialog.Title className="text-lg font-semibold text-primary-800">Add admin user</Dialog.Title>
                 <p className="mt-1 text-sm text-muted-foreground">New admin will need to verify OTP on first login.</p>
                 <form className="mt-4 space-y-3" onSubmit={(e) => { e.preventDefault(); if (!addAdminForm.name.trim() || !addAdminForm.email.trim() || !addAdminForm.password) { toast({ title: 'Name, email and password required.', variant: 'destructive' }); return; } setAddAdminSaving(true); api.post('/api/admin/users', { name: addAdminForm.name.trim(), email: addAdminForm.email.trim(), phone: addAdminForm.phone.trim() || undefined, password: addAdminForm.password }).then(() => { toast({ title: 'Admin user created.' }); setAddAdminOpen(false); setAddAdminForm({ name: '', email: '', phone: '', password: '' }); const params = new URLSearchParams(); if (usersSearch.trim()) params.set('search', usersSearch.trim()); return api.get<{ users: User[] }>(`/api/admin/users?${params}`); }).then((r) => { if (r?.data?.users) setUsers(r.data.users); }).catch((err) => toast({ title: err.response?.data?.message || 'Failed to create admin.', variant: 'destructive' })).finally(() => setAddAdminSaving(false)); }}>
@@ -1249,6 +1544,7 @@ export default function AdminDashboard() {
                 { key: 'corporate_name', label: 'Corporate', render: (b) => b.corporate_name || '—' },
                 { key: 'dates', label: 'Dates', sortValue: (b) => b.check_in, render: (b) => `${formatDateOnly(b.check_in)} – ${formatDateOnly(b.check_out)}` },
                 { key: 'status', label: 'Status', sortable: true, render: (b) => <span className={`rounded-full px-2 py-1 text-xs font-medium ${bookingStatusColor(b.status)}`}>{b.status}</span> },
+                { key: 'payment_provider', label: 'Online pay', render: (b) => formatBookingPaymentMethod(b.payment_provider) },
                 { key: 'actions', label: 'Actions', render: (b) => <Button variant="outline" size="sm" onClick={() => setSelectedBooking(b)}>View booking details</Button> },
               ]}
             />
@@ -1322,7 +1618,7 @@ export default function AdminDashboard() {
           <Dialog.Root open={corporateFormOpen} onOpenChange={(open) => { setCorporateFormOpen(open); if (!open) setEditingCorporate(null); }}>
             <Dialog.Portal>
               <Dialog.Overlay className="fixed inset-0 bg-black/50" />
-              <Dialog.Content className="fixed left-1/2 top-1/2 z-50 w-full max-w-md -translate-x-1/2 -translate-y-1/2 rounded-lg border border-primary-200 bg-background p-6 shadow-lg">
+              <Dialog.Content aria-describedby={undefined} className="fixed left-1/2 top-1/2 z-50 w-full max-w-md -translate-x-1/2 -translate-y-1/2 rounded-lg border border-primary-200 bg-background p-6 shadow-lg">
                 <Dialog.Title className="text-lg font-semibold text-primary-800">{editingCorporate ? 'Edit corporate' : 'Add corporate'}</Dialog.Title>
                 <form className="mt-4 space-y-3" onSubmit={(e) => { e.preventDefault(); setCorporateFormSaving(true); const payload = { name: corporateForm.name!, status: (corporateForm.status as string) || 'provisional', contact_name: corporateForm.contact_name || undefined, contact_email: corporateForm.contact_email || undefined, contact_phone: corporateForm.contact_phone || undefined, billing_method: corporateForm.billing_method || undefined, approval_required: !!corporateForm.approval_required, max_nightly_rate: corporateForm.max_nightly_rate != null ? Number(corporateForm.max_nightly_rate) : undefined, notes: corporateForm.notes || undefined }; if (editingCorporate) { api.patch(`/api/admin/corporates/${editingCorporate.id}`, payload).then((res) => { toast({ title: 'Corporate updated.' }); setCorporateFormOpen(false); const updated = res.data.corporate as Corporate; setCorporates((prev) => prev.map((x) => x.id === editingCorporate.id ? updated : x)); }).catch(() => toast({ title: 'Failed to update.', variant: 'destructive' })).finally(() => setCorporateFormSaving(false)); } else { api.post('/api/admin/corporates', payload).then((res) => { toast({ title: 'Corporate created.' }); setCorporates((prev) => [res.data.corporate, ...prev]); setCorporatesTotal((t) => t + 1); setCorporateFormOpen(false); }).catch(() => toast({ title: 'Failed to create.', variant: 'destructive' })).finally(() => setCorporateFormSaving(false)); } }}>
                   <div>
@@ -1378,7 +1674,7 @@ export default function AdminDashboard() {
           <Dialog.Root open={createBookingOpen} onOpenChange={setCreateBookingOpen}>
             <Dialog.Portal>
               <Dialog.Overlay className="fixed inset-0 bg-black/50" />
-              <Dialog.Content className="fixed left-1/2 top-1/2 z-50 max-h-[90vh] w-full max-w-lg -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-lg border border-primary-200 bg-background p-6 shadow-lg">
+              <Dialog.Content aria-describedby={undefined} className="fixed left-1/2 top-1/2 z-50 max-h-[90vh] w-full max-w-lg -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-lg border border-primary-200 bg-background p-6 shadow-lg">
                 <Dialog.Title className="text-lg font-semibold text-primary-800">Create corporate booking</Dialog.Title>
                 <p className="mt-1 text-sm text-muted-foreground">Add guest names (one per line or comma-separated) or upload CSV. Number of guests and total price are calculated from the list.</p>
                 <form className="mt-4 space-y-3" onSubmit={(e) => {
@@ -1607,6 +1903,7 @@ export default function AdminDashboard() {
                 { key: 'guest_name', label: 'Guest', sortable: true },
                 { key: 'amount', label: 'Amount', sortable: true, render: (p) => <span className="font-medium text-accent-600">NPR {Number(p.amount).toLocaleString()}</span> },
                 { key: 'service_charge', label: 'Service charge', render: (p) => `NPR ${Number(p.service_charge ?? 0).toLocaleString()}` },
+                { key: 'payment_provider', label: 'Method', render: (p) => formatBookingPaymentMethod(p.payment_provider) },
                 { key: 'status', label: 'Status', sortable: true, render: (p) => <span className={`rounded-full px-2 py-1 text-xs font-medium ${p.status === 'succeeded' ? 'bg-green-100 text-green-800' : 'bg-secondary-200 text-secondary-800'}`}>{p.status}</span> },
                 { key: 'created_at', label: 'Date', sortable: true, render: (p) => formatDateOnly(p.created_at) },
                 { key: 'actions', label: 'Receipt', render: (p) => <Button variant="outline" size="sm" onClick={() => setSelectedPayment(p)}>View transaction receipt</Button> },
@@ -1651,6 +1948,7 @@ export default function AdminDashboard() {
                 { key: 'check_out', label: 'Check-out', sortable: true, render: (b) => formatDateOnly(b.check_out) },
                 { key: 'guests', label: 'Guests', sortable: true },
                 { key: 'status', label: 'Status', sortable: true, render: (b) => <span className={`rounded-full px-2 py-1 text-xs font-medium ${bookingStatusColor(b.status)}`}>{b.status}</span> },
+                { key: 'payment_provider', label: 'Online pay', render: (b) => formatBookingPaymentMethod(b.payment_provider) },
                 { key: 'created_at', label: 'Created', sortable: true, render: (b) => formatDateOnly(b.created_at) },
               ]}
             />
@@ -1823,11 +2121,15 @@ export default function AdminDashboard() {
               </div>
               {cmsSectionsLoading ? (
                 <p className="p-6 text-center text-muted-foreground">Loading sections…</p>
-              ) : cmsSections.filter((s) => !cmsSearch.trim() || (s.section_key && s.section_key.toLowerCase().includes(cmsSearch.toLowerCase())) || (s.title && s.title.toLowerCase().includes(cmsSearch.toLowerCase()))).length === 0 ? (
-                <p className="p-6 text-center text-muted-foreground">No CMS sections yet. Add one above or they may be seeded in the database.</p>
+              ) : filteredCmsSections.length === 0 ? (
+                <p className="p-6 text-center text-muted-foreground">
+                  {cmsSections.filter(isValidCmsSection).length === 0
+                    ? 'No CMS sections yet. Add one above or they may be seeded in the database.'
+                    : 'No sections match your search.'}
+                </p>
               ) : (
                 <ul className="space-y-2">
-                  {cmsSections.filter((s) => !cmsSearch.trim() || (s.section_key && s.section_key.toLowerCase().includes(cmsSearch.toLowerCase())) || (s.title && s.title.toLowerCase().includes(cmsSearch.toLowerCase()))).map((s) => (
+                  {filteredCmsSections.map((s) => (
                     <li key={s.id} className="flex items-center justify-between gap-2 rounded-md border border-primary-100 bg-primary-50/50 px-3 py-2 text-sm">
                       <span className="font-medium text-primary-800">{s.section_key}</span>
                       <span className="text-muted-foreground">{s.display_place} · order {s.sort_order}</span>
@@ -1868,7 +2170,7 @@ export default function AdminDashboard() {
             >
               <Dialog.Portal>
                 <Dialog.Overlay className="fixed inset-0 bg-black/50" />
-                <Dialog.Content className="fixed left-1/2 top-1/2 z-50 w-full max-w-2xl max-h-[90vh] overflow-y-auto -translate-x-1/2 -translate-y-1/2 rounded-lg border border-primary-200 bg-background p-6 shadow-lg">
+                <Dialog.Content aria-describedby={undefined} className="fixed left-1/2 top-1/2 z-50 w-full max-w-2xl max-h-[90vh] overflow-y-auto -translate-x-1/2 -translate-y-1/2 rounded-lg border border-primary-200 bg-background p-6 shadow-lg">
                   <Dialog.Title className="text-lg font-semibold text-primary-800">
                     {editingCmsSection ? `Edit: ${editingCmsSection.section_key}` : `New section: ${cmsSectionForm.section_key}`}
                   </Dialog.Title>
@@ -1888,8 +2190,18 @@ export default function AdminDashboard() {
                         api
                           .patch(`/api/admin/cms/sections/${editingCmsSection.id}`, payload)
                           .then((res) => {
-                            const updated = res.data.section as CmsSection;
-                            setCmsSections((prev) => prev.map((x) => (x.id === editingCmsSection.id ? updated : x)));
+                            const fromApi = res.data.section;
+                            const next: CmsSection = isValidCmsSection(fromApi)
+                              ? fromApi
+                              : {
+                                  ...editingCmsSection,
+                                  section_key: payload.section_key,
+                                  title: payload.title,
+                                  content: payload.content,
+                                  display_place: payload.display_place,
+                                  sort_order: payload.sort_order,
+                                };
+                            setCmsSections((prev) => prev.map((x) => (x.id === editingCmsSection.id ? next : x)));
                             toast({ title: 'Section updated.' });
                             setEditingCmsSection(null);
                             setCmsSectionForm({ section_key: '', title: '', content: '', display_place: 'footer', sort_order: 0 });
@@ -1899,9 +2211,21 @@ export default function AdminDashboard() {
                       } else {
                         api
                           .post('/api/admin/cms/sections', payload)
-                          .then((res) => {
-                            const created = res.data.section as CmsSection;
-                            setCmsSections((prev) => [...prev, created].sort((a, b) => a.sort_order - b.sort_order || a.id - b.id));
+                          .then(async (res) => {
+                            const created = res.data.section;
+                            if (isValidCmsSection(created)) {
+                              setCmsSections((prev) => [...prev, created].sort((a, b) => a.sort_order - b.sort_order || a.id - b.id));
+                            } else {
+                              try {
+                                const list = await api.get<{ sections: CmsSection[] }>('/api/admin/cms/sections');
+                                const raw = Array.isArray(list.data.sections) ? list.data.sections : [];
+                                setCmsSections(raw.filter(isValidCmsSection));
+                              } catch {
+                                toast({ title: 'Section may have been created but the list could not be refreshed.', variant: 'destructive' });
+                                setCmsSectionSaving(false);
+                                return;
+                              }
+                            }
                             toast({ title: 'Section created.' });
                             setCmsSectionForm({ section_key: '', title: '', content: '', display_place: 'footer', sort_order: 0 });
                           })
@@ -2223,6 +2547,27 @@ export default function AdminDashboard() {
                 />
                 <span className="text-sm font-medium text-primary-800">Require online payment when reserving</span>
               </label>
+              <p className="text-xs text-muted-foreground">
+                If online payment is on, enable at least one method below (and configure server credentials: NPX env vars, or HimalPay <code className="rounded bg-muted px-1">HIMALPAY_CHECKOUT_API_KEY</code>).
+              </p>
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={paymentNpxEnabled}
+                  onChange={(e) => setPaymentNpxEnabled(e.target.checked)}
+                  className="h-4 w-4 rounded border-primary-200"
+                />
+                <span className="text-sm font-medium text-primary-800">Enable e-bank / m-bank (NPX)</span>
+              </label>
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={paymentHimalpayEnabled}
+                  onChange={(e) => setPaymentHimalpayEnabled(e.target.checked)}
+                  className="h-4 w-4 rounded border-primary-200"
+                />
+                <span className="text-sm font-medium text-primary-800">Enable N-cash (HimalPay)</span>
+              </label>
               <div>
                 <label className="mb-1 block text-sm font-medium text-primary-800">Extra message for guests (optional)</label>
                 <p className="text-xs text-muted-foreground mb-2">
@@ -2237,30 +2582,57 @@ export default function AdminDashboard() {
                   className="w-full min-h-[100px] rounded-md border border-primary-200 bg-background px-3 py-2 text-sm"
                 />
               </div>
-              <Button
-                type="button"
-                disabled={paymentGatewaySaving}
-                className="bg-accent-500 hover:bg-accent-600"
-                onClick={() => {
-                  setPaymentGatewaySaving(true);
-                  api
-                    .patch('/api/admin/settings', {
-                      payment_gateway_enabled: paymentGatewayEnabled,
-                      offline_booking_guest_message: offlineBookingGuestMessage.trim() || null,
-                    })
-                    .then((res) => {
-                      setPaymentGatewayEnabled(res.data?.payment_gateway_enabled !== false);
-                      setOfflineBookingGuestMessage(
-                        typeof res.data?.offline_booking_guest_message === 'string' ? res.data.offline_booking_guest_message : ''
-                      );
-                      toast({ title: 'Payment options saved.' });
-                    })
-                    .catch(() => toast({ title: 'Failed to save.', variant: 'destructive' }))
-                    .finally(() => setPaymentGatewaySaving(false));
-                }}
-              >
-                {paymentGatewaySaving ? 'Saving…' : 'Save payment options'}
-              </Button>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  disabled={paymentGatewaySaving}
+                  className="bg-accent-500 hover:bg-accent-600"
+                  onClick={() => {
+                    setPaymentGatewaySaving(true);
+                    api
+                      .patch('/api/admin/settings', {
+                        payment_gateway_enabled: paymentGatewayEnabled,
+                        payment_npx_enabled: paymentNpxEnabled,
+                        payment_himalpay_enabled: paymentHimalpayEnabled,
+                        offline_booking_guest_message: offlineBookingGuestMessage.trim() || null,
+                      })
+                      .then((res) => {
+                        setPaymentGatewayEnabled(res.data?.payment_gateway_enabled === true);
+                        setPaymentNpxEnabled(res.data?.payment_npx_enabled === true);
+                        setPaymentHimalpayEnabled(res.data?.payment_himalpay_enabled === true);
+                        setOfflineBookingGuestMessage(
+                          typeof res.data?.offline_booking_guest_message === 'string' ? res.data.offline_booking_guest_message : ''
+                        );
+                        toast({ title: 'Payment options saved.' });
+                      })
+                      .catch(() => toast({ title: 'Failed to save.', variant: 'destructive' }))
+                      .finally(() => setPaymentGatewaySaving(false));
+                  }}
+                >
+                  {paymentGatewaySaving ? 'Saving…' : 'Save payment options'}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={paymentGatewaySaving}
+                  className="border-destructive/40 text-destructive hover:bg-destructive/10"
+                  onClick={() => {
+                    setPaymentGatewaySaving(true);
+                    api
+                      .patch('/api/admin/settings', { disable_all_online_payment_methods: true })
+                      .then((res) => {
+                        setPaymentGatewayEnabled(res.data?.payment_gateway_enabled === true);
+                        setPaymentNpxEnabled(res.data?.payment_npx_enabled === true);
+                        setPaymentHimalpayEnabled(res.data?.payment_himalpay_enabled === true);
+                        toast({ title: 'All online payment methods disabled.' });
+                      })
+                      .catch(() => toast({ title: 'Failed to save.', variant: 'destructive' }))
+                      .finally(() => setPaymentGatewaySaving(false));
+                  }}
+                >
+                  Disable all online payment methods
+                </Button>
+              </div>
             </CardContent>
           </Card>
 
@@ -3414,6 +3786,130 @@ export default function AdminDashboard() {
             </CardContent>
           </Card>
 
+          <Card className="border-primary-200">
+            <CardHeader className="border-b border-primary-100 bg-primary-50/50">
+              <div className="flex items-center gap-2">
+                <Mail className="h-5 w-5 text-accent-500" />
+                <h2 className="font-semibold text-primary-800">Email templates</h2>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                Override subject and body for each transactional email. Leave fields blank to use the built-in default. Use placeholders such as{' '}
+                <code className="text-xs">{'{{otp}}'}</code>, <code className="text-xs">{'{{temporaryPassword}}'}</code>,{' '}
+                <code className="text-xs">{'{{listingTitle}}'}</code>, <code className="text-xs">{'{{guestName}}'}</code>,{' '}
+                <code className="text-xs">{'{{checkIn}}'}</code>, <code className="text-xs">{'{{checkOut}}'}</code>, <code className="text-xs">{'{{amountNpr}}'}</code> where relevant.
+              </p>
+            </CardHeader>
+            <CardContent className="space-y-4 p-6">
+              <div>
+                <label className="mb-1 block text-sm font-medium text-primary-800">Template</label>
+                <select
+                  value={emailTemplateKey}
+                  onChange={(e) => setEmailTemplateKey(e.target.value)}
+                  className="w-full max-w-md rounded-md border border-primary-200 bg-background px-3 py-2 text-sm"
+                >
+                  {ADMIN_EMAIL_TEMPLATE_KEYS.map((k) => (
+                    <option key={k} value={k}>
+                      {k.replace(/_/g, ' ')}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-primary-800">Subject (optional override)</label>
+                <input
+                  type="text"
+                  value={emailTemplateSubject}
+                  onChange={(e) => setEmailTemplateSubject(e.target.value)}
+                  className="w-full rounded-md border border-primary-200 bg-background px-3 py-2 text-sm"
+                  placeholder="Leave blank for default subject"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-primary-800">Inner HTML (optional)</label>
+                <Textarea
+                  value={emailTemplateInnerHtml}
+                  onChange={(e) => setEmailTemplateInnerHtml(e.target.value)}
+                  rows={8}
+                  className="font-mono text-xs"
+                  placeholder="HTML fragment inside the branded email layout…"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-primary-800">Plain text body (optional)</label>
+                <Textarea
+                  value={emailTemplateBodyText}
+                  onChange={(e) => setEmailTemplateBodyText(e.target.value)}
+                  rows={6}
+                  className="font-mono text-xs"
+                  placeholder="Plain text version…"
+                />
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  className="bg-accent-500 hover:bg-accent-600"
+                  disabled={emailTemplatesSaving}
+                  onClick={() => {
+                    const subj = emailTemplateSubject.trim();
+                    const inner = emailTemplateInnerHtml.trim();
+                    const txt = emailTemplateBodyText.trim();
+                    const entry =
+                      subj || inner || txt
+                        ? { ...(subj ? { subject: subj } : {}), ...(inner ? { innerHtml: inner } : {}), ...(txt ? { bodyText: txt } : {}) }
+                        : null;
+                    const nextMap = { ...emailTemplatesMap };
+                    if (entry && Object.keys(entry).length > 0) nextMap[emailTemplateKey] = entry;
+                    else delete nextMap[emailTemplateKey];
+                    setEmailTemplatesSaving(true);
+                    api
+                      .patch('/api/admin/settings', { email_template_overrides: nextMap })
+                      .then((res) => {
+                        const raw = res.data?.email_template_overrides;
+                        setEmailTemplatesMap(
+                          raw && typeof raw === 'object' && !Array.isArray(raw)
+                            ? (raw as Record<string, { subject?: string; innerHtml?: string; bodyText?: string }>)
+                            : nextMap
+                        );
+                        toast({ title: 'Email template saved.' });
+                      })
+                      .catch(() => toast({ title: 'Failed to save template.', variant: 'destructive' }))
+                      .finally(() => setEmailTemplatesSaving(false));
+                  }}
+                >
+                  {emailTemplatesSaving ? 'Saving…' : 'Save this template'}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={emailTemplatesSaving}
+                  onClick={() => {
+                    const nextMap = { ...emailTemplatesMap };
+                    delete nextMap[emailTemplateKey];
+                    setEmailTemplateSubject('');
+                    setEmailTemplateInnerHtml('');
+                    setEmailTemplateBodyText('');
+                    setEmailTemplatesSaving(true);
+                    api
+                      .patch('/api/admin/settings', { email_template_overrides: Object.keys(nextMap).length ? nextMap : {} })
+                      .then((res) => {
+                        const raw = res.data?.email_template_overrides;
+                        setEmailTemplatesMap(
+                          raw && typeof raw === 'object' && !Array.isArray(raw)
+                            ? (raw as Record<string, { subject?: string; innerHtml?: string; bodyText?: string }>)
+                            : {}
+                        );
+                        toast({ title: 'Override cleared for this template.' });
+                      })
+                      .catch(() => toast({ title: 'Failed to clear template.', variant: 'destructive' }))
+                      .finally(() => setEmailTemplatesSaving(false));
+                  }}
+                >
+                  Clear override
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
           {/* Notification delivery (email vs SMS, who receives) */}
           {notificationSettings && (
             <Card className="border-primary-200">
@@ -3966,7 +4462,7 @@ export default function AdminDashboard() {
                       {heatmapPageViews.map((r, i) => (
                         <tr key={i} className="border-b border-primary-100 cursor-pointer hover:bg-primary-50/80" onClick={() => setSelectedHeatmapPath(selectedHeatmapPath === r.path ? null : r.path)}>
                           <td className="p-2 font-mono text-xs">{r.path}</td>
-                          <td className="p-2 text-right font-medium">{r.views.toLocaleString()}</td>
+                          <td className="p-2 text-right font-medium">{(r.views ?? 0).toLocaleString()}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -4014,7 +4510,7 @@ export default function AdminDashboard() {
       <Dialog.Root open={!!emailSmsDetail} onOpenChange={(open) => { if (!open) { setSelectedEmailSmsId(null); setEmailSmsDetail(null); } }}>
         <Dialog.Portal>
           <Dialog.Overlay className="fixed inset-0 z-50 bg-black/50" />
-          <Dialog.Content className="fixed left-1/2 top-1/2 z-50 w-full max-w-2xl max-h-[90vh] -translate-x-1/2 -translate-y-1/2 rounded-lg border border-primary-200 bg-background shadow-lg overflow-hidden flex flex-col">
+          <Dialog.Content aria-describedby={undefined} className="fixed left-1/2 top-1/2 z-50 w-full max-w-2xl max-h-[90vh] -translate-x-1/2 -translate-y-1/2 rounded-lg border border-primary-200 bg-background shadow-lg overflow-hidden flex flex-col">
             {emailSmsDetail && (
               <>
                 <div className="flex items-center justify-between border-b border-primary-100 p-4 bg-primary-50/50">
@@ -4050,7 +4546,7 @@ export default function AdminDashboard() {
       <Dialog.Root open={!!selectedJourneySessionId} onOpenChange={(open) => { if (!open) { setSelectedJourneySessionId(null); setJourneySessionEvents([]); } }}>
         <Dialog.Portal>
           <Dialog.Overlay className="fixed inset-0 z-50 bg-black/50" />
-          <Dialog.Content className="fixed left-1/2 top-1/2 z-50 w-full max-w-2xl max-h-[90vh] -translate-x-1/2 -translate-y-1/2 rounded-lg border border-primary-200 bg-background shadow-lg overflow-hidden flex flex-col">
+          <Dialog.Content aria-describedby={undefined} className="fixed left-1/2 top-1/2 z-50 w-full max-w-2xl max-h-[90vh] -translate-x-1/2 -translate-y-1/2 rounded-lg border border-primary-200 bg-background shadow-lg overflow-hidden flex flex-col">
             <div className="flex items-center justify-between border-b border-primary-100 p-4 bg-primary-50/50">
               <Dialog.Title className="font-semibold text-primary-800">User journey — Session timeline</Dialog.Title>
               <Dialog.Close asChild>
@@ -4078,7 +4574,7 @@ export default function AdminDashboard() {
       <Dialog.Root open={!!selectedApiLog} onOpenChange={(open) => !open && setSelectedApiLog(null)}>
         <Dialog.Portal>
           <Dialog.Overlay className="fixed inset-0 z-50 bg-black/50" />
-          <Dialog.Content className="fixed left-1/2 top-1/2 z-50 w-full max-w-2xl max-h-[90vh] -translate-x-1/2 -translate-y-1/2 rounded-lg border border-primary-200 bg-background p-6 shadow-lg overflow-y-auto">
+          <Dialog.Content aria-describedby={undefined} className="fixed left-1/2 top-1/2 z-50 w-full max-w-2xl max-h-[90vh] -translate-x-1/2 -translate-y-1/2 rounded-lg border border-primary-200 bg-background p-6 shadow-lg overflow-y-auto">
             {selectedApiLog && (
               <>
                 <div className="flex items-center justify-between border-b border-primary-100 pb-3">
@@ -4116,7 +4612,7 @@ export default function AdminDashboard() {
       <Dialog.Root open={!!selectedErrorLog} onOpenChange={(open) => !open && setSelectedErrorLog(null)}>
         <Dialog.Portal>
           <Dialog.Overlay className="fixed inset-0 z-50 bg-black/50" />
-          <Dialog.Content className="fixed left-1/2 top-1/2 z-50 w-full max-w-2xl max-h-[90vh] -translate-x-1/2 -translate-y-1/2 rounded-lg border border-primary-200 bg-background shadow-lg overflow-hidden flex flex-col">
+          <Dialog.Content aria-describedby={undefined} className="fixed left-1/2 top-1/2 z-50 w-full max-w-2xl max-h-[90vh] -translate-x-1/2 -translate-y-1/2 rounded-lg border border-primary-200 bg-background shadow-lg overflow-hidden flex flex-col">
             {selectedErrorLog && (
               <>
                 <div className="flex items-center justify-between border-b border-primary-100 p-4 bg-primary-50/50">
@@ -4154,20 +4650,18 @@ export default function AdminDashboard() {
       <Dialog.Root open={!!selectedBooking} onOpenChange={(open) => !open && setSelectedBooking(null)}>
         <Dialog.Portal>
           <Dialog.Overlay className="fixed inset-0 z-50 bg-black/50" />
-          <Dialog.Content className="fixed left-1/2 top-1/2 z-50 w-full max-w-lg max-h-[90vh] -translate-x-1/2 -translate-y-1/2 rounded-lg border border-primary-200 bg-background p-6 shadow-lg overflow-y-auto">
+          <Dialog.Content aria-describedby={undefined} className="fixed left-1/2 top-1/2 z-50 w-full max-w-lg max-h-[90vh] -translate-x-1/2 -translate-y-1/2 rounded-lg border border-primary-200 bg-background p-6 shadow-lg overflow-y-auto">
             {selectedBooking && (() => {
               const subtotal = selectedBooking.subtotal_npr != null ? Number(selectedBooking.subtotal_npr) : null;
               const total = selectedBooking.total_amount != null ? Number(selectedBooking.total_amount) : null;
-              let amenityLines: { name: string; quantity: number; unit_price: number; total: number }[] = [];
-              try {
-                if (selectedBooking.amenity_charges_json) {
-                  const parsed = JSON.parse(selectedBooking.amenity_charges_json);
-                  amenityLines = Array.isArray(parsed) ? parsed : [];
-                }
-              } catch {
-                amenityLines = [];
-              }
-              const hasInvoice = subtotal != null || total != null || amenityLines.length > 0;
+              const amenityLines = parseAmenityChargesJson(selectedBooking.amenity_charges_json);
+              const feeDelta = bookingFeeDelta(subtotal, amenityLines, total);
+              const hasInvoice =
+                subtotal != null ||
+                total != null ||
+                amenityLines.length > 0 ||
+                feeDelta.serviceChargeNpr != null ||
+                feeDelta.discountNpr != null;
               const downloadInvoicePdf = () => {
                 const doc = new jsPDF();
                 doc.setFontSize(18);
@@ -4180,6 +4674,7 @@ export default function AdminDashboard() {
                 doc.text(`Check-in: ${formatDateOnly(selectedBooking.check_in)}`, 20, y); y += 7;
                 doc.text(`Check-out: ${formatDateOnly(selectedBooking.check_out)}`, 20, y); y += 7;
                 doc.text(`Guests: ${selectedBooking.guests}`, 20, y); y += 7;
+                doc.text(`Online payment: ${formatBookingPaymentMethod(selectedBooking.payment_provider)}`, 20, y); y += 7;
                 doc.text(`Created: ${formatDateOnly(selectedBooking.created_at)}`, 20, y); y += 10;
                 if (subtotal != null) {
                   doc.text(`Accommodation subtotal: NPR ${subtotal.toLocaleString()}`, 20, y); y += 7;
@@ -4187,10 +4682,19 @@ export default function AdminDashboard() {
                 amenityLines.forEach((line) => {
                   doc.text(`${line.name} (×${line.quantity}): NPR ${line.total.toLocaleString()}`, 20, y); y += 6;
                 });
+                if (feeDelta.preFeeTotalNpr > 0 && (subtotal != null || amenityLines.length > 0)) {
+                  doc.text(`Subtotal (accommodation + add-ons): NPR ${feeDelta.preFeeTotalNpr.toLocaleString()}`, 20, y); y += 7;
+                }
+                if (feeDelta.serviceChargeNpr != null) {
+                  doc.text(`Service charge (booking fee): NPR ${feeDelta.serviceChargeNpr.toLocaleString()}`, 20, y); y += 7;
+                }
+                if (feeDelta.discountNpr != null) {
+                  doc.text(`Discount: NPR ${feeDelta.discountNpr.toLocaleString()}`, 20, y); y += 7;
+                }
                 if (total != null) {
                   y += 4;
                   doc.setFont('helvetica', 'bold');
-                  doc.text(`Total: NPR ${total.toLocaleString()}`, 20, y);
+                  doc.text(`Total (guest pays): NPR ${total.toLocaleString()}`, 20, y);
                   doc.setFont('helvetica', 'normal');
                 }
                 doc.save(`booking-invoice-${selectedBooking.id}.pdf`);
@@ -4214,17 +4718,130 @@ export default function AdminDashboard() {
                     <div><dt className="font-medium text-muted-foreground">Check-out</dt><dd className="text-primary-800">{formatDateOnly(selectedBooking.check_out)}</dd></div>
                     <div><dt className="font-medium text-muted-foreground">Guests</dt><dd className="text-primary-800">{selectedBooking.guests}</dd></div>
                     <div><dt className="font-medium text-muted-foreground">Status</dt><dd><span className={`rounded-full px-2 py-1 text-xs font-medium ${bookingStatusColor(selectedBooking.status)}`}>{selectedBooking.status}</span></dd></div>
+                    <div><dt className="font-medium text-muted-foreground">Online payment</dt><dd className="text-primary-800">{formatBookingPaymentMethod(selectedBooking.payment_provider)}</dd></div>
                     <div><dt className="font-medium text-muted-foreground">Created</dt><dd className="text-primary-800">{formatDateOnly(selectedBooking.created_at)}</dd></div>
+                    {selectedBooking.offline_payment_proof_url && (
+                      <div>
+                        <dt className="font-medium text-muted-foreground">Offline payment slip</dt>
+                        <dd>
+                          <OfflineProofPreview url={selectedBooking.offline_payment_proof_url} />
+                        </dd>
+                      </div>
+                    )}
+                    {selectedBooking.offline_payment_remarks && (
+                      <div><dt className="font-medium text-muted-foreground">Offline remarks</dt><dd className="text-primary-800 whitespace-pre-wrap">{selectedBooking.offline_payment_remarks}</dd></div>
+                    )}
                   </dl>
+                  {selectedBooking.status === 'pending' && (
+                    <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50/50 p-3 text-sm space-y-3">
+                      <p className="font-semibold text-primary-800">Offline reservation — confirm payment</p>
+                      <p className="text-muted-foreground">Upload a payment confirmation slip, add optional remarks, then mark the booking as paid.</p>
+                      <div>
+                        <input
+                          type="file"
+                          accept="image/*,application/pdf"
+                          className="block w-full text-xs"
+                          onChange={async (e) => {
+                            const f = e.target.files?.[0];
+                            if (!f) return;
+                            const fd = new FormData();
+                            fd.append('image', f);
+                            try {
+                              const res = await api.post<{ url: string }>('/api/admin/notifications/upload-image', fd, {
+                                headers: { 'Content-Type': 'multipart/form-data' },
+                              });
+                              setOfflineProofUrl(res.data.url);
+                              toast({ title: 'Slip uploaded.' });
+                            } catch {
+                              toast({ title: 'Upload failed.', variant: 'destructive' });
+                            }
+                            e.target.value = '';
+                          }}
+                        />
+                        {offlineProofUrl ? (
+                          <div className="mt-2">
+                            <p className="text-xs text-muted-foreground break-all">Preview</p>
+                            <OfflineProofPreview url={offlineProofUrl} />
+                          </div>
+                        ) : null}
+                      </div>
+                      <Textarea
+                        value={offlineRemarks}
+                        onChange={(e) => setOfflineRemarks(e.target.value)}
+                        placeholder="Remarks (e.g. bank reference, amount received)"
+                        rows={3}
+                        className="border-primary-200"
+                      />
+                      <Button
+                        type="button"
+                        className="bg-accent-500 hover:bg-accent-600"
+                        disabled={offlineApproving || !offlineProofUrl.trim()}
+                        onClick={() => {
+                          if (!selectedBooking) return;
+                          setOfflineApproving(true);
+                          api
+                            .post<{ message: string }>(`/api/admin/bookings/${selectedBooking.id}/approve-offline-payment`, {
+                              proof_url: offlineProofUrl.trim(),
+                              remarks: offlineRemarks.trim() || null,
+                            })
+                            .then(() => {
+                              toast({ title: 'Booking marked as paid.' });
+                              setSelectedBooking({ ...selectedBooking, status: 'paid', offline_payment_proof_url: offlineProofUrl.trim(), offline_payment_remarks: offlineRemarks.trim() || null });
+                              const params = new URLSearchParams();
+                              if (adminBookingsStatus) params.set('status', adminBookingsStatus);
+                              api.get<{ bookings: AdminBooking[]; total: number }>(`/api/admin/bookings?${params}`).then((r) => {
+                                setAdminBookings(r.data.bookings || []);
+                                setAdminBookingsTotal(r.data.total ?? 0);
+                              }).catch(() => {});
+                            })
+                            .catch((err) => toast({ title: err.response?.data?.message || 'Failed to confirm', variant: 'destructive' }))
+                            .finally(() => setOfflineApproving(false));
+                        }}
+                      >
+                        {offlineApproving ? 'Saving…' : 'Confirm offline payment'}
+                      </Button>
+                    </div>
+                  )}
                   {hasInvoice && (
                     <div className="mt-4 rounded-lg border border-primary-200 bg-primary-50/50 p-3">
                       <h4 className="font-semibold text-primary-800 mb-2">Invoice / Price quotation</h4>
                       <dl className="space-y-1 text-sm">
-                        {subtotal != null && <div className="flex justify-between"><dt className="text-muted-foreground">Accommodation subtotal</dt><dd>NPR {subtotal.toLocaleString()}</dd></div>}
+                        {subtotal != null && (
+                          <div className="flex justify-between">
+                            <dt className="text-muted-foreground">Accommodation subtotal</dt>
+                            <dd>NPR {subtotal.toLocaleString()}</dd>
+                          </div>
+                        )}
                         {amenityLines.map((line, i) => (
-                          <div key={i} className="flex justify-between"><dt className="text-muted-foreground">{line.name} (×{line.quantity})</dt><dd>NPR {line.total.toLocaleString()}</dd></div>
+                          <div key={i} className="flex justify-between">
+                            <dt className="text-muted-foreground">{line.name} (×{line.quantity})</dt>
+                            <dd>NPR {line.total.toLocaleString()}</dd>
+                          </div>
                         ))}
-                        {total != null && <div className="flex justify-between font-semibold text-primary-800 mt-2 pt-2 border-t border-primary-200"><dt>Total</dt><dd>NPR {total.toLocaleString()}</dd></div>}
+                        {(subtotal != null || amenityLines.length > 0) && feeDelta.preFeeTotalNpr > 0 && (
+                          <div className="flex justify-between border-t border-primary-200/80 pt-1 mt-1 text-primary-800">
+                            <dt className="font-medium">Subtotal (stay + add-ons)</dt>
+                            <dd className="font-medium">NPR {feeDelta.preFeeTotalNpr.toLocaleString()}</dd>
+                          </div>
+                        )}
+                        {feeDelta.serviceChargeNpr != null && (
+                          <div className="flex justify-between text-primary-800">
+                            <dt className="text-muted-foreground">Service charge (booking fee)</dt>
+                            <dd>+ NPR {feeDelta.serviceChargeNpr.toLocaleString()}</dd>
+                          </div>
+                        )}
+                        {feeDelta.discountNpr != null && (
+                          <div className="flex justify-between text-primary-800">
+                            <dt className="text-muted-foreground">Discount</dt>
+                            <dd>− NPR {feeDelta.discountNpr.toLocaleString()}</dd>
+                          </div>
+                        )}
+                        {total != null && (
+                          <div className="flex justify-between font-semibold text-primary-800 mt-2 pt-2 border-t border-primary-200">
+                            <dt>Total (guest pays)</dt>
+                            <dd>NPR {total.toLocaleString()}</dd>
+                          </div>
+                        )}
                       </dl>
                     </div>
                   )}
@@ -4250,7 +4867,7 @@ export default function AdminDashboard() {
       <Dialog.Root open={!!selectedPayment} onOpenChange={(open) => !open && setSelectedPayment(null)}>
         <Dialog.Portal>
           <Dialog.Overlay className="fixed inset-0 z-50 bg-black/50" />
-          <Dialog.Content className="fixed left-1/2 top-1/2 z-50 w-full max-w-md -translate-x-1/2 -translate-y-1/2 rounded-lg border border-primary-200 bg-background p-6 shadow-lg">
+          <Dialog.Content aria-describedby={undefined} className="fixed left-1/2 top-1/2 z-50 w-full max-w-md -translate-x-1/2 -translate-y-1/2 rounded-lg border border-primary-200 bg-background p-6 shadow-lg">
             {selectedPayment && (() => {
               const p = selectedPayment;
               const downloadReceiptPdf = () => {
@@ -4264,6 +4881,7 @@ export default function AdminDashboard() {
                 doc.text(`Listing: ${p.listing_title}`, 20, y); y += 8;
                 doc.text(`Guest: ${p.guest_name}`, 20, y); y += 8;
                 doc.text(`Amount: NPR ${Number(p.amount).toLocaleString()}`, 20, y); y += 8;
+                doc.text(`Payment method: ${formatBookingPaymentMethod(p.payment_provider)}`, 20, y); y += 8;
                 doc.text(`Status: ${p.status}`, 20, y); y += 8;
                 doc.text(`Date: ${formatDateOnly(p.created_at)}`, 20, y);
                 doc.save(`receipt-${p.id}.pdf`);
@@ -4285,6 +4903,7 @@ export default function AdminDashboard() {
                     <div><dt className="font-medium text-muted-foreground">Listing</dt><dd className="text-primary-800">{p.listing_title}</dd></div>
                     <div><dt className="font-medium text-muted-foreground">Guest</dt><dd className="text-primary-800">{p.guest_name}</dd></div>
                     <div><dt className="font-medium text-muted-foreground">Amount</dt><dd className="font-semibold text-accent-600">NPR {Number(p.amount).toLocaleString()}</dd></div>
+                    <div><dt className="font-medium text-muted-foreground">Payment method</dt><dd className="text-primary-800">{formatBookingPaymentMethod(p.payment_provider)}</dd></div>
                     <div><dt className="font-medium text-muted-foreground">Status</dt><dd className="text-primary-800">{p.status}</dd></div>
                     <div><dt className="font-medium text-muted-foreground">Date</dt><dd className="text-primary-800">{formatDateOnly(p.created_at)}</dd></div>
                   </dl>

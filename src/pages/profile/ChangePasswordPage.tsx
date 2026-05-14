@@ -13,7 +13,7 @@ import { KeyRound } from 'lucide-react';
 export default function ChangePasswordPage() {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { logout } = useAuth();
+  const { logout, user, updateUser } = useAuth();
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -21,6 +21,7 @@ export default function ChangePasswordPage() {
 
   const newPasswordValidation = validatePassword(newPassword);
   const confirmMismatch = confirmPassword.length > 0 && newPassword !== confirmPassword;
+  const mandatoryChange = Boolean(user?.must_change_password);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -32,13 +33,23 @@ export default function ChangePasswordPage() {
       toast({ title: newPasswordValidation.errors.join('. '), variant: 'destructive' });
       return;
     }
+    if (!mandatoryChange && !currentPassword.trim()) {
+      toast({ title: 'Current password is required.', variant: 'destructive' });
+      return;
+    }
     setLoading(true);
     api
       .post('/api/auth/change-password', {
-        currentPassword,
+        ...(mandatoryChange ? {} : { currentPassword }),
         newPassword,
       })
       .then(() => {
+        if (mandatoryChange) {
+          updateUser({ must_change_password: false });
+          toast({ title: 'Password updated. You can continue using your account.' });
+          navigate(user?.role === 'host' ? '/dashboard/host' : user?.role === 'admin' ? '/admin/dashboard' : '/', { replace: true });
+          return;
+        }
         toast({ title: 'Password updated. Please sign in with your new password.' });
         logout();
         navigate('/login', { replace: true });
@@ -52,25 +63,33 @@ export default function ChangePasswordPage() {
   return (
     <div className="mx-auto max-w-md">
       <h1 className="text-2xl font-semibold text-primary-800">Change password</h1>
-      <p className="mt-1 text-sm text-muted-foreground">Update your account password.</p>
+      <p className="mt-1 text-sm text-muted-foreground">
+        {mandatoryChange
+          ? 'Your password was reset by an administrator. Choose a new password to continue.'
+          : 'Update your account password.'}
+      </p>
       <Card className="mt-6 border-primary-200">
         <CardHeader className="border-b border-primary-100 bg-primary-50/50">
           <h2 className="font-semibold text-primary-800">New password</h2>
-          <p className="text-sm text-muted-foreground">Enter your current password and choose a new one.</p>
+          <p className="text-sm text-muted-foreground">
+            {mandatoryChange ? 'Set a new password (your temporary password is no longer needed after this).' : 'Enter your current password and choose a new one.'}
+          </p>
         </CardHeader>
         <CardContent className="p-6">
           <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <Label htmlFor="current">Current password</Label>
-              <PasswordInput
-                id="current"
-                value={currentPassword}
-                onChange={(e) => setCurrentPassword(e.target.value)}
-                required
-                className="mt-1"
-                autoComplete="current-password"
-              />
-            </div>
+            {!mandatoryChange && (
+              <div>
+                <Label htmlFor="current">Current password</Label>
+                <PasswordInput
+                  id="current"
+                  value={currentPassword}
+                  onChange={(e) => setCurrentPassword(e.target.value)}
+                  required
+                  className="mt-1"
+                  autoComplete="current-password"
+                />
+              </div>
+            )}
             <div>
               <Label htmlFor="new">New password</Label>
               <PasswordInput
@@ -109,9 +128,15 @@ export default function ChangePasswordPage() {
                 <KeyRound className="w-4 h-4 mr-2" />
                 {loading ? 'Updating…' : 'Update password'}
               </Button>
-              <Button type="button" variant="outline" asChild>
-                <Link to="/">Cancel</Link>
-              </Button>
+              {mandatoryChange ? (
+                <Button type="button" variant="outline" onClick={() => logout('/login')}>
+                  Sign out
+                </Button>
+              ) : (
+                <Button type="button" variant="outline" asChild>
+                  <Link to="/">Cancel</Link>
+                </Button>
+              )}
             </div>
           </form>
         </CardContent>

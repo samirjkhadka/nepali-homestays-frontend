@@ -135,6 +135,11 @@ export default function ListingDetailPage() {
   const [bookingFee, setBookingFee] = useState<{ type: 'service_charge' | 'discount'; kind: 'percent' | 'fixed'; value: number } | null>(null);
   const [partialPaymentMinPercent, setPartialPaymentMinPercent] = useState(25);
   const [paymentGatewayEnabled, setPaymentGatewayEnabled] = useState(true);
+  const [paymentMethodsAvailable, setPaymentMethodsAvailable] = useState<{ npx: boolean; himalpay: boolean }>({
+    npx: true,
+    himalpay: false,
+  });
+  const [paymentProvider, setPaymentProvider] = useState<'npx' | 'himalpay'>('npx');
   const [paymentType, setPaymentType] = useState<'full' | 'partial'>('full');
   const [partialPercent, setPartialPercent] = useState(25);
   const [showRejectForm, setShowRejectForm] = useState(false);
@@ -188,6 +193,7 @@ export default function ListingDetailPage() {
         booking_fee: { type: 'service_charge' | 'discount'; kind: 'percent' | 'fixed'; value: number } | null;
         partial_payment_min_percent?: number;
         payment_gateway_enabled?: boolean;
+        payment_methods_available?: { npx?: boolean; himalpay?: boolean };
       }>(`/api/listings/${id}/booking-fee`)
       .then((res) => {
         setBookingFee(res.data.booking_fee ?? null);
@@ -196,7 +202,14 @@ export default function ListingDetailPage() {
           setPartialPaymentMinPercent(min);
           setPartialPercent(min);
         }
-        setPaymentGatewayEnabled(res.data.payment_gateway_enabled !== false);
+        const methods = res.data.payment_methods_available ?? {};
+        const npx = methods.npx === true;
+        const himalpay = methods.himalpay === true;
+        setPaymentMethodsAvailable({ npx, himalpay });
+        setPaymentGatewayEnabled(npx || himalpay);
+        if (npx && !himalpay) setPaymentProvider('npx');
+        else if (!npx && himalpay) setPaymentProvider('himalpay');
+        else setPaymentProvider('npx');
       })
       .catch(() => setBookingFee(null));
   }, [id]);
@@ -329,6 +342,7 @@ export default function ListingDetailPage() {
       guests,
       message: message || undefined,
       payment_type: paymentType,
+      ...(paymentGatewayEnabled ? { payment_provider: paymentProvider } : {}),
       ...(paymentType === 'partial' ? { partial_percent: Math.max(partialPaymentMinPercent, Math.min(99, partialPercent)) } : {}),
       ...(selectedExtraServices.length > 0 ? { extra_services: selectedExtraServices } : {}),
     };
@@ -1055,6 +1069,9 @@ export default function ListingDetailPage() {
                   bookingFee={bookingFee}
                   trustBadges={listingDisplay.trust_badges}
                   paymentGatewayEnabled={paymentGatewayEnabled}
+                  paymentMethodsAvailable={paymentMethodsAvailable}
+                  paymentProvider={paymentProvider}
+                  onPaymentProviderChange={setPaymentProvider}
                   paymentType={paymentType}
                   partialPercent={partialPercent}
                   partialPaymentMinPercent={partialPaymentMinPercent}

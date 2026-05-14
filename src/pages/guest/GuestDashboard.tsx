@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { CreditCard, Heart, Star, Home } from 'lucide-react';
+import * as Dialog from '@radix-ui/react-dialog';
+import { CreditCard, Heart, Star, Home, X } from 'lucide-react';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -12,17 +13,23 @@ import { useToast } from '@/hooks/use-toast';
 import { useCurrency } from '@/lib/currency';
 import { formatDateTime } from '@/lib/format';
 import { useAuth } from '@/lib/auth';
+import { bookingFeeDelta, parseAmenityChargesJson } from '@/lib/booking-price-breakdown';
 
 type Booking = {
   id: number;
   listing_id: number;
   listing_title: string;
   listing_location: string;
-  listing_price?: string;
+  listing_price?: string | number;
   check_in: string;
   check_out: string;
+  guests?: number;
+  message?: string | null;
   status: string;
   total_amount?: number | null;
+  subtotal_npr?: number | null;
+  amenity_charges_json?: string | null;
+  payment_provider?: string | null;
   amount_paid?: number | null;
 };
 
@@ -38,6 +45,10 @@ type GuestTabType = (typeof GUEST_TABS)[number];
 
 const BOOKING_STATUSES = ['all', 'upcoming', 'pending', 'pending_payment', 'approved', 'partial_paid', 'paid', 'completed', 'declined', 'cancelled'] as const;
 
+function bookingStatusNorm(s: string | undefined): string {
+  return (s || '').toLowerCase().trim();
+}
+
 function formatBookingDateRange(checkIn: string, checkOut: string): string {
   const fmt = (d: string) => {
     const date = new Date(d);
@@ -46,8 +57,16 @@ function formatBookingDateRange(checkIn: string, checkOut: string): string {
   return `${fmt(checkIn)} – ${fmt(checkOut)}`;
 }
 
+function formatGuestPaymentMethod(raw: string | null | undefined): string {
+  const s = (raw ?? '').trim().toLowerCase();
+  if (s === 'npx') return 'NPX';
+  if (s === 'himalpay') return 'N-Cash (HimalPay)';
+  if (!s) return '—';
+  return (raw ?? '').trim();
+}
+
 function statusBadgeClass(status: string): string {
-  switch (status) {
+  switch (bookingStatusNorm(status)) {
     case 'pending_payment':
       return 'bg-amber-100 text-amber-800';
     case 'partial_paid':
@@ -84,6 +103,7 @@ export default function GuestDashboard() {
   const [sendingMessage, setSendingMessage] = useState(false);
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [becomingHost, setBecomingHost] = useState(false);
+  const [guestBookingDetail, setGuestBookingDetail] = useState<Booking | null>(null);
 
   useEffect(() => {
     const t = searchParams.get('tab') as GuestTabType | null;
@@ -111,6 +131,11 @@ export default function GuestDashboard() {
     api.get<{ bookings: Booking[] }>('/api/bookings').then((res) => setBookings(res.data.bookings || [])).catch(() => setBookings([]));
     api.get<{ favorites?: { id: number; listing_id: number; listing_title: string; listing_location: string; image_url?: string | null }[] }>('/api/favorites').then((res) => setFavorites(res.data.favorites || [])).catch(() => setFavorites([]));
   }, []);
+
+  useEffect(() => {
+    if (tab !== 'bookings') return;
+    api.get<{ bookings: Booking[] }>('/api/bookings').then((res) => setBookings(res.data.bookings || [])).catch(() => setBookings([]));
+  }, [tab]);
 
   useEffect(() => {
     if (tab !== 'messages') return;
@@ -155,18 +180,25 @@ export default function GuestDashboard() {
     }).catch(() => toast({ title: 'Failed to update.', variant: 'destructive' })).finally(() => setSaving(false));
   };
 
+  const upcomingStatuses = new Set(['pending', 'pending_payment', 'approved', 'partial_paid', 'paid']);
   const filteredBookings =
     statusFilter === 'all'
       ? bookings
       : statusFilter === 'upcoming'
-        ? bookings.filter((b) => ['pending', 'pending_payment', 'approved', 'paid'].includes(b.status))
-        : bookings.filter((b) => b.status === statusFilter);
-  const upcomingCount = bookings.filter((b) => ['pending', 'pending_payment', 'approved', 'partial_paid', 'paid'].includes(b.status)).length;
-  const paidBookings = bookings.filter((b) => b.status === 'paid' || b.status === 'completed');
+        ? bookings.filter((b) => upcomingStatuses.has(bookingStatusNorm(b.status)))
+        : bookings.filter((b) => bookingStatusNorm(b.status) === statusFilter);
+  const upcomingCount = bookings.filter((b) => upcomingStatuses.has(bookingStatusNorm(b.status))).length;
+  const paidBookings = bookings.filter((b) => {
+    const s = bookingStatusNorm(b.status);
+    return s === 'paid' || s === 'completed' || s === 'partial_paid';
+  });
 
   /** Messaging allowed only when payment is done and booking is active (not completed/cancelled). */
   const canMessageConversation = (bookingId: number) =>
-    bookings.some((b) => b.id === bookingId && ['pending_payment', 'approved', 'partial_paid', 'paid'].includes(b.status));
+    bookings.some((b) => {
+      const s = bookingStatusNorm(b.status);
+      return b.id === bookingId && ['pending_payment', 'approved', 'partial_paid', 'paid'].includes(s);
+    });
   const selectedCanMessage = selectedConversation ? canMessageConversation(selectedConversation.booking_id) : false;
 
   return (
@@ -276,32 +308,65 @@ export default function GuestDashboard() {
           ) : (
             <div className="grid gap-4">
               {filteredBookings.map((b) => {
+                const st = bookingStatusNorm(b.status);
                 const checkIn = new Date(b.check_in);
                 const checkOut = new Date(b.check_out);
                 const nights = Math.ceil((checkOut.getTime() - checkIn.getTime()) / (24 * 60 * 60 * 1000));
-                const total = b.listing_price != null ? nights * parseFloat(b.listing_price) : 0;
+                const priceNum = b.listing_price != null ? parseFloat(String(b.listing_price)) : NaN;
+                const roughTotal = Number.isFinite(priceNum) && nights > 0 ? nights * priceNum : 0;
+                const guestMayCancel = st === 'pending' || st === 'pending_payment' || st === 'approved';
                 return (
                   <Card key={b.id} className="border-primary-200">
                     <CardContent className="p-4">
                       <div>
                         <p className="font-semibold text-primary-800">{b.listing_title}</p>
                         <p className="text-sm text-muted-foreground">{b.listing_location} · {formatBookingDateRange(b.check_in, b.check_out)}</p>
-                        {nights > 0 && b.listing_price != null && (
+                        {nights > 0 && b.listing_price != null && Number.isFinite(priceNum) && (
                           <p className="mt-1 text-sm font-medium text-accent-600">
-                            {nights} night{nights !== 1 ? 's' : ''} · Total: {formatPrice(String(total))}
+                            {nights} night{nights !== 1 ? 's' : ''}
+                            {b.total_amount != null
+                              ? ` · Confirmed total: ${formatPrice(String(b.total_amount))}`
+                              : ` · Est. from nightly rate: ${formatPrice(String(roughTotal))}`}
                           </p>
                         )}
                         <Badge className={`mt-2 ${statusBadgeClass(b.status)}`}>
-                          {b.status === 'pending_payment' ? 'Awaiting payment' : b.status === 'partial_paid' ? 'Partial paid' : b.status}
+                          {st === 'pending_payment' ? 'Awaiting payment' : st === 'partial_paid' ? 'Partial paid' : b.status}
                         </Badge>
-                        {b.status === 'partial_paid' && b.total_amount != null && b.amount_paid != null && (
+                        {st === 'partial_paid' && b.total_amount != null && b.amount_paid != null && (
                           <p className="mt-1 text-xs text-muted-foreground">
                             Total: {formatPrice(String(b.total_amount))} · Paid: {formatPrice(String(b.amount_paid))} · Remaining: {formatPrice(String(Math.max(0, (b.total_amount ?? 0) - (b.amount_paid ?? 0))))}
                           </p>
                         )}
                       </div>
                       <div className="mt-4 flex flex-wrap gap-2">
-                        {(b.status === 'pending_payment' || b.status === 'partial_paid') && (
+                        <Button type="button" variant="outline" size="sm" onClick={() => setGuestBookingDetail(b)}>
+                          View booking details
+                        </Button>
+                        {guestMayCancel && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="border-destructive/50 text-destructive hover:bg-destructive/10"
+                            onClick={() => {
+                              if (!window.confirm('Cancel this reservation? You can book again later if dates are still available.')) return;
+                              api
+                                .post<{ message: string }>(`/api/bookings/${b.id}/cancel`)
+                                .then(() => {
+                                  toast({ title: 'Booking cancelled.' });
+                                  setBookings((prev) => prev.map((x) => (x.id === b.id ? { ...x, status: 'cancelled' } : x)));
+                                })
+                                .catch((err) =>
+                                  toast({
+                                    title: err.response?.data?.message || 'Could not cancel.',
+                                    variant: 'destructive',
+                                  })
+                                );
+                            }}
+                          >
+                            Cancel booking
+                          </Button>
+                        )}
+                        {(st === 'pending_payment' || st === 'partial_paid') && (
                           <Button
                             size="sm"
                             className="bg-accent-500 hover:bg-accent-600"
@@ -331,10 +396,10 @@ export default function GuestDashboard() {
                             }}
                           >
                             <CreditCard className="mr-1 h-4 w-4" />
-                            {b.status === 'partial_paid' ? 'Pay remaining' : 'Complete payment'}
+                            {st === 'partial_paid' ? 'Pay remaining' : 'Complete payment'}
                           </Button>
                         )}
-                        {b.status === 'approved' && (
+                        {st === 'approved' && (
                           <Button size="sm" className="bg-accent-500 hover:bg-accent-600" asChild>
                             <Link to={`/bookings/${b.id}/pay`}>
                               <CreditCard className="mr-1 h-4 w-4" />
@@ -342,7 +407,7 @@ export default function GuestDashboard() {
                             </Link>
                           </Button>
                         )}
-                        {b.status === 'completed' && (
+                        {st === 'completed' && (
                           <Button size="sm" variant="outline" className="border-accent-300 text-accent-700" asChild>
                             <Link to={`/listings/${b.listing_id}?review=${b.id}`}>
                               <Star className="mr-1 h-4 w-4" />
@@ -360,6 +425,138 @@ export default function GuestDashboard() {
               })}
             </div>
           )}
+
+          <Dialog.Root open={!!guestBookingDetail} onOpenChange={(open) => !open && setGuestBookingDetail(null)}>
+            <Dialog.Portal>
+              <Dialog.Overlay className="fixed inset-0 z-50 bg-black/50" />
+              <Dialog.Content className="fixed left-1/2 top-1/2 z-50 w-full max-w-lg max-h-[90vh] -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-lg border border-primary-200 bg-background p-6 shadow-lg">
+                {guestBookingDetail && (() => {
+                  const d = guestBookingDetail;
+                  const st = bookingStatusNorm(d.status);
+                  const subtotal = d.subtotal_npr != null ? Number(d.subtotal_npr) : null;
+                  const total = d.total_amount != null ? Number(d.total_amount) : null;
+                  const amenityLines = parseAmenityChargesJson(d.amenity_charges_json);
+                  const feeDelta = bookingFeeDelta(subtotal, amenityLines, total);
+                  const hasBreakdown =
+                    subtotal != null ||
+                    total != null ||
+                    amenityLines.length > 0 ||
+                    feeDelta.serviceChargeNpr != null ||
+                    feeDelta.discountNpr != null;
+                  return (
+                    <>
+                      <div className="flex items-center justify-between border-b border-primary-100 pb-3">
+                        <Dialog.Title className="font-semibold text-primary-800">Booking details</Dialog.Title>
+                        <Dialog.Close asChild>
+                          <button type="button" className="rounded p-1 hover:bg-primary-100" aria-label="Close">
+                            <X className="h-5 w-5" />
+                          </button>
+                        </Dialog.Close>
+                      </div>
+                      <dl className="mt-4 space-y-2 text-sm">
+                        <div>
+                          <dt className="font-medium text-muted-foreground">Listing</dt>
+                          <dd className="text-primary-800">{d.listing_title}</dd>
+                        </div>
+                        <div>
+                          <dt className="font-medium text-muted-foreground">Stay</dt>
+                          <dd className="text-primary-800">
+                            {d.listing_location} · {formatBookingDateRange(d.check_in, d.check_out)}
+                          </dd>
+                        </div>
+                        {d.guests != null && (
+                          <div>
+                            <dt className="font-medium text-muted-foreground">Guests</dt>
+                            <dd className="text-primary-800">{d.guests}</dd>
+                          </div>
+                        )}
+                        <div>
+                          <dt className="font-medium text-muted-foreground">Status</dt>
+                          <dd>
+                            <Badge className={statusBadgeClass(d.status)}>
+                              {st === 'pending_payment' ? 'Awaiting payment' : st === 'partial_paid' ? 'Partial paid' : d.status}
+                            </Badge>
+                          </dd>
+                        </div>
+                        <div>
+                          <dt className="font-medium text-muted-foreground">Payment method</dt>
+                          <dd className="text-primary-800">{formatGuestPaymentMethod(d.payment_provider)}</dd>
+                        </div>
+                        {d.message != null && d.message.trim() !== '' && (
+                          <div>
+                            <dt className="font-medium text-muted-foreground">Your message</dt>
+                            <dd className="whitespace-pre-wrap text-primary-800">{d.message}</dd>
+                          </div>
+                        )}
+                      </dl>
+                      {hasBreakdown && (
+                        <div className="mt-4 rounded-lg border border-primary-200 bg-primary-50/50 p-3">
+                          <h4 className="mb-2 font-semibold text-primary-800">Price summary</h4>
+                          <dl className="space-y-1 text-sm">
+                            {subtotal != null && (
+                              <div className="flex justify-between">
+                                <dt className="text-muted-foreground">Accommodation subtotal</dt>
+                                <dd>NPR {subtotal.toLocaleString()}</dd>
+                              </div>
+                            )}
+                            {amenityLines.map((line, i) => (
+                              <div key={i} className="flex justify-between">
+                                <dt className="text-muted-foreground">{line.name} (×{line.quantity})</dt>
+                                <dd>NPR {line.total.toLocaleString()}</dd>
+                              </div>
+                            ))}
+                            {(subtotal != null || amenityLines.length > 0) && feeDelta.preFeeTotalNpr > 0 && (
+                              <div className="mt-1 flex justify-between border-t border-primary-200/80 pt-1 font-medium text-primary-800">
+                                <dt>Subtotal (stay + add-ons)</dt>
+                                <dd>NPR {feeDelta.preFeeTotalNpr.toLocaleString()}</dd>
+                              </div>
+                            )}
+                            {feeDelta.serviceChargeNpr != null && (
+                              <div className="flex justify-between text-primary-800">
+                                <dt className="text-muted-foreground">Service charge</dt>
+                                <dd>+ NPR {feeDelta.serviceChargeNpr.toLocaleString()}</dd>
+                              </div>
+                            )}
+                            {feeDelta.discountNpr != null && (
+                              <div className="flex justify-between text-primary-800">
+                                <dt className="text-muted-foreground">Discount</dt>
+                                <dd>− NPR {feeDelta.discountNpr.toLocaleString()}</dd>
+                              </div>
+                            )}
+                            {total != null && (
+                              <div className="mt-2 flex justify-between border-t border-primary-200 pt-2 font-semibold text-primary-800">
+                                <dt>Total (your price)</dt>
+                                <dd>NPR {total.toLocaleString()}</dd>
+                              </div>
+                            )}
+                          </dl>
+                        </div>
+                      )}
+                      {d.amount_paid != null && (st === 'partial_paid' || st === 'paid' || st === 'completed') && (
+                        <p className="mt-3 text-sm text-muted-foreground">
+                          Paid to date: {formatPrice(String(d.amount_paid))}
+                          {d.total_amount != null && d.amount_paid != null && st === 'partial_paid' && (
+                            <>
+                              {' '}
+                              · Remaining:{' '}
+                              {formatPrice(String(Math.max(0, Number(d.total_amount) - Number(d.amount_paid))))}
+                            </>
+                          )}
+                        </p>
+                      )}
+                      <div className="mt-4 flex flex-wrap justify-end gap-2">
+                        <Button type="button" variant="outline" size="sm" asChild>
+                          <Link to={`/listings/${d.listing_id}`} onClick={() => setGuestBookingDetail(null)}>
+                            View listing
+                          </Link>
+                        </Button>
+                      </div>
+                    </>
+                  );
+                })()}
+              </Dialog.Content>
+            </Dialog.Portal>
+          </Dialog.Root>
         </div>
       )}
 
@@ -476,7 +673,7 @@ export default function GuestDashboard() {
                 const checkIn = new Date(b.check_in);
                 const checkOut = new Date(b.check_out);
                 const nights = Math.ceil((checkOut.getTime() - checkIn.getTime()) / (24 * 60 * 60 * 1000));
-                const total = b.listing_price != null ? nights * parseFloat(b.listing_price) : 0;
+                const total = b.listing_price != null ? nights * parseFloat(String(b.listing_price)) : 0;
                 return (
                   <Card key={b.id} className="border-primary-200">
                     <CardContent className="p-4 flex flex-wrap items-center justify-between gap-4">

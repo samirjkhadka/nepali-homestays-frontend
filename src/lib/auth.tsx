@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 
-type User = { id: number; email: string; role: string };
+type User = { id: number; email: string; role: string; must_change_password?: boolean };
 
 type AuthContextType = {
   user: User | null;

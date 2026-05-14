@@ -78,7 +78,7 @@ export default function HeroCarousel({ listings, heroLoaded = true }: Props) {
         pricePerNight: l.price_per_night,
         maxGuests: l.max_guests,
         averageRating: l.average_rating,
-        reviewCount: l.review_count,
+        reviewCount: Number(l.review_count) || 0,
         badge: l.badge ?? null,
         description: l.description,
         bedrooms: l.bedrooms,
@@ -169,7 +169,7 @@ export default function HeroCarousel({ listings, heroLoaded = true }: Props) {
             alt={s.name}
             className="w-full h-full object-cover animate-ken-burns"
             loading="eager"
-            fetchPriority="high"
+            fetchpriority="high"
             decoding="async"
           />
           <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/25 to-black/45" aria-hidden />

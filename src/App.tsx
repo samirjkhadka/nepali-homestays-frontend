@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate, useParams } from 'react-router-dom';
+import { Routes, Route, Navigate, useParams, useLocation } from 'react-router-dom';
 import { Toaster } from '@/components/ui/toaster';
 import { useAuth } from '@/lib/auth';
 import Layout from '@/components/layout/Layout';
@@ -52,9 +52,14 @@ function HomestayToListingRedirect() {
 
 function ProtectedRoute({ children, roles }: { children: React.ReactNode; roles: string[] }) {
   const { user, loading } = useAuth();
+  const location = useLocation();
   if (loading) return <div className="flex min-h-screen items-center justify-center">Loading...</div>;
   if (!user) return <Navigate to="/login" replace />;
-  if (!roles.includes(user.role)) return <Navigate to="/" replace />;
+  const r = (user.role || '').toLowerCase();
+  if (!roles.some((allowed) => allowed.toLowerCase() === r)) return <Navigate to="/" replace />;
+  if (user.must_change_password && !location.pathname.includes('/profile/change-password')) {
+    return <Navigate to="/profile/change-password" replace />;
+  }
   return <>{children}</>;
 }
 

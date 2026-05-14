@@ -28,12 +28,21 @@ export default function VerifyPage() {
     setError('');
     setLoading(true);
     api
-      .post<{ token: string; refreshToken: string; user: { id: number; email: string; role: string } }>(
-        '/api/auth/verify',
-        { email, otp }
-      )
+      .post<{
+        token: string;
+        refreshToken: string;
+        user: { id: number; email: string; role: string; must_change_password?: boolean };
+        mustChangePassword?: boolean;
+      }>('/api/auth/verify', { email, otp })
       .then((res) => {
-        login(res.data.token, res.data.user);
+        const mustChange =
+          Boolean(res.data.user.must_change_password) || Boolean(res.data.mustChangePassword);
+        const user = { ...res.data.user, must_change_password: mustChange };
+        login(res.data.token, user);
+        if (mustChange) {
+          navigate('/profile/change-password', { replace: true });
+          return;
+        }
         navigate('/');
       })
       .catch((err) => setError(err.response?.data?.message || 'Invalid or expired code.'))

@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { api } from '@/lib/api';
+import { openPaymentUrl, submitPaymentForm } from '@/lib/paymentRedirect';
 import { useToast } from '@/hooks/use-toast';
 import { useCurrency } from '@/lib/currency';
 import { formatDateTime } from '@/lib/format';
@@ -43,7 +44,7 @@ type Profile = {
 const GUEST_TABS = ['profile', 'bookings', 'wishlist', 'messages', 'payment-history'] as const;
 type GuestTabType = (typeof GUEST_TABS)[number];
 
-const BOOKING_STATUSES = ['all', 'upcoming', 'pending', 'pending_payment', 'approved', 'partial_paid', 'paid', 'completed', 'declined', 'cancelled'] as const;
+const BOOKING_STATUSES = ['all', 'upcoming', 'pending', 'pending_payment', 'approved', 'partial_paid', 'paid', 'completed', 'no_show', 'declined', 'cancelled'] as const;
 
 function bookingStatusNorm(s: string | undefined): string {
   return (s || '').toLowerCase().trim();
@@ -76,6 +77,8 @@ function statusBadgeClass(status: string): string {
       return 'bg-primary-100 text-primary-800';
     case 'approved':
       return 'bg-accent-100 text-accent-800';
+    case 'no_show':
+      return 'bg-orange-100 text-orange-800';
     case 'declined':
     case 'cancelled':
       return 'bg-destructive/10 text-destructive';
@@ -372,23 +375,17 @@ export default function GuestDashboard() {
                             className="bg-accent-500 hover:bg-accent-600"
                             onClick={() => {
                               api.get<{ redirect_url?: string; redirect_form?: { action: string; method: string; fields: Record<string, string> } }>(`/api/bookings/${b.id}/resume-payment`).then((res) => {
-                                if (res.data?.redirect_url) {
-                                  window.location.href = res.data.redirect_url;
-                                  return;
-                                }
-                                if (res.data?.redirect_form) {
-                                  const form = document.createElement('form');
-                                  form.method = res.data.redirect_form.method;
-                                  form.action = res.data.redirect_form.action;
-                                  Object.entries(res.data.redirect_form.fields).forEach(([name, value]) => {
-                                    const input = document.createElement('input');
-                                    input.type = 'hidden';
-                                    input.name = name;
-                                    input.value = value;
-                                    form.appendChild(input);
-                                  });
-                                  document.body.appendChild(form);
-                                  form.submit();
+                                try {
+                                  if (res.data?.redirect_url) {
+                                    openPaymentUrl(res.data.redirect_url);
+                                    return;
+                                  }
+                                  if (res.data?.redirect_form) {
+                                    submitPaymentForm(res.data.redirect_form);
+                                    return;
+                                  }
+                                } catch {
+                                  toast({ title: 'Invalid payment URL.', variant: 'destructive' });
                                   return;
                                 }
                                 toast({ title: 'Could not resume payment.', variant: 'destructive' });

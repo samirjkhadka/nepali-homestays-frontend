@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { PasswordInput } from '@/components/ui/password-input';
 import { Users, FileCheck, Calendar, CreditCard, BarChart3, FileText, Youtube, X, Download, Home, MessageSquare, Bell, Activity, AlertCircle, Mail, MousePointer, Building2, Plus, RefreshCw, Newspaper, ChevronUp, ChevronDown } from 'lucide-react';
+import { WalletUtilitiesPanel } from '@/components/admin/WalletUtilitiesPanel';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line, CartesianGrid, Legend } from 'recharts';
 import { api } from '@/lib/api';
 import { bookingFeeDelta, parseAmenityChargesJson } from '@/lib/booking-price-breakdown';
@@ -353,7 +354,7 @@ const ADMIN_EMAIL_TEMPLATE_KEYS = [
   'offline_booking_confirmed',
 ] as const;
 
-const ADMIN_TABS = ['overview', 'listings', 'users', 'bookings', 'corporates', 'payments', 'reports', 'content', 'settings', 'logs'] as const;
+const ADMIN_TABS = ['overview', 'listings', 'users', 'bookings', 'corporates', 'payments', 'reports', 'content', 'settings', 'wallet_utilities', 'logs'] as const;
 type AdminTab = (typeof ADMIN_TABS)[number];
 
 const LISTING_BADGES = ['recommended', 'featured', 'new'] as const;
@@ -380,6 +381,9 @@ function formatDateOnly(iso: string): string {
 function bookingStatusColor(s: string): string {
   if (s === 'paid' || s === 'completed') return 'bg-green-100 text-green-800';
   if (s === 'declined' || s === 'cancelled') return 'bg-red-100 text-red-800';
+  // A no-show is neither a completed stay nor a cancellation, and it needs to be
+  // distinguishable from both at a glance when an admin is settling a dispute.
+  if (s === 'no_show') return 'bg-orange-100 text-orange-800';
   return 'bg-yellow-100 text-yellow-800';
 }
 
@@ -428,6 +432,7 @@ export default function AdminDashboard() {
   const [paymentGatewayEnabled, setPaymentGatewayEnabled] = useState(true);
   const [paymentNpxEnabled, setPaymentNpxEnabled] = useState(true);
   const [paymentHimalpayEnabled, setPaymentHimalpayEnabled] = useState(false);
+  const [paymentResellerHostEnabled, setPaymentResellerHostEnabled] = useState(false);
   const [offlineBookingGuestMessage, setOfflineBookingGuestMessage] = useState('');
   const [paymentGatewaySaving, setPaymentGatewaySaving] = useState(false);
   type FeeRule = { type: 'service_charge' | 'discount'; kind: 'percent' | 'fixed'; value: number; applies_to?: 'guest' | 'host' };
@@ -465,6 +470,17 @@ export default function AdminDashboard() {
   const [festivalsPageSaving, setFestivalsPageSaving] = useState(false);
   const [tripPlannerPageForm, setTripPlannerPageForm] = useState<TripPlannerPageForm>(EMPTY_TRIP_PLANNER_FORM());
   const [tripPlannerPageSaving, setTripPlannerPageSaving] = useState(false);
+  const [homeContentJson, setHomeContentJson] = useState('{}');
+  const [homeContentSaving, setHomeContentSaving] = useState(false);
+  const [marketingJsonByKey, setMarketingJsonByKey] = useState<Record<string, string>>({
+    team_page: '{}',
+    careers_page: '{}',
+    press_page: '{}',
+    packages_page: '{}',
+    destinations_page: '{}',
+    experiences_page: '{}',
+  });
+  const [marketingSavingKey, setMarketingSavingKey] = useState<string | null>(null);
   const [emailTemplatesMap, setEmailTemplatesMap] = useState<Record<string, { subject?: string; innerHtml?: string; bodyText?: string }>>({});
   const [emailTemplateKey, setEmailTemplateKey] = useState<string>(ADMIN_EMAIL_TEMPLATE_KEYS[0]);
   const [emailTemplateSubject, setEmailTemplateSubject] = useState('');
@@ -575,6 +591,53 @@ export default function AdminDashboard() {
   const [addAdminOpen, setAddAdminOpen] = useState(false);
   const [addAdminForm, setAddAdminForm] = useState({ name: '', email: '', phone: '', password: '' });
   const [addAdminSaving, setAddAdminSaving] = useState(false);
+
+  type HostWalletPolicyRow = { enabled: boolean; platform_enabled?: boolean };
+  const [hostWalletCatalog, setHostWalletCatalog] = useState<string[]>([]);
+  const [hostWalletPolicies, setHostWalletPolicies] = useState<Record<string, HostWalletPolicyRow>>({});
+  const [hostWalletLoading, setHostWalletLoading] = useState(false);
+  const [hostWalletSaving, setHostWalletSaving] = useState(false);
+
+  useEffect(() => {
+    if (!selectedUserDetail || selectedUserDetail.role !== 'host') {
+      setHostWalletCatalog([]);
+      setHostWalletPolicies({});
+      return;
+    }
+    let cancelled = false;
+    setHostWalletLoading(true);
+    api
+      .get<{
+        user_id: number;
+        services?: { wallet_service_name: string; platform_enabled: boolean; host_enabled: boolean }[];
+        policies?: { wallet_service_name: string; enabled: boolean; adjustment_json?: string | null }[];
+      }>(`/api/admin/users/${selectedUserDetail.id}/host-wallet-services`)
+      .then((res) => {
+        if (cancelled) return;
+        const services = Array.isArray(res.data.services) ? res.data.services : [];
+        const names = services.map((s) => s.wallet_service_name).filter(Boolean).sort();
+        setHostWalletCatalog(names);
+        const map: Record<string, HostWalletPolicyRow> = {};
+        for (const s of services) {
+          if (!s.wallet_service_name) continue;
+          map[s.wallet_service_name] = { enabled: !!s.host_enabled, platform_enabled: s.platform_enabled };
+        }
+        setHostWalletPolicies(map);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          toast({ title: 'Could not load host wallet services.', variant: 'destructive' });
+          setHostWalletCatalog([]);
+          setHostWalletPolicies({});
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setHostWalletLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedUserDetail]);
 
   useEffect(() => {
     api.get<{
@@ -697,6 +760,7 @@ export default function AdminDashboard() {
         payment_gateway_enabled?: boolean;
         payment_npx_enabled?: boolean;
         payment_himalpay_enabled?: boolean;
+        himalpay_reseller_host_enabled?: boolean;
         offline_booking_guest_message?: string;
         listing_display?: ListingDisplaySettings;
         sparrow_sms?: SparrowSmsSettings;
@@ -705,6 +769,13 @@ export default function AdminDashboard() {
         home_partners?: Record<string, unknown>;
         festivals_page?: FestivalsPageConfig;
         trip_planner_page?: TripPlannerPageConfig;
+        home_content?: Record<string, unknown>;
+        team_page?: Record<string, unknown>;
+        careers_page?: Record<string, unknown>;
+        press_page?: Record<string, unknown>;
+        packages_page?: Record<string, unknown>;
+        destinations_page?: Record<string, unknown>;
+        experiences_page?: Record<string, unknown>;
         email_template_overrides?: Record<string, { subject?: string; innerHtml?: string; bodyText?: string }>;
       }>('/api/admin/settings')
       .then((settingsRes) => {
@@ -717,6 +788,7 @@ export default function AdminDashboard() {
         setPaymentGatewayEnabled(res.payment_gateway_enabled !== false);
         setPaymentNpxEnabled(res.payment_npx_enabled !== false);
         setPaymentHimalpayEnabled(res.payment_himalpay_enabled === true);
+        setPaymentResellerHostEnabled(res.himalpay_reseller_host_enabled === true);
         setOfflineBookingGuestMessage(typeof res.offline_booking_guest_message === 'string' ? res.offline_booking_guest_message : '');
         setBookingFeeByCategory(res.booking_fee_by_category ?? {});
         setBookingFeeByListing(res.booking_fee_by_listing ?? {});
@@ -749,6 +821,15 @@ export default function AdminDashboard() {
         setHomePartnersForm(normalizeHomePartners(res.home_partners));
         setFestivalsPageForm(normalizeFestivalsPage(res.festivals_page ?? EMPTY_FESTIVALS_PAGE()));
         setTripPlannerPageForm(normalizeTripPlannerPage(res.trip_planner_page ?? EMPTY_TRIP_PLANNER_PAGE()));
+        setHomeContentJson(JSON.stringify(res.home_content ?? {}, null, 2));
+        setMarketingJsonByKey({
+          team_page: JSON.stringify(res.team_page ?? {}, null, 2),
+          careers_page: JSON.stringify(res.careers_page ?? {}, null, 2),
+          press_page: JSON.stringify(res.press_page ?? {}, null, 2),
+          packages_page: JSON.stringify(res.packages_page ?? {}, null, 2),
+          destinations_page: JSON.stringify(res.destinations_page ?? {}, null, 2),
+          experiences_page: JSON.stringify(res.experiences_page ?? {}, null, 2),
+        });
         setEmailTemplatesMap(
           res.email_template_overrides && typeof res.email_template_overrides === 'object' && !Array.isArray(res.email_template_overrides)
             ? (res.email_template_overrides as Record<string, { subject?: string; innerHtml?: string; bodyText?: string }>)
@@ -1075,7 +1156,7 @@ export default function AdminDashboard() {
               if (t === 'listings') setAdminLiveListingsFilter('all');
             }}
           >
-            {t === 'listings' ? 'Listings' : t === 'corporates' ? 'Corporates' : t}
+            {t === 'listings' ? 'Listings' : t === 'corporates' ? 'Corporates' : t === 'wallet_utilities' ? 'Wallet utilities' : t}
           </button>
         ))}
       </div>
@@ -1396,7 +1477,7 @@ export default function AdminDashboard() {
           <Dialog.Root open={!!selectedUserDetail} onOpenChange={(open) => !open && setSelectedUserDetail(null)}>
             <Dialog.Portal>
               <Dialog.Overlay className="fixed inset-0 bg-black/50" />
-              <Dialog.Content aria-describedby={undefined} className="fixed left-1/2 top-1/2 z-50 w-full max-w-md -translate-x-1/2 -translate-y-1/2 rounded-lg border border-primary-200 bg-background p-6 shadow-lg">
+              <Dialog.Content aria-describedby={undefined} className="fixed left-1/2 top-1/2 z-50 w-full max-w-2xl max-h-[90vh] -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-lg border border-primary-200 bg-background p-6 shadow-lg">
                 <Dialog.Title className="text-lg font-semibold text-primary-800">User detail</Dialog.Title>
                 {selectedUserDetail && (
                   <div className="mt-4 space-y-2 text-sm">
@@ -1407,6 +1488,90 @@ export default function AdminDashboard() {
                     <p><span className="font-medium text-muted-foreground">Role:</span> {selectedUserDetail.role === 'admin' ? 'Admin' : selectedUserDetail.role === 'host' ? 'Host' : 'Guest'}</p>
                     <p><span className="font-medium text-muted-foreground">Created:</span> {selectedUserDetail.created_at ? formatDateOnly(selectedUserDetail.created_at) : '—'}</p>
                     {selectedUserDetail.blocked && <p className="text-red-600 font-medium">Blocked</p>}
+                    {selectedUserDetail.role === 'host' && (
+                      <div className="mt-4 border-t border-primary-100 pt-4 space-y-3">
+                        <h3 className="font-semibold text-primary-800">Host wallet services (HimalPay)</h3>
+                        <p className="text-xs text-muted-foreground">
+                          Enable SKUs this host may sell. Platform pricing slabs are configured under the Wallet utilities admin tab; disabled platform SKUs do not appear here.
+                        </p>
+                        {hostWalletLoading && <p className="text-sm text-muted-foreground">Loading…</p>}
+                        {!hostWalletLoading && hostWalletCatalog.length === 0 && (
+                          <p className="text-sm text-muted-foreground">No catalog entries (reseller API not configured, catalog empty, or no platform rows — run Wallet utilities refresh).</p>
+                        )}
+                        {!hostWalletLoading && hostWalletCatalog.length > 0 && (
+                          <div className="space-y-4 max-h-[40vh] overflow-y-auto pr-1">
+                            {hostWalletCatalog.map((svc) => (
+                              <div key={svc} className="rounded border border-primary-100 p-3 space-y-2">
+                                <p className="font-mono text-xs font-medium text-primary-800">{svc}</p>
+                                <p className="text-xs text-muted-foreground">
+                                  Platform:{' '}
+                                  <span className={hostWalletPolicies[svc]?.platform_enabled ? 'text-green-700' : 'text-amber-700'}>
+                                    {hostWalletPolicies[svc]?.platform_enabled ? 'enabled' : 'disabled'}
+                                  </span>
+                                </p>
+                                <label className="flex items-center gap-2 cursor-pointer">
+                                  <input
+                                    type="checkbox"
+                                    checked={hostWalletPolicies[svc]?.enabled ?? false}
+                                    disabled={!hostWalletPolicies[svc]?.platform_enabled}
+                                    onChange={(e) =>
+                                      setHostWalletPolicies((prev) => ({
+                                        ...prev,
+                                        [svc]: {
+                                          enabled: e.target.checked,
+                                          platform_enabled: prev[svc]?.platform_enabled,
+                                        },
+                                      }))
+                                    }
+                                    className="h-4 w-4 rounded border-primary-200"
+                                  />
+                                  <span className="text-sm">Enabled for this host</span>
+                                </label>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        {!hostWalletLoading && hostWalletCatalog.length > 0 && (
+                          <Button
+                            type="button"
+                            disabled={hostWalletSaving}
+                            className="bg-accent-500 hover:bg-accent-600"
+                            onClick={() => {
+                              if (!selectedUserDetail) return;
+                              setHostWalletSaving(true);
+                              const body = hostWalletCatalog.map((wallet_service_name) => ({
+                                wallet_service_name,
+                                enabled: hostWalletPolicies[wallet_service_name]?.enabled ?? false,
+                              }));
+                              api
+                                .patch<{ message?: string; policies: { wallet_service_name: string; enabled: boolean }[] }>(
+                                  `/api/admin/users/${selectedUserDetail.id}/host-wallet-services`,
+                                  body
+                                )
+                                .then((res) => {
+                                  toast({ title: res.data?.message || 'Policies saved.' });
+                                  const pols = res.data.policies ?? [];
+                                  setHostWalletPolicies((prev) => {
+                                    const next = { ...prev };
+                                    for (const p of pols) {
+                                      if (!p.wallet_service_name) continue;
+                                      next[p.wallet_service_name] = {
+                                        enabled: !!p.enabled,
+                                        platform_enabled: prev[p.wallet_service_name]?.platform_enabled ?? false,
+                                      };
+                                    }
+                                    return next;
+                                  });
+                                })
+                                .catch(() => toast({ title: 'Failed to save wallet policies.', variant: 'destructive' }))
+                                .finally(() => setHostWalletSaving(false));
+                            }}
+                          >
+                            {hostWalletSaving ? 'Saving…' : 'Save host SKU toggles'}
+                          </Button>
+                        )}
+                      </div>
+                    )}
                   </div>
                 )}
                 <div className="mt-4 flex justify-end">
@@ -2568,6 +2733,15 @@ export default function AdminDashboard() {
                 />
                 <span className="text-sm font-medium text-primary-800">Enable N-cash (HimalPay)</span>
               </label>
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={paymentResellerHostEnabled}
+                  onChange={(e) => setPaymentResellerHostEnabled(e.target.checked)}
+                  className="h-4 w-4 rounded border-primary-200"
+                />
+                <span className="text-sm font-medium text-primary-800">Enable HimalPay reseller utilities for hosts</span>
+              </label>
               <div>
                 <label className="mb-1 block text-sm font-medium text-primary-800">Extra message for guests (optional)</label>
                 <p className="text-xs text-muted-foreground mb-2">
@@ -2594,12 +2768,14 @@ export default function AdminDashboard() {
                         payment_gateway_enabled: paymentGatewayEnabled,
                         payment_npx_enabled: paymentNpxEnabled,
                         payment_himalpay_enabled: paymentHimalpayEnabled,
+                        himalpay_reseller_host_enabled: paymentResellerHostEnabled,
                         offline_booking_guest_message: offlineBookingGuestMessage.trim() || null,
                       })
                       .then((res) => {
                         setPaymentGatewayEnabled(res.data?.payment_gateway_enabled === true);
                         setPaymentNpxEnabled(res.data?.payment_npx_enabled === true);
                         setPaymentHimalpayEnabled(res.data?.payment_himalpay_enabled === true);
+                        setPaymentResellerHostEnabled(res.data?.himalpay_reseller_host_enabled === true);
                         setOfflineBookingGuestMessage(
                           typeof res.data?.offline_booking_guest_message === 'string' ? res.data.offline_booking_guest_message : ''
                         );
@@ -2624,6 +2800,7 @@ export default function AdminDashboard() {
                         setPaymentGatewayEnabled(res.data?.payment_gateway_enabled === true);
                         setPaymentNpxEnabled(res.data?.payment_npx_enabled === true);
                         setPaymentHimalpayEnabled(res.data?.payment_himalpay_enabled === true);
+                        setPaymentResellerHostEnabled(res.data?.himalpay_reseller_host_enabled === true);
                         toast({ title: 'All online payment methods disabled.' });
                       })
                       .catch(() => toast({ title: 'Failed to save.', variant: 'destructive' }))
@@ -3522,6 +3699,145 @@ export default function AdminDashboard() {
             </Card>
           )}
 
+          {/* Home content + marketing page JSON */}
+          {tab === 'settings' && (
+            <Card className="border-primary-200">
+              <CardHeader className="border-b border-primary-100 bg-primary-50/50">
+                <div className="flex items-center gap-2">
+                  <Home className="h-5 w-5 text-accent-500" />
+                  <h2 className="font-semibold text-primary-800">Home & marketing content</h2>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  Edit home trust/impact/testimonials/mobile/social/footer JSON and marketing page configs (team, careers, destinations, etc.).
+                </p>
+              </CardHeader>
+              <CardContent className="space-y-8 p-6">
+                <div>
+                  <h3 className="mb-2 font-medium text-primary-800">Home content (`home_content`)</h3>
+                  <textarea
+                    value={homeContentJson}
+                    onChange={(e) => setHomeContentJson(e.target.value)}
+                    rows={14}
+                    className="flex w-full rounded-md border border-primary-200 bg-background px-3 py-2 font-mono text-sm"
+                  />
+                  <div className="mt-3 flex gap-2">
+                    <Button
+                      type="button"
+                      disabled={homeContentSaving}
+                      className="bg-accent-500 hover:bg-accent-600"
+                      onClick={() => {
+                        try {
+                          const payload = JSON.parse(homeContentJson);
+                          setHomeContentSaving(true);
+                          api
+                            .patch('/api/admin/settings', { home_content: payload })
+                            .then((r) => {
+                              setHomeContentJson(JSON.stringify(r.data?.home_content ?? payload, null, 2));
+                              toast({ title: 'Home content saved.' });
+                            })
+                            .catch((err) =>
+                              toast({ title: err.response?.data?.message || 'Failed to save home content.', variant: 'destructive' })
+                            )
+                            .finally(() => setHomeContentSaving(false));
+                        } catch {
+                          toast({ title: 'Invalid JSON for home content.', variant: 'destructive' });
+                        }
+                      }}
+                    >
+                      {homeContentSaving ? 'Saving…' : 'Save home content'}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled={homeContentSaving}
+                      onClick={() => {
+                        setHomeContentSaving(true);
+                        api
+                          .patch('/api/admin/settings', { home_content: null })
+                          .then((r) => {
+                            setHomeContentJson(JSON.stringify(r.data?.home_content ?? {}, null, 2));
+                            toast({ title: 'Home content reset to defaults.' });
+                          })
+                          .catch(() => toast({ title: 'Failed to reset home content.', variant: 'destructive' }))
+                          .finally(() => setHomeContentSaving(false));
+                      }}
+                    >
+                      Reset home content
+                    </Button>
+                  </div>
+                </div>
+
+                {(
+                  [
+                    ['team_page', 'Team page'],
+                    ['careers_page', 'Careers page'],
+                    ['press_page', 'Press page'],
+                    ['packages_page', 'Packages page'],
+                    ['destinations_page', 'Destinations page'],
+                    ['experiences_page', 'Experiences page'],
+                  ] as const
+                ).map(([key, label]) => (
+                  <div key={key}>
+                    <h3 className="mb-2 font-medium text-primary-800">{label}</h3>
+                    <textarea
+                      value={marketingJsonByKey[key] ?? '{}'}
+                      onChange={(e) => setMarketingJsonByKey((m) => ({ ...m, [key]: e.target.value }))}
+                      rows={10}
+                      className="flex w-full rounded-md border border-primary-200 bg-background px-3 py-2 font-mono text-sm"
+                    />
+                    <div className="mt-3 flex gap-2">
+                      <Button
+                        type="button"
+                        disabled={marketingSavingKey === key}
+                        className="bg-accent-500 hover:bg-accent-600"
+                        onClick={() => {
+                          try {
+                            const payload = JSON.parse(marketingJsonByKey[key] || '{}');
+                            setMarketingSavingKey(key);
+                            api
+                              .patch('/api/admin/settings', { [key]: payload })
+                              .then((r) => {
+                                const next = (r.data as Record<string, unknown>)?.[key] ?? payload;
+                                setMarketingJsonByKey((m) => ({ ...m, [key]: JSON.stringify(next, null, 2) }));
+                                toast({ title: `${label} saved.` });
+                              })
+                              .catch((err) =>
+                                toast({ title: err.response?.data?.message || `Failed to save ${label}.`, variant: 'destructive' })
+                              )
+                              .finally(() => setMarketingSavingKey(null));
+                          } catch {
+                            toast({ title: `Invalid JSON for ${label}.`, variant: 'destructive' });
+                          }
+                        }}
+                      >
+                        {marketingSavingKey === key ? 'Saving…' : `Save ${label}`}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        disabled={marketingSavingKey === key}
+                        onClick={() => {
+                          setMarketingSavingKey(key);
+                          api
+                            .patch('/api/admin/settings', { [key]: null })
+                            .then((r) => {
+                              const next = (r.data as Record<string, unknown>)?.[key] ?? {};
+                              setMarketingJsonByKey((m) => ({ ...m, [key]: JSON.stringify(next, null, 2) }));
+                              toast({ title: `${label} reset to defaults.` });
+                            })
+                            .catch(() => toast({ title: `Failed to reset ${label}.`, variant: 'destructive' }))
+                            .finally(() => setMarketingSavingKey(null));
+                        }}
+                      >
+                        Reset
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          )}
+
           {/* Listing display (homestay detail page text) */}
           {listingDisplayForm && (
             <Card className="border-primary-200">
@@ -4071,6 +4387,8 @@ export default function AdminDashboard() {
           )}
         </div>
       )}
+
+      {tab === 'wallet_utilities' && <WalletUtilitiesPanel />}
 
       {tab === 'logs' && (
         <div className="mt-6 space-y-4">

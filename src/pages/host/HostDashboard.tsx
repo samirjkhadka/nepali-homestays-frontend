@@ -55,11 +55,24 @@ function formatLabel(s: string): string {
 type HostProfile = { id: number; name: string; is_primary: boolean };
 type Listing = { id: number; host_id: number; title: string; status: string; disabled_by_admin?: boolean; location?: string; price_per_night?: string | number; category?: string | null; hosts?: HostProfile[] };
 
-const BOOKING_STATUSES = ['all', 'pending', 'pending_payment', 'approved', 'partial_paid', 'paid', 'completed', 'declined', 'cancelled'] as const;
+const BOOKING_STATUSES = ['all', 'pending', 'pending_payment', 'approved', 'partial_paid', 'paid', 'completed', 'no_show', 'declined', 'cancelled'] as const;
 
 function formatBookingDateRange(checkIn: string, checkOut: string): string {
   const fmt = (d: string) => new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
   return `${fmt(checkIn)} – ${fmt(checkOut)}`;
+}
+
+/**
+ * States a no-show can be declared from, and whether the arrival day has come.
+ * Mirrors the API so the button is not offered when the request would be refused.
+ * Nepal is UTC+05:45 and check_in is a plain date, so the comparison is made in
+ * Nepal's calendar day rather than the browser's.
+ */
+const NO_SHOW_FROM = ['approved', 'partial_paid', 'paid'];
+
+function hasArrived(checkIn: string): boolean {
+  const nepalToday = new Date(Date.now() + 5.75 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  return checkIn.slice(0, 10) <= nepalToday;
 }
 
 function statusBadgeClass(status: string): string {
@@ -75,6 +88,8 @@ function statusBadgeClass(status: string): string {
       return 'bg-accent-100 text-accent-800';
     case 'pending':
       return 'bg-accent-50 text-accent-700';
+    case 'no_show':
+      return 'bg-orange-100 text-orange-800';
     case 'declined':
     case 'cancelled':
       return 'bg-destructive/10 text-destructive';
@@ -584,6 +599,20 @@ export default function HostDashboard() {
       setDashboard((d) => d ? { ...d, bookings: d.bookings.map((b) => b.id === id ? { ...b, status: 'completed' } : b) } : null);
       setSelectedBookingDetail((b) => (b?.id === id ? { ...b, status: 'completed' } : b));
     }).catch((err) => toast({ title: err.response?.data?.message || 'Failed to mark as complete.', variant: 'destructive' }));
+  };
+
+  /**
+   * Records that the guest never arrived. Confirmed twice over: it is the host's
+   * word against the guest's, it is written to an audit trail, and it cannot be
+   * undone from this screen.
+   */
+  const handleMarkNoShow = (id: number) => {
+    if (!window.confirm('Mark this reservation as a no-show? The nights are freed and this is recorded against the booking.')) return;
+    api.post(`/api/bookings/${id}/no-show`).then(() => {
+      toast({ title: 'Marked as a no-show.' });
+      setDashboard((d) => d ? { ...d, bookings: d.bookings.map((b) => b.id === id ? { ...b, status: 'no_show' } : b) } : null);
+      setSelectedBookingDetail((b) => (b?.id === id ? { ...b, status: 'no_show' } : b));
+    }).catch((err) => toast({ title: err.response?.data?.message || 'Could not mark as a no-show.', variant: 'destructive' }));
   };
 
   useEffect(() => {
@@ -1246,6 +1275,11 @@ export default function HostDashboard() {
                                   Mark as complete (guest can review)
                                 </Button>
                               )}
+                              {NO_SHOW_FROM.includes(b.status) && hasArrived(b.check_in) && (
+                                <Button size="sm" variant="outline" className="mt-2 ml-2" onClick={(e) => { e.stopPropagation(); handleMarkNoShow(b.id); }}>
+                                  Guest did not arrive
+                                </Button>
+                              )}
                               <Button size="sm" variant="outline" className="mt-2 ml-2" onClick={(e) => { e.stopPropagation(); setSelectedBookingDetail(b); }}>View details</Button>
                             </div>
                           </CardContent>
@@ -1291,6 +1325,9 @@ export default function HostDashboard() {
                       )}
                       {b.status === 'paid' && (
                         <Button size="sm" className="mt-2 bg-accent-500 hover:bg-accent-600" onClick={() => { handleMarkAsComplete(b.id); setSelectedBookingDetail(null); }}>Mark as complete (guest can review)</Button>
+                      )}
+                      {NO_SHOW_FROM.includes(b.status) && hasArrived(b.check_in) && (
+                        <Button size="sm" variant="outline" className="mt-2 ml-2" onClick={() => { handleMarkNoShow(b.id); setSelectedBookingDetail(null); }}>Guest did not arrive</Button>
                       )}
                     </div>
                   );

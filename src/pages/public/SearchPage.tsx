@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card';
 import { ListingBadges } from '@/components/ListingBadges';
+import { DateRangePicker } from '@/components/DateRangePicker';
 import { api } from '@/lib/api';
 import { getImageDisplayUrl } from '@/lib/image-url';
 import { assets } from '@/lib/design-tokens';
@@ -51,6 +52,8 @@ export default function SearchPage() {
   const [minPrice, setMinPrice] = useState(searchParams.get('minPrice') || '');
   const [maxPrice, setMaxPrice] = useState(searchParams.get('maxPrice') || '');
   const [guests, setGuests] = useState(searchParams.get('guests') || '');
+  const [checkIn, setCheckIn] = useState(searchParams.get('checkIn') || '');
+  const [checkOut, setCheckOut] = useState(searchParams.get('checkOut') || '');
   const [listings, setListings] = useState<Listing[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -90,11 +93,20 @@ export default function SearchPage() {
     if (categoryParam) setCategory(categoryParam);
     const nameParam = searchParams.get('name');
     if (nameParam) setNameQuery(nameParam);
+    const checkInParam = searchParams.get('checkIn');
+    if (checkInParam) setCheckIn(checkInParam);
+    const checkOutParam = searchParams.get('checkOut');
+    if (checkOutParam) setCheckOut(checkOutParam);
   }, [searchParams]);
+
+  // A stay filters results only once both ends are chosen. Sending a half-range
+  // would be rejected by the API, and mid-selection is a normal state in the
+  // calendar — so the query simply stays unfiltered until the range is complete.
+  const hasStay = Boolean(checkIn && checkOut && checkOut > checkIn);
 
   useEffect(() => {
     setPage(1);
-  }, [provinceId, districtId, district, location, minPrice, maxPrice, guests, nameQuery, category]);
+  }, [provinceId, districtId, district, location, minPrice, maxPrice, guests, nameQuery, category, checkIn, checkOut]);
 
   useEffect(() => {
     const params: Record<string, string | number> = { page, limit: PAGE_SIZE };
@@ -107,6 +119,10 @@ export default function SearchPage() {
     if (minPrice) params.minPrice = minPrice;
     if (maxPrice) params.maxPrice = maxPrice;
     if (guests) params.guests = guests;
+    if (hasStay) {
+      params.checkIn = checkIn;
+      params.checkOut = checkOut;
+    }
     setLoading(true);
     api
       .get<{ listings: Listing[]; total: number }>('/api/listings', { params })
@@ -118,7 +134,7 @@ export default function SearchPage() {
       })
       .catch(() => { setListings([]); setTotal(0); })
       .finally(() => setLoading(false));
-  }, [page, provinceId, districtId, district, location, minPrice, maxPrice, guests, nameQuery, category]);
+  }, [page, provinceId, districtId, district, location, minPrice, maxPrice, guests, nameQuery, category, hasStay, checkIn, checkOut]);
 
   const filteredByType = listings.filter((l) => {
     if (homestayType && (l.type || '').toLowerCase() !== homestayType.toLowerCase()) return false;
@@ -144,6 +160,8 @@ export default function SearchPage() {
     if (minPrice) params.set('minPrice', minPrice);
     if (maxPrice) params.set('maxPrice', maxPrice);
     if (guests) params.set('guests', guests);
+    if (checkIn) params.set('checkIn', checkIn);
+    if (checkOut) params.set('checkOut', checkOut);
     if (category) params.set('category', category);
     if (provinceParam) params.set('province', provinceParam);
     if (homestayType) params.set('type', homestayType);
@@ -350,6 +368,19 @@ export default function SearchPage() {
             <Label>Guests</Label>
             <Input type="number" value={guests} onChange={(e) => setGuests(e.target.value)} className="mt-1" />
           </div>
+          <div>
+            <Label>Dates</Label>
+            <DateRangePicker
+              checkIn={checkIn}
+              checkOut={checkOut}
+              onCheckInChange={setCheckIn}
+              onCheckOutChange={setCheckOut}
+              className="mt-1"
+            />
+            {checkIn && !checkOut && (
+              <p className="mt-1 text-sm text-muted-foreground">Pick a checkout date to filter by availability.</p>
+            )}
+          </div>
           <div className="flex items-end gap-2">
             <Button type="submit" className="w-full">Apply filters</Button>
             <Button
@@ -362,6 +393,8 @@ export default function SearchPage() {
                 setMinPrice('');
                 setMaxPrice('');
                 setGuests('');
+                setCheckIn('');
+                setCheckOut('');
                 setDistrict('');
                 setCategory('');
                 setHomestayType('');

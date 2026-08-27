@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
-import { Bed, DollarSign, Home, Plus, Calendar, BarChart3, Star, MessageSquare, Languages, ChevronRight, ArrowLeft, CalendarDays, User } from 'lucide-react';
+import { Bed, DollarSign, Home, Plus, Calendar, BarChart3, Star, MessageSquare, Languages, ChevronRight, ArrowLeft, CalendarDays, User, Wallet } from 'lucide-react';
 import {
   BarChart,
   Bar,
@@ -24,7 +24,9 @@ import {
   Legend,
   Line,
 } from 'recharts';
+import { CalendarSyncPanel } from '@/components/host/CalendarSyncPanel';
 import { api } from '@/lib/api';
+import { openPaymentUrl } from '@/lib/paymentRedirect';
 import { useToast } from '@/hooks/use-toast';
 import { useCurrency } from '@/lib/currency';
 import { formatDateTime } from '@/lib/format';
@@ -81,13 +83,14 @@ function statusBadgeClass(status: string): string {
   }
 }
 
-const TABS = ['overview', 'listings', 'bookings', 'calendar', 'reviews', 'messages', 'profile'] as const;
+const TABS = ['overview', 'listings', 'bookings', 'utilities', 'calendar', 'reviews', 'messages', 'profile'] as const;
 type TabType = (typeof TABS)[number];
 
 const TAB_ICONS: Record<TabType, React.ComponentType<{ className?: string }>> = {
   overview: BarChart3,
   listings: Home,
   bookings: Bed,
+  utilities: Wallet,
   calendar: CalendarDays,
   reviews: Star,
   messages: MessageSquare,
@@ -203,10 +206,302 @@ export default function HostDashboard() {
   });
   const [selectedBookingDetail, setSelectedBookingDetail] = useState<Booking | null>(null);
 
+  type WalletFormField = { key: string; label: string; type: string; required: boolean };
+  function neaFieldLabel(fields: WalletFormField[] | undefined, key: string, fallback: string) {
+    return fields?.find((f) => f.key === key)?.label ?? fallback;
+  }
+  type WalletCatalogService = {
+    wallet_service_name: string;
+    display_name?: string;
+    logo_url?: string | null;
+    flow_type?: 'standard' | 'nea' | string;
+    fields?: WalletFormField[];
+    host_due_example_npr?: number;
+  };
+  type UtilPricingLines = {
+    cashback_npr?: number | null;
+    discount_npr?: number | null;
+    service_charge_npr?: number | null;
+  };
+  type UtilPreviewResponse = {
+    wallet_service_name: string;
+    amount_npr?: number;
+    face_value_npr: number;
+    host_due_npr: number;
+    face_value_paisa?: number;
+    host_due_paisa?: number;
+    data_json?: string;
+    pricing?: UtilPricingLines | null;
+    himalpay_calculate?: { raw?: string } | null;
+  };
+  type NeaBillOption = { bill: Record<string, unknown>; amount_npr: number };
+  type PerServiceUtilState = {
+    form: Record<string, string>;
+    preview: UtilPreviewResponse | null;
+    advancedJson: string;
+    showAdvanced: boolean;
+    neaCounter: string;
+    neaScNo: string;
+    neaConsumerId: string;
+    neaCounters: { value: string; label: string }[];
+    neaCountersLoading: boolean;
+    neaBills: NeaBillOption[];
+    neaBillsLoading: boolean;
+    neaSelectedBillIdx: number | null;
+  };
+  const emptyPerServiceUtil = (): PerServiceUtilState => ({
+    form: {},
+    preview: null,
+    advancedJson: '{}',
+    showAdvanced: false,
+    neaCounter: '',
+    neaScNo: '',
+    neaConsumerId: '',
+    neaCounters: [],
+    neaCountersLoading: false,
+    neaBills: [],
+    neaBillsLoading: false,
+    neaSelectedBillIdx: null,
+  });
+
+  function renderUtilPricingLines(pricing: UtilPricingLines | null | undefined) {
+    if (!pricing) return null;
+    const lines: { label: string; value: number }[] = [];
+    if (pricing.cashback_npr != null && pricing.cashback_npr > 0)
+      lines.push({ label: 'Cashback', value: pricing.cashback_npr });
+    if (pricing.discount_npr != null && pricing.discount_npr > 0)
+      lines.push({ label: 'Discount', value: pricing.discount_npr });
+    if (pricing.service_charge_npr != null && pricing.service_charge_npr > 0)
+      lines.push({ label: 'Service charge', value: pricing.service_charge_npr });
+    if (lines.length === 0) return null;
+    return (
+      <div className="space-y-0.5 pt-1 border-t border-primary-100/80">
+        {lines.map((l) => (
+          <p key={l.label}>
+            <span className="font-medium text-muted-foreground">{l.label}:</span>{' '}
+            {formatPrice(String(l.value))}
+          </p>
+        ))}
+      </div>
+    );
+  }
+
+  function loadNeaCounters(serviceName: string) {
+    setUtilStates((p) => {
+      const cur = p[serviceName] ?? emptyPerServiceUtil();
+      return { ...p, [serviceName]: { ...cur, neaCountersLoading: true } };
+    });
+    api
+      .get<{ counters: { value: string; label: string }[] }>('/api/host/wallet-services/nea/counters')
+      .then((res) => {
+        setUtilStates((p) => {
+          const cur = p[serviceName] ?? emptyPerServiceUtil();
+          return {
+            ...p,
+            [serviceName]: {
+              ...cur,
+              neaCounters: res.data.counters ?? [],
+              neaCountersLoading: false,
+            },
+          };
+        });
+      })
+      .catch((err) => {
+        setUtilStates((p) => {
+          const cur = p[serviceName] ?? emptyPerServiceUtil();
+          return { ...p, [serviceName]: { ...cur, neaCountersLoading: false } };
+        });
+        toast({ title: err.response?.data?.message || 'Could not load NEA counters.', variant: 'destructive' });
+      });
+  }
+
+  function loadNeaBills(serviceName: string, counter: string, scNo: string, consumerId: string) {
+    setUtilStates((p) => {
+      const cur = p[serviceName] ?? emptyPerServiceUtil();
+      return { ...p, [serviceName]: { ...cur, neaBillsLoading: true, neaBills: [], neaSelectedBillIdx: null, preview: null } };
+    });
+    api
+      .post<{ bills: NeaBillOption[] }>('/api/host/wallet-services/nea/bills', {
+        counter,
+        sc_no: scNo,
+        consumer_id: consumerId,
+      })
+      .then((res) => {
+        setUtilStates((p) => {
+          const cur = p[serviceName] ?? emptyPerServiceUtil();
+          return {
+            ...p,
+            [serviceName]: {
+              ...cur,
+              neaBills: res.data.bills ?? [],
+              neaBillsLoading: false,
+            },
+          };
+        });
+      })
+      .catch((err) => {
+        setUtilStates((p) => {
+          const cur = p[serviceName] ?? emptyPerServiceUtil();
+          return { ...p, [serviceName]: { ...cur, neaBillsLoading: false } };
+        });
+        toast({ title: err.response?.data?.message || 'Could not load bills.', variant: 'destructive' });
+      });
+  }
+
+  function neaSelectedBill(st: PerServiceUtilState): NeaBillOption | null {
+    if (st.neaSelectedBillIdx == null || st.neaSelectedBillIdx < 0) return null;
+    return st.neaBills[st.neaSelectedBillIdx] ?? null;
+  }
+
+  function runWalletPreview(serviceName: string, svc: WalletCatalogService, st: PerServiceUtilState) {
+    const isNea = svc.flow_type === 'nea';
+    let payload: {
+      wallet_service_name: string;
+      face_value_npr: number;
+      form?: Record<string, string>;
+      data_json?: string;
+    };
+    if (isNea) {
+      const bill = neaSelectedBill(st);
+      if (!bill || bill.amount_npr <= 0) {
+        toast({ title: 'Select a bill to preview.', variant: 'destructive' });
+        return;
+      }
+      payload = {
+        wallet_service_name: serviceName,
+        face_value_npr: bill.amount_npr,
+        data_json: JSON.stringify(bill.bill),
+      };
+    } else {
+      const n = resolveWalletAmountNpr(svc.fields ?? [], st.form);
+      if (n == null) {
+        toast({ title: 'Enter a valid amount (NPR).', variant: 'destructive' });
+        return;
+      }
+      payload = { wallet_service_name: serviceName, face_value_npr: n, form: st.form };
+    }
+    setUtilPreviewLoading(serviceName);
+    api
+      .post<UtilPreviewResponse>('/api/host/wallet-services/preview', payload)
+      .then((res) => {
+        setUtilStates((q) => {
+          const c = q[serviceName] ?? emptyPerServiceUtil();
+          return { ...q, [serviceName]: { ...c, preview: res.data } };
+        });
+      })
+      .catch((err) => {
+        setUtilStates((q) => {
+          const c = q[serviceName] ?? emptyPerServiceUtil();
+          return { ...q, [serviceName]: { ...c, preview: null } };
+        });
+        toast({ title: err.response?.data?.message || 'Preview failed.', variant: 'destructive' });
+      })
+      .finally(() => setUtilPreviewLoading(null));
+  }
+
+  function runWalletCheckout(serviceName: string, svc: WalletCatalogService, st: PerServiceUtilState) {
+    const isNea = svc.flow_type === 'nea';
+    let payload: {
+      wallet_service_name: string;
+      face_value_npr: number;
+      form?: Record<string, string>;
+      data_json?: string;
+    };
+    if (isNea) {
+      const bill = neaSelectedBill(st);
+      if (!bill || bill.amount_npr <= 0) {
+        toast({ title: 'Select a bill to pay.', variant: 'destructive' });
+        return;
+      }
+      payload = {
+        wallet_service_name: serviceName,
+        face_value_npr: bill.amount_npr,
+        data_json: JSON.stringify(bill.bill),
+      };
+    } else {
+      const n = resolveWalletAmountNpr(svc.fields ?? [], st.form);
+      if (n == null) {
+        toast({ title: 'Enter a valid amount (NPR).', variant: 'destructive' });
+        return;
+      }
+      if (st.showAdvanced) {
+        const raw = st.advancedJson.trim();
+        let dataStr: string;
+        try {
+          dataStr = raw ? JSON.stringify(JSON.parse(raw)) : '{}';
+        } catch {
+          toast({ title: 'Advanced JSON must be valid.', variant: 'destructive' });
+          return;
+        }
+        payload = { wallet_service_name: serviceName, face_value_npr: n, data_json: dataStr };
+      } else {
+        payload = { wallet_service_name: serviceName, face_value_npr: n, form: st.form };
+      }
+    }
+    setUtilCheckoutLoading(serviceName);
+    api
+      .post<{ redirect_url: string; transaction_id?: number }>('/api/host/wallet-services/checkout', payload)
+      .then((res) => {
+        const url = res.data?.redirect_url;
+        if (url) {
+          try {
+            openPaymentUrl(url);
+          } catch {
+            toast({ title: 'Invalid payment URL.', variant: 'destructive' });
+          }
+        } else toast({ title: 'No redirect URL returned.', variant: 'destructive' });
+      })
+      .catch((err) =>
+        toast({ title: err.response?.data?.message || 'Could not start checkout.', variant: 'destructive' })
+      )
+      .finally(() => setUtilCheckoutLoading(null));
+  }
+
+  function resolveWalletAmountNpr(fields: WalletFormField[], form: Record<string, string>): number | null {
+    for (const f of fields) {
+      if (f.type !== 'amount') continue;
+      const n = Number(form[f.key]);
+      if (Number.isFinite(n) && n > 0) return n;
+    }
+    return null;
+  }
+  const [walletCatalog, setWalletCatalog] = useState<{
+    enabled: boolean;
+    services: WalletCatalogService[];
+    message?: string;
+  } | null>(null);
+  const [walletCatalogLoading, setWalletCatalogLoading] = useState(false);
+  const [utilStates, setUtilStates] = useState<Record<string, PerServiceUtilState>>({});
+  const [utilPreviewLoading, setUtilPreviewLoading] = useState<string | null>(null);
+  const [utilCheckoutLoading, setUtilCheckoutLoading] = useState<string | null>(null);
+  const [utilExpanded, setUtilExpanded] = useState<Record<string, boolean>>({});
+  type UtilTxnRow = {
+    id: number;
+    wallet_service_name: string;
+    face_value_paisa: number;
+    host_due_paisa: number;
+    status: string;
+    created_at: string;
+    error_message?: string | null;
+  };
+  const [utilTxns, setUtilTxns] = useState<UtilTxnRow[]>([]);
+  const [utilTxnsLoading, setUtilTxnsLoading] = useState(false);
+
   useEffect(() => {
     const t = searchParams.get('tab') as TabType | null;
     if (t && TABS.includes(t)) setTab(t);
   }, [searchParams]);
+
+  useEffect(() => {
+    const util = searchParams.get('utility');
+    if (util !== 'success' && util !== 'failed') return;
+    toast({
+      title: util === 'success' ? 'Payment received. Your utility order is being finalized.' : 'Utility payment did not complete.',
+      variant: util === 'success' ? 'default' : 'destructive',
+    });
+    setTab('utilities');
+    setSearchParams({ tab: 'utilities' }, { replace: true });
+  }, [searchParams, setSearchParams, toast]);
 
   useEffect(() => {
     api.get('/api/host/dashboard').then((res) => setDashboard(res.data)).catch(() => setDashboard(null));
@@ -357,6 +652,51 @@ export default function HostDashboard() {
     }
   }, [dashboard, isCoHostOnly, tab, setSearchParams]);
 
+  useEffect(() => {
+    if (tab !== 'utilities' || isCoHostOnly) return;
+    setWalletCatalogLoading(true);
+    api
+      .get<{ enabled: boolean; services: WalletCatalogService[]; message?: string }>('/api/host/wallet-services/catalog')
+      .then((res) => {
+        setWalletCatalog(res.data);
+      })
+      .catch(() => {
+        setWalletCatalog(null);
+        toast({ title: 'Could not load wallet services.', variant: 'destructive' });
+      })
+      .finally(() => setWalletCatalogLoading(false));
+    setUtilTxnsLoading(true);
+    api
+      .get<{ transactions: UtilTxnRow[] }>('/api/host/wallet-services/transactions?page=1&limit=20')
+      .then((res) => setUtilTxns(res.data.transactions ?? []))
+      .catch(() => setUtilTxns([]))
+      .finally(() => setUtilTxnsLoading(false));
+  }, [tab, isCoHostOnly]);
+
+  useEffect(() => {
+    if (!walletCatalog?.enabled || !walletCatalog.services?.length) return;
+    setUtilStates((prev) => {
+      const next = { ...prev };
+      for (const s of walletCatalog.services) {
+        const name = s.wallet_service_name;
+        const formKeys = s.fields ?? [];
+        if (!next[name]) {
+          const form: Record<string, string> = {};
+          for (const f of formKeys) form[f.key] = '';
+          next[name] = emptyPerServiceUtil();
+          next[name] = { ...next[name], form };
+        } else {
+          const mergedForm = { ...next[name].form };
+          for (const f of formKeys) {
+            if (mergedForm[f.key] === undefined) mergedForm[f.key] = '';
+          }
+          next[name] = { ...next[name], form: mergedForm };
+        }
+      }
+      return next;
+    });
+  }, [walletCatalog?.enabled, walletCatalog?.services]);
+
   const handleAddCoHost = async (e: React.FormEvent) => {
     e.preventDefault();
     if (coHostListingId == null || !coHostForm.email.trim()) return;
@@ -434,7 +774,7 @@ export default function HostDashboard() {
               }}
             >
               {Icon && <Icon className="h-4 w-4 shrink-0" />}
-              {t}
+              {t === 'utilities' ? 'Wallet utilities' : t}
             </button>
           );
         })}
@@ -964,7 +1304,340 @@ export default function HostDashboard() {
         </div>
       )}
 
+      {tab === 'utilities' && !isCoHostOnly && (
+        <div className="mt-6 space-y-6 max-w-4xl">
+          <Card className="border-primary-200">
+            <CardHeader className="border-b border-primary-100 bg-primary-50/50">
+              <div className="flex items-center gap-2">
+                <Wallet className="h-5 w-5 text-accent-500" />
+                <h3 className="font-semibold text-primary-800">Wallet utilities (HimalPay)</h3>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                Pay for enabled wallet services via N-Cash checkout. You must be the primary owner of at least one listing.
+                Each card is one SKU — fill the fields, preview your due amount, then pay.
+              </p>
+            </CardHeader>
+            <CardContent className="p-6 space-y-6">
+              {walletCatalogLoading && <p className="text-sm text-muted-foreground">Loading catalog…</p>}
+              {!walletCatalogLoading && walletCatalog && !walletCatalog.enabled && (
+                <p className="text-sm text-muted-foreground">{walletCatalog.message || 'Wallet utilities are not available right now.'}</p>
+              )}
+              {!walletCatalogLoading && walletCatalog?.enabled && (
+                <>
+                  {(walletCatalog.services ?? []).length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No services enabled for your account.</p>
+                  ) : (
+                    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                      {(walletCatalog.services ?? []).map((svc) => {
+                        const name = svc.wallet_service_name;
+                        const st = utilStates[name] ?? emptyPerServiceUtil();
+                        const fields = svc.fields ?? [];
+                        const neaFields = svc.flow_type === 'nea' ? fields : [];
+                        const expanded = !!utilExpanded[name];
+                        const label = svc.display_name?.trim() || name;
+                        return (
+                          <Card key={name} className="border-primary-100 shadow-sm overflow-hidden">
+                            <button
+                              type="button"
+                              className="w-full flex items-center gap-3 p-4 text-left hover:bg-primary-50/50 transition-colors"
+                              onClick={() => {
+                                const willExpand = !expanded;
+                                setUtilExpanded((p) => ({ ...p, [name]: willExpand }));
+                                if (willExpand && svc.flow_type === 'nea') {
+                                  const cur = utilStates[name] ?? emptyPerServiceUtil();
+                                  if (cur.neaCounters.length === 0 && !cur.neaCountersLoading) loadNeaCounters(name);
+                                }
+                              }}
+                            >
+                              {svc.logo_url ? (
+                                <img
+                                  src={svc.logo_url}
+                                  alt=""
+                                  className="h-12 w-12 rounded-lg object-contain bg-white border border-primary-100 shrink-0"
+                                />
+                              ) : (
+                                <div className="h-12 w-12 rounded-lg bg-primary-100 flex items-center justify-center shrink-0">
+                                  <Wallet className="h-6 w-6 text-primary-600" />
+                                </div>
+                              )}
+                              <div className="min-w-0 flex-1">
+                                <p className="font-semibold text-primary-800 truncate">{label}</p>
+                              </div>
+                              <span className="text-xs text-muted-foreground shrink-0">{expanded ? '▲' : '▼'}</span>
+                            </button>
+                            {expanded && (
+                            <CardContent className="space-y-3 pt-0 border-t border-primary-100 pb-4 px-4">
+                              {svc.host_due_example_npr != null && (
+                                <p className="text-xs text-muted-foreground">
+                                  Example due on NPR 100: {formatPrice(String(svc.host_due_example_npr))}
+                                </p>
+                              )}
+                              {svc.flow_type === 'nea' ? (
+                                <div className="space-y-3">
+                                  <div>
+                                    <Label className="text-primary-800">
+                                      {neaFieldLabel(neaFields, 'counter', 'Distribution counter')}
+                                      {' *'}
+                                    </Label>
+                                    {st.neaCountersLoading ? (
+                                      <p className="text-xs text-muted-foreground mt-1">Loading counters…</p>
+                                    ) : (
+                                      <select
+                                        className="mt-1 w-full rounded-md border border-primary-200 bg-background px-3 py-2 text-sm"
+                                        value={st.neaCounter}
+                                        onChange={(e) =>
+                                          setUtilStates((p) => {
+                                            const cur = p[name] ?? emptyPerServiceUtil();
+                                            return {
+                                              ...p,
+                                              [name]: {
+                                                ...cur,
+                                                neaCounter: e.target.value,
+                                                neaBills: [],
+                                                neaSelectedBillIdx: null,
+                                                preview: null,
+                                              },
+                                            };
+                                          })
+                                        }
+                                      >
+                                        <option value="">Select counter</option>
+                                        {st.neaCounters.map((c) => (
+                                          <option key={c.value} value={c.value}>
+                                            {c.label}
+                                          </option>
+                                        ))}
+                                      </select>
+                                    )}
+                                  </div>
+                                  <div>
+                                    <Label className="text-primary-800">
+                                      {neaFieldLabel(neaFields, 'sc_no', 'SC number')}
+                                      {' *'}
+                                    </Label>
+                                    <Input
+                                      value={st.neaScNo}
+                                      onChange={(e) =>
+                                        setUtilStates((p) => {
+                                          const cur = p[name] ?? emptyPerServiceUtil();
+                                          return {
+                                            ...p,
+                                            [name]: { ...cur, neaScNo: e.target.value, preview: null },
+                                          };
+                                        })
+                                      }
+                                      className="mt-1 border-primary-200"
+                                    />
+                                  </div>
+                                  <div>
+                                    <Label className="text-primary-800">
+                                      {neaFieldLabel(neaFields, 'consumer_id', 'Consumer ID')}
+                                      {' *'}
+                                    </Label>
+                                    <Input
+                                      value={st.neaConsumerId}
+                                      onChange={(e) =>
+                                        setUtilStates((p) => {
+                                          const cur = p[name] ?? emptyPerServiceUtil();
+                                          return {
+                                            ...p,
+                                            [name]: { ...cur, neaConsumerId: e.target.value, preview: null },
+                                          };
+                                        })
+                                      }
+                                      className="mt-1 border-primary-200"
+                                    />
+                                  </div>
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    disabled={st.neaBillsLoading || !st.neaCounter || !st.neaScNo.trim() || !st.neaConsumerId.trim()}
+                                    onClick={() => loadNeaBills(name, st.neaCounter, st.neaScNo.trim(), st.neaConsumerId.trim())}
+                                  >
+                                    {st.neaBillsLoading ? 'Loading bills…' : 'Load bills'}
+                                  </Button>
+                                  {st.neaBills.length > 0 && (
+                                    <ul className="space-y-2 text-sm border border-primary-100 rounded-md p-2 max-h-40 overflow-y-auto">
+                                      {st.neaBills.map((b, idx) => (
+                                        <li key={idx}>
+                                          <label className="flex items-start gap-2 cursor-pointer">
+                                            <input
+                                              type="radio"
+                                              name={`nea-bill-${name}`}
+                                              checked={st.neaSelectedBillIdx === idx}
+                                              onChange={() =>
+                                                setUtilStates((p) => {
+                                                  const cur = p[name] ?? emptyPerServiceUtil();
+                                                  return {
+                                                    ...p,
+                                                    [name]: { ...cur, neaSelectedBillIdx: idx, preview: null },
+                                                  };
+                                                })
+                                              }
+                                              className="mt-1"
+                                            />
+                                            <span>
+                                              {formatPrice(String(b.amount_npr))}
+                                              {b.bill.bill_month != null && (
+                                                <span className="text-muted-foreground"> · {String(b.bill.bill_month)}</span>
+                                              )}
+                                            </span>
+                                          </label>
+                                        </li>
+                                      ))}
+                                    </ul>
+                                  )}
+                                </div>
+                              ) : (
+                              fields.map((f) => (
+                                <div key={f.key}>
+                                  <Label className="text-primary-800">
+                                    {f.label}
+                                    {f.required ? ' *' : ''}
+                                  </Label>
+                                  <Input
+                                    type={f.type === 'text' ? 'text' : 'number'}
+                                    inputMode={f.type === 'text' ? 'text' : 'decimal'}
+                                    value={st.form[f.key] ?? ''}
+                                    onChange={(e) => {
+                                      const v = e.target.value;
+                                      setUtilStates((p) => {
+                                        const cur = p[name] ?? emptyPerServiceUtil();
+                                        return {
+                                          ...p,
+                                          [name]: {
+                                            ...cur,
+                                            form: { ...cur.form, [f.key]: v },
+                                            preview: null,
+                                          },
+                                        };
+                                      });
+                                    }}
+                                    className="mt-1 border-primary-200"
+                                    placeholder={f.type === 'amount' ? 'e.g. 100' : ''}
+                                  />
+                                </div>
+                              )))}
+                              {svc.flow_type !== 'nea' && (
+                              <div className="pt-1">
+                                <button
+                                  type="button"
+                                  className="text-xs text-accent-600 hover:underline"
+                                  onClick={() =>
+                                    setUtilStates((p) => {
+                                      const cur = p[name] ?? emptyPerServiceUtil();
+                                      return { ...p, [name]: { ...cur, showAdvanced: !cur.showAdvanced } };
+                                    })
+                                  }
+                                >
+                                  {st.showAdvanced ? 'Hide advanced JSON' : 'Advanced: edit payload JSON'}
+                                </button>
+                                {st.showAdvanced && (
+                                  <Textarea
+                                    value={st.advancedJson}
+                                    onChange={(e) =>
+                                      setUtilStates((p) => {
+                                        const cur = p[name] ?? emptyPerServiceUtil();
+                                        return {
+                                          ...p,
+                                          [name]: { ...cur, advancedJson: e.target.value, preview: null },
+                                        };
+                                      })
+                                    }
+                                    rows={4}
+                                    className="mt-2 font-mono text-xs border-primary-200"
+                                  />
+                                )}
+                              </div>
+                              )}
+                              <div className="flex flex-wrap gap-2 pt-1">
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  disabled={utilPreviewLoading === name}
+                                  onClick={() => runWalletPreview(name, svc, st)}
+                                >
+                                  {utilPreviewLoading === name ? 'Preview…' : 'Preview'}
+                                </Button>
+                                <Button
+                                  type="button"
+                                  className="bg-accent-500 hover:bg-accent-600"
+                                  disabled={utilCheckoutLoading === name}
+                                  onClick={() => runWalletCheckout(name, svc, st)}
+                                >
+                                  {utilCheckoutLoading === name ? 'Starting…' : 'Pay with HimalPay'}
+                                </Button>
+                              </div>
+                              {st.preview && (
+                                <div className="rounded-md border border-primary-100 bg-primary-50/30 p-3 text-sm space-y-1">
+                                  <p>
+                                    <span className="font-medium text-muted-foreground">Amount:</span>{' '}
+                                    {formatPrice(String(st.preview.amount_npr ?? st.preview.face_value_npr))}
+                                  </p>
+                                  <p>
+                                    <span className="font-medium text-muted-foreground">You pay:</span>{' '}
+                                    {formatPrice(String(st.preview.host_due_npr))}
+                                  </p>
+                                  {renderUtilPricingLines(st.preview.pricing)}
+                                  {st.preview.himalpay_calculate?.raw && (
+                                    <details className="text-xs">
+                                      <summary className="cursor-pointer text-muted-foreground">HimalPay calculate (optional)</summary>
+                                      <pre className="mt-2 max-h-32 overflow-auto rounded bg-muted p-2 whitespace-pre-wrap break-all">
+                                        {(() => {
+                                          try {
+                                            const o = JSON.parse(st.preview.himalpay_calculate.raw);
+                                            return JSON.stringify(o, null, 2);
+                                          } catch {
+                                            return st.preview.himalpay_calculate.raw;
+                                          }
+                                        })()}
+                                      </pre>
+                                    </details>
+                                  )}
+                                </div>
+                              )}
+                            </CardContent>
+                            )}
+                          </Card>
+                        );
+                      })}
+                    </div>
+                  )}
+                </>
+              )}
+            </CardContent>
+          </Card>
+          <Card className="border-primary-200">
+            <CardHeader className="border-b border-primary-100 bg-primary-50/50">
+              <h3 className="font-semibold text-primary-800">Recent utility transactions</h3>
+            </CardHeader>
+            <CardContent className="p-6">
+              {utilTxnsLoading && <p className="text-sm text-muted-foreground">Loading…</p>}
+              {!utilTxnsLoading && utilTxns.length === 0 && (
+                <p className="text-sm text-muted-foreground">No transactions yet.</p>
+              )}
+              {!utilTxnsLoading && utilTxns.length > 0 && (
+                <ul className="space-y-2 text-sm">
+                  {utilTxns.map((t) => (
+                    <li key={t.id} className="rounded border border-primary-100 p-3">
+                      <p className="font-medium text-primary-800">{t.wallet_service_name}</p>
+                      <p className="text-muted-foreground">
+                        Due {formatPrice(String((t.host_due_paisa ?? 0) / 100))} · Status {t.status}
+                      </p>
+                      {t.error_message && <p className="text-destructive text-xs mt-1">{t.error_message}</p>}
+                      <p className="text-xs text-muted-foreground mt-1">{formatDateTime(t.created_at)}</p>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
       {tab === 'calendar' && (
+        <>
         <Card className="mt-6 max-w-md border-primary-200">
           <CardHeader className="border-b border-primary-100 bg-primary-50/50">
             <div className="flex items-center gap-2">
@@ -1040,6 +1713,11 @@ export default function HostDashboard() {
             )}
           </CardContent>
         </Card>
+
+        {/* The panel mints the feed token on first view, so it renders only
+            once a listing is chosen above. */}
+        <CalendarSyncPanel listingId={blockListingId} />
+        </>
       )}
 
       {tab === 'reviews' && (

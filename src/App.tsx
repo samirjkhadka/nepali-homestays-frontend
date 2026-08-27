@@ -31,6 +31,7 @@ import BlogsPage from '@/pages/public/BlogsPage';
 import CmsPage from '@/pages/public/CmsPage';
 import FestivalsPage from '@/pages/public/FestivalsPage';
 import ThingsToDoPage from '@/pages/public/ExperiencesPage';
+import ExperienceDetailPage from '@/pages/public/ExperienceDetailPage';
 import TripPlannerPage from '@/pages/public/TripPlannerPage';
 import TeamPage from '@/pages/public/marketing/TeamPage';
 import CareersPage from '@/pages/public/marketing/CareersPage';
@@ -89,6 +90,7 @@ export default function App() {
           <Route path="cms/:slug" element={<CmsPage />} />
           <Route path="festivals" element={<FestivalsPage />} />
           <Route path="things-to-do" element={<ThingsToDoPage />} />
+          <Route path="things-to-do/:id" element={<ExperienceDetailPage />} />
           <Route path="trip-planner" element={<TripPlannerPage />} />
           <Route path="wishlist" element={<WishlistNavRedirect />} />
           <Route path="signin" element={<LoginPage />} />

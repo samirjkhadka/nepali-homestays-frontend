@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { CancelBookingButton } from '@/components/booking/CancelBookingButton';
+import { MyExperienceBookings } from '@/components/booking/MyExperienceBookings';
 import { api } from '@/lib/api';
 import { openPaymentUrl, submitPaymentForm } from '@/lib/paymentRedirect';
 import { useToast } from '@/hooks/use-toast';
@@ -280,6 +281,7 @@ export default function GuestDashboard() {
       )}
 
       {tab === 'bookings' && (
+        <>
         <div className="mt-6 space-y-6">
           <div className="flex flex-wrap gap-4">
             <Card className={`border-primary-200 ${statusFilter === 'all' ? 'ring-2 ring-accent-400' : ''}`}>
@@ -545,6 +547,10 @@ export default function GuestDashboard() {
             </Dialog.Portal>
           </Dialog.Root>
         </div>
+        {/* Listed apart from stays: a different shape of thing, and folding
+            them in would leave most stay rows carrying blank columns. */}
+        <MyExperienceBookings />
+        </>
       )}
 
       {tab === 'wishlist' && (

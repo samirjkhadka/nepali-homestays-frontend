@@ -209,7 +209,7 @@ export default function ExperiencesPage() {
               const duration = formatDuration(x.duration_minutes);
               const party = formatParticipants(x.min_participants, x.max_participants);
               return (
-                <Link key={x.id} to={`/listings/${x.listing.id}`} className="group">
+                <Link key={x.id} to={`/things-to-do/${x.id}`} className="group">
                   <Card className="h-full overflow-hidden transition-shadow hover:shadow-md">
                     {x.image_url && (
                       <img

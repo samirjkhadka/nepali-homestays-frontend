@@ -9,6 +9,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { useAuth } from '@/lib/auth';
 import { api } from '@/lib/api';
+import { openPaymentUrl, submitPaymentForm } from '@/lib/paymentRedirect';
 import { getImageDisplayUrl } from '@/lib/image-url';
 import { assets } from '@/lib/design-tokens';
 import { useToast } from '@/hooks/use-toast';
@@ -17,6 +18,7 @@ import { ListingMap } from '@/components/ListingMap';
 import { PhotoGallery } from '@/components/PhotoGallery';
 import { BookingCard } from '@/components/BookingCard';
 import { ReviewsSection } from '@/components/ReviewsSection';
+import { CancellationTerms } from '@/components/booking/CancellationTerms';
 import { AmenitiesList } from '@/components/AmenitiesList';
 import { ListingBadges } from '@/components/ListingBadges';
 import { SafeHtml } from '@/components/SafeHtml';
@@ -365,22 +367,21 @@ export default function ListingDetailPage() {
           return;
         }
         if (res.data?.redirect_url) {
-          window.location.href = res.data.redirect_url;
+          try {
+            openPaymentUrl(res.data.redirect_url);
+          } catch {
+            toast({ title: 'Invalid payment URL.', variant: 'destructive' });
+            setSubmitting(false);
+          }
           return;
         }
         if (res.data?.redirect_form) {
-          const form = document.createElement('form');
-          form.method = res.data.redirect_form.method;
-          form.action = res.data.redirect_form.action;
-          Object.entries(res.data.redirect_form.fields).forEach(([name, value]) => {
-            const input = document.createElement('input');
-            input.type = 'hidden';
-            input.name = name;
-            input.value = value;
-            form.appendChild(input);
-          });
-          document.body.appendChild(form);
-          form.submit();
+          try {
+            submitPaymentForm(res.data.redirect_form);
+          } catch {
+            toast({ title: 'Invalid payment form.', variant: 'destructive' });
+            setSubmitting(false);
+          }
           return;
         }
         toast({ title: 'Payment could not be started.', variant: 'destructive' });
@@ -945,6 +946,10 @@ export default function ListingDetailPage() {
                 </CardContent>
               </Card>
             )}
+
+            {/* Cancellation terms — before reviews, because it is part of the
+                price rather than an afterthought. */}
+            {listing?.id != null && <CancellationTerms listingId={listing.id} />}
 
             {/* Reviews */}
             <ReviewsSection

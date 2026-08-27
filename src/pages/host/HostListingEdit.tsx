@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { CancellationPolicyPicker } from '@/components/host/CancellationPolicyPicker';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -227,6 +228,18 @@ export default function HostListingEdit() {
   return (
     <div>
       <h1 className="text-2xl font-semibold">Edit listing</h1>
+      {id && (
+        <Card className="mt-6 max-w-2xl">
+          <CardHeader><h2 className="font-semibold">Cancellation</h2></CardHeader>
+          <CardContent>
+            {/* Saves on its own, not with the form below: it has its own
+                endpoint, and a host who picks a policy then navigates away
+                should not silently lose it. */}
+            <CancellationPolicyPicker listingId={Number(id)} value={null} />
+          </CardContent>
+        </Card>
+      )}
+
       <Card className="mt-6 max-w-2xl">
         <CardHeader><h2 className="font-semibold">Homestay details</h2></CardHeader>
         <CardContent>

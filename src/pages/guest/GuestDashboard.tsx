@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
+import { CancelBookingButton } from '@/components/booking/CancelBookingButton';
 import { api } from '@/lib/api';
 import { openPaymentUrl, submitPaymentForm } from '@/lib/paymentRedirect';
 import { useToast } from '@/hooks/use-toast';
@@ -317,7 +318,12 @@ export default function GuestDashboard() {
                 const nights = Math.ceil((checkOut.getTime() - checkIn.getTime()) / (24 * 60 * 60 * 1000));
                 const priceNum = b.listing_price != null ? parseFloat(String(b.listing_price)) : NaN;
                 const roughTotal = Number.isFinite(priceNum) && nights > 0 ? nights * priceNum : 0;
-                const guestMayCancel = st === 'pending' || st === 'pending_payment' || st === 'approved';
+                // Paid and part-paid included: the cancellation policy decides what
+                // comes back, so these no longer need an admin to unwind by hand.
+                // Mirrors CancellableStatuses on the API.
+                const guestMayCancel =
+                  st === 'pending' || st === 'pending_payment' || st === 'approved' ||
+                  st === 'partial_paid' || st === 'paid';
                 return (
                   <Card key={b.id} className="border-primary-200">
                     <CardContent className="p-4">
@@ -346,28 +352,12 @@ export default function GuestDashboard() {
                           View booking details
                         </Button>
                         {guestMayCancel && (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="border-destructive/50 text-destructive hover:bg-destructive/10"
-                            onClick={() => {
-                              if (!window.confirm('Cancel this reservation? You can book again later if dates are still available.')) return;
-                              api
-                                .post<{ message: string }>(`/api/bookings/${b.id}/cancel`)
-                                .then(() => {
-                                  toast({ title: 'Booking cancelled.' });
-                                  setBookings((prev) => prev.map((x) => (x.id === b.id ? { ...x, status: 'cancelled' } : x)));
-                                })
-                                .catch((err) =>
-                                  toast({
-                                    title: err.response?.data?.message || 'Could not cancel.',
-                                    variant: 'destructive',
-                                  })
-                                );
-                            }}
-                          >
-                            Cancel booking
-                          </Button>
+                          <CancelBookingButton
+                            bookingId={b.id}
+                            onCancelled={() =>
+                              setBookings((prev) => prev.map((x) => (x.id === b.id ? { ...x, status: 'cancelled' } : x)))
+                            }
+                          />
                         )}
                         {(st === 'pending_payment' || st === 'partial_paid') && (
                           <Button

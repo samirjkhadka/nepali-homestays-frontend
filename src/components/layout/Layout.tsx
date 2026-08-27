@@ -29,6 +29,7 @@ function getInitials(name: string | null, email: string): string {
 const navItems = [
   { key: 'nav.home', href: '/' },
   { key: 'nav.search', href: '/search' },
+  { key: 'nav.experiences', href: '/things-to-do' },
   { key: 'nav.festivals', href: '/festivals' },
   { key: 'nav.tripPlanner', href: '/trip-planner' },
   { key: 'nav.blogs', href: '/blogs' },

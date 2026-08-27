@@ -18,6 +18,7 @@ import AdminDashboard from '@/pages/admin/AdminDashboard';
 import AdminListingNew from '@/pages/admin/AdminListingNew';
 import AdminListingEdit from '@/pages/admin/AdminListingEdit';
 import AdminSendNotifications from '@/pages/admin/AdminSendNotifications';
+import AdminStaticData from '@/pages/admin/AdminStaticData';
 import HostListingNew from '@/pages/host/HostListingNew';
 import HostListingEdit from '@/pages/host/HostListingEdit';
 import PayBookingPage from '@/pages/booking/PayBookingPage';
@@ -29,6 +30,7 @@ import ContactPage from '@/pages/public/ContactPage';
 import BlogsPage from '@/pages/public/BlogsPage';
 import CmsPage from '@/pages/public/CmsPage';
 import FestivalsPage from '@/pages/public/FestivalsPage';
+import ThingsToDoPage from '@/pages/public/ExperiencesPage';
 import TripPlannerPage from '@/pages/public/TripPlannerPage';
 import TeamPage from '@/pages/public/marketing/TeamPage';
 import CareersPage from '@/pages/public/marketing/CareersPage';
@@ -36,13 +38,6 @@ import PressPage from '@/pages/public/marketing/PressPage';
 import PackagesPage from '@/pages/public/marketing/PackagesPage';
 import DestinationsPage from '@/pages/public/marketing/DestinationsPage';
 import ExperiencesPage from '@/pages/public/marketing/ExperiencesPage';
-import HelpPage from '@/pages/public/marketing/HelpPage';
-import SafetyPage from '@/pages/public/marketing/SafetyPage';
-import CancellationPage from '@/pages/public/marketing/CancellationPage';
-import FAQsPage from '@/pages/public/marketing/FAQsPage';
-import PrivacyPage from '@/pages/public/marketing/PrivacyPage';
-import TermsPage from '@/pages/public/marketing/TermsPage';
-import CookiesPage from '@/pages/public/marketing/CookiesPage';
 import WishlistNavRedirect from '@/components/system/WishlistNavRedirect';
 
 function HomestayToListingRedirect() {
@@ -84,15 +79,16 @@ export default function App() {
           <Route path="packages" element={<PackagesPage />} />
           <Route path="destinations" element={<DestinationsPage />} />
           <Route path="experiences" element={<ExperiencesPage />} />
-          <Route path="help" element={<HelpPage />} />
-          <Route path="safety" element={<SafetyPage />} />
-          <Route path="cancellation" element={<CancellationPage />} />
-          <Route path="faqs" element={<FAQsPage />} />
-          <Route path="privacy" element={<PrivacyPage />} />
-          <Route path="terms" element={<TermsPage />} />
-          <Route path="cookies" element={<CookiesPage />} />
+          <Route path="help" element={<CmsPage slugOverride="help" />} />
+          <Route path="safety" element={<CmsPage slugOverride="safety" />} />
+          <Route path="cancellation" element={<CmsPage slugOverride="cancellation" />} />
+          <Route path="faqs" element={<CmsPage slugOverride="faqs" />} />
+          <Route path="privacy" element={<CmsPage slugOverride="privacy" />} />
+          <Route path="terms" element={<CmsPage slugOverride="terms" />} />
+          <Route path="cookies" element={<CmsPage slugOverride="cookies" />} />
           <Route path="cms/:slug" element={<CmsPage />} />
           <Route path="festivals" element={<FestivalsPage />} />
+          <Route path="things-to-do" element={<ThingsToDoPage />} />
           <Route path="trip-planner" element={<TripPlannerPage />} />
           <Route path="wishlist" element={<WishlistNavRedirect />} />
           <Route path="signin" element={<LoginPage />} />
@@ -178,6 +174,14 @@ export default function App() {
             element={
               <ProtectedRoute roles={['admin']}>
                 <AdminSendNotifications />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="admin/static-data"
+            element={
+              <ProtectedRoute roles={['admin']}>
+                <AdminStaticData />
               </ProtectedRoute>
             }
           />

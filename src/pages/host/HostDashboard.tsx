@@ -25,6 +25,7 @@ import {
   Line,
 } from 'recharts';
 import { CalendarSyncPanel } from '@/components/host/CalendarSyncPanel';
+import { HostExperienceBookings } from '@/components/host/HostExperienceBookings';
 import { api } from '@/lib/api';
 import { openPaymentUrl } from '@/lib/paymentRedirect';
 import { useToast } from '@/hooks/use-toast';
@@ -1192,6 +1193,7 @@ export default function HostDashboard() {
       )}
 
       {tab === 'bookings' && (
+        <>
         <div className="mt-6 space-y-6">
           <div>
             <Label className="text-primary-800">Filter by status</Label>
@@ -1339,6 +1341,10 @@ export default function HostDashboard() {
             </Dialog.Portal>
           </Dialog.Root>
         </div>
+        {/* Kept apart from stays: a day booking has a head count and no
+            nights, so it does not fit the stay rows. */}
+        <HostExperienceBookings />
+        </>
       )}
 
       {tab === 'utilities' && !isCoHostOnly && (

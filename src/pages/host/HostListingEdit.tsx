@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { CancellationPolicyPicker } from '@/components/host/CancellationPolicyPicker';
+import { HostExperiencesPanel } from '@/components/host/HostExperiencesPanel';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -228,6 +229,20 @@ export default function HostListingEdit() {
   return (
     <div>
       <h1 className="text-2xl font-semibold">Edit listing</h1>
+      {id && (
+        <Card className="mt-6 max-w-2xl">
+          <CardHeader>
+            <h2 className="font-semibold">Experiences</h2>
+            <p className="text-sm text-muted-foreground">
+              Describe your activities so guests can find them on their own.
+            </p>
+          </CardHeader>
+          <CardContent>
+            <HostExperiencesPanel listingId={Number(id)} />
+          </CardContent>
+        </Card>
+      )}
+
       {id && (
         <Card className="mt-6 max-w-2xl">
           <CardHeader><h2 className="font-semibold">Cancellation</h2></CardHeader>

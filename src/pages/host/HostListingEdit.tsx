@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { CancellationPolicyPicker } from '@/components/host/CancellationPolicyPicker';
 import { HostExperiencesPanel } from '@/components/host/HostExperiencesPanel';
+import { ListingUnitsPanel } from '@/components/host/ListingUnitsPanel';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -40,6 +41,7 @@ type District = { id: number; province_id: number; name: string };
 
 export default function HostListingEdit() {
   const { id } = useParams<{ id: string }>();
+  const [homestayKind, setHomestayKind] = useState<string>('individual');
   const navigate = useNavigate();
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -92,6 +94,9 @@ export default function HostListingEdit() {
           sectionForm[k] = v;
         }
       });
+      // Seed the houses panel from what the listing actually says, rather than
+      // letting it sit on its 'individual' default and mislead the host.
+      if (typeof d.homestay_kind === 'string') setHomestayKind(d.homestay_kind);
       const images = (d.images as { url: string }[] | undefined) ?? [];
       const image_urls = images.map((i) => i.url);
       const rawExtras = (d.extra_services ?? []) as { name: string; price_npr: number; unit: string; description?: string | null }[];
@@ -229,6 +234,20 @@ export default function HostListingEdit() {
   return (
     <div>
       <h1 className="text-2xl font-semibold">Edit listing</h1>
+      {id && (
+        <Card className="mt-6 max-w-2xl">
+          <CardHeader>
+            <h2 className="font-semibold">Houses</h2>
+            <p className="text-sm text-muted-foreground">
+              How many groups you can take at the same time.
+            </p>
+          </CardHeader>
+          <CardContent>
+            <ListingUnitsPanel listingId={Number(id)} kind={homestayKind} onKindChange={setHomestayKind} />
+          </CardContent>
+        </Card>
+      )}
+
       {id && (
         <Card className="mt-6 max-w-2xl">
           <CardHeader>

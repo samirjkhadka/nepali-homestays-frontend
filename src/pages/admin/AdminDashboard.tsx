@@ -9,6 +9,7 @@ import { PasswordInput } from '@/components/ui/password-input';
 import { Users, FileCheck, Calendar, CreditCard, BarChart3, FileText, Youtube, X, Download, Home, MessageSquare, Bell, Activity, AlertCircle, Mail, MousePointer, Building2, Plus, RefreshCw, Newspaper, ChevronUp, ChevronDown } from 'lucide-react';
 import { WalletUtilitiesPanel } from '@/components/admin/WalletUtilitiesPanel';
 import { CancellationPoliciesPanel } from '@/components/admin/CancellationPoliciesPanel';
+import { RouteStopsPanel } from '@/components/admin/RouteStopsPanel';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line, CartesianGrid, Legend } from 'recharts';
 import { api } from '@/lib/api';
 import { bookingFeeDelta, parseAmenityChargesJson } from '@/lib/booking-price-breakdown';
@@ -355,7 +356,7 @@ const ADMIN_EMAIL_TEMPLATE_KEYS = [
   'offline_booking_confirmed',
 ] as const;
 
-const ADMIN_TABS = ['overview', 'listings', 'users', 'bookings', 'corporates', 'payments', 'reports', 'content', 'settings', 'cancellation', 'wallet_utilities', 'logs'] as const;
+const ADMIN_TABS = ['overview', 'listings', 'users', 'bookings', 'corporates', 'payments', 'reports', 'content', 'settings', 'cancellation', 'treks', 'wallet_utilities', 'logs'] as const;
 type AdminTab = (typeof ADMIN_TABS)[number];
 
 const LISTING_BADGES = ['recommended', 'featured', 'new'] as const;
@@ -1157,7 +1158,7 @@ export default function AdminDashboard() {
               if (t === 'listings') setAdminLiveListingsFilter('all');
             }}
           >
-            {t === 'listings' ? 'Listings' : t === 'corporates' ? 'Corporates' : t === 'wallet_utilities' ? 'Wallet utilities' : t === 'cancellation' ? 'Cancellation' : t}
+            {t === 'listings' ? 'Listings' : t === 'corporates' ? 'Corporates' : t === 'wallet_utilities' ? 'Wallet utilities' : t === 'cancellation' ? 'Cancellation' : t === 'treks' ? 'Treks' : t}
           </button>
         ))}
       </div>
@@ -4390,6 +4391,8 @@ export default function AdminDashboard() {
       )}
 
       {tab === 'cancellation' && <div className="mt-6"><CancellationPoliciesPanel /></div>}
+
+      {tab === 'treks' && <div className="mt-6"><RouteStopsPanel /></div>}
 
       {tab === 'wallet_utilities' && <WalletUtilitiesPanel />}
 

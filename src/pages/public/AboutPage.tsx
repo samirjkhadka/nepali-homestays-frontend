@@ -1,8 +1,16 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { api } from '@/lib/api';
+import { SafeHtml } from '@/components/SafeHtml';
 
 type CmsSection = { id: number; section_key: string; title: string | null; content: string | null; display_place: string; sort_order: number };
+
+function CmsBody({ content }: { content: string | null }) {
+  const html = content || 'Content not yet added.';
+  const looksLikeHtml = /<[a-z][\s\S]*>/i.test(html);
+  if (looksLikeHtml) return <SafeHtml html={html} className="mt-4" />;
+  return <div className="prose prose-sm mt-4 max-w-none whitespace-pre-wrap text-foreground">{html}</div>;
+}
 
 export default function AboutPage() {
   const [sections, setSections] = useState<CmsSection[]>([]);
@@ -46,7 +54,7 @@ export default function AboutPage() {
                 className="rounded-2xl border border-border bg-card p-8 shadow-soft"
               >
                 <h2 className="font-display text-2xl font-semibold text-foreground">{about.title || 'About us'}</h2>
-                <div className="prose prose-sm mt-4 max-w-none text-foreground whitespace-pre-wrap">{about.content || 'Content not yet added.'}</div>
+                <CmsBody content={about.content} />
               </motion.section>
             )}
             {team && (
@@ -57,7 +65,7 @@ export default function AboutPage() {
                 className="rounded-2xl border border-border bg-card p-8 shadow-soft"
               >
                 <h2 className="font-display text-2xl font-semibold text-foreground">{team.title || 'Our team'}</h2>
-                <div className="prose prose-sm mt-4 max-w-none text-foreground whitespace-pre-wrap">{team.content || 'Content not yet added.'}</div>
+                <CmsBody content={team.content} />
               </motion.section>
             )}
             {!loading && sections.length === 0 && (

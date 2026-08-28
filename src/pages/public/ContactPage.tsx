@@ -7,16 +7,15 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 
-const CONTACT_EMAIL = 'admin@himalayanfoxtechnology.com.np';
 const MAX_FILE_SIZE = 1 * 1024 * 1024; // 1 MB
 
 type CmsSection = { id: number; section_key: string; title: string | null; content: string | null; display_place: string; sort_order: number };
 type CmsSectionListItem = { section_key: string; content: string | null };
 
 const defaultContactInfo = {
-  address: 'Thamel, Kathmandu, Nepal',
-  phone: '+977 1-4123456',
-  email: 'info@nepalihomestays.com',
+  address: '',
+  phone: '',
+  email: '',
 };
 
 export default function ContactPage() {
@@ -115,7 +114,7 @@ export default function ContactPage() {
   const contactCards = [
     { icon: MapPin, title: 'Address', lines: [contactInfo.address] },
     { icon: Phone, title: 'Phone', lines: [contactInfo.phone] },
-    { icon: Mail, title: 'Email', lines: [contactInfo.email, CONTACT_EMAIL] },
+    { icon: Mail, title: 'Email', lines: [contactInfo.email].filter(Boolean) },
     { icon: Clock, title: 'Response time', lines: ['We usually reply within 1–2 business days.'] },
   ];
 
@@ -262,7 +261,7 @@ export default function ContactPage() {
                 )}
                 {!section?.content && !loading && (
                   <p className="text-sm text-muted-foreground">
-                    Form messages are delivered to {CONTACT_EMAIL}. You can also use the contact details on the left.
+                    Form messages are delivered to our support team. You can also use the contact details on the left.
                   </p>
                 )}
               </>

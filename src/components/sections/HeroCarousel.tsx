@@ -6,8 +6,9 @@ import { ChevronLeft, ChevronRight, ChevronDown, MapPin, Star, Compass, Users, E
 import { useCurrency } from '@/lib/currency';
 import { getImageDisplayUrl } from '@/lib/image-url';
 import { getHomeDisplayRating, getHomeDisplayReviewCountLabel } from '@/lib/home-listing-ratings';
+import { useHomeContent } from '@/hooks/useHomeContent';
 
-const FALLBACK_SLIDES = [
+const DEFAULT_FALLBACK_SLIDES = [
   { image: '/hero-1.jpg', title: 'Experience Authentic Nepal', subtitle: 'Stay with local families in the heart of the Himalayas' },
   { image: '/hero-2.jpg', title: 'Discover Mountain Villages', subtitle: 'Immerse yourself in rich cultural traditions' },
   { image: '/hero-3.jpg', title: 'Warm Nepali Hospitality', subtitle: 'Feel at home in traditional homestays' },
@@ -62,6 +63,11 @@ function plainTextExcerpt(text: string | null | undefined, maxLen = 220): string
 
 export default function HeroCarousel({ listings, heroLoaded = true }: Props) {
   const { format: formatPrice } = useCurrency();
+  const { content: homeContent } = useHomeContent();
+  const FALLBACK_SLIDES =
+    homeContent?.hero_fallback?.slides?.length
+      ? homeContent.hero_fallback.slides
+      : DEFAULT_FALLBACK_SLIDES;
   const [index, setIndex] = useState(0);
   const [viewportHeight, setViewportHeight] = useState<number | null>(null);
   const sectionRef = useRef<HTMLElement | null>(null);
@@ -104,8 +110,8 @@ export default function HeroCarousel({ listings, heroLoaded = true }: Props) {
     if (listings.length > 0) {
       return listings.map((l) => listingImageUrl(l.image_url) || FALLBACK_SLIDES[0].image);
     }
-    return FALLBACK_SLIDES.map((s) => s.image);
-  }, [listings]);
+    return FALLBACK_SLIDES.map((slide) => slide.image);
+  }, [listings, FALLBACK_SLIDES]);
 
   useEffect(() => {
     for (const url of imageUrlsToPreload) {

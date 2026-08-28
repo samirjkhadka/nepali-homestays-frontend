@@ -11,7 +11,7 @@ import { api } from '@/lib/api';
 export default function VerifyPage() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { login } = useAuth();
+  const { setSessionUser } = useAuth();
   const email = (location.state as { email?: string })?.email || '';
   const [otp, setOtp] = useState('');
   const [loading, setLoading] = useState(false);
@@ -38,7 +38,7 @@ export default function VerifyPage() {
         const mustChange =
           Boolean(res.data.user.must_change_password) || Boolean(res.data.mustChangePassword);
         const user = { ...res.data.user, must_change_password: mustChange };
-        login(res.data.token, user);
+        setSessionUser(user);
         if (mustChange) {
           navigate('/profile/change-password', { replace: true });
           return;

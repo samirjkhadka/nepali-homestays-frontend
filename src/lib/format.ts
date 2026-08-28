@@ -16,3 +16,16 @@ export function formatDateTime(date: Date | string | number | undefined | null):
     .format(d)
     .replace(' ', ' ');
 }
+
+/** Nepal local calendar date (YYYY-MM-DD). */
+export function formatDateOnly(date: Date | string | number | undefined | null): string {
+  if (date == null || date === '') return '—';
+  const d = new Date(date);
+  if (Number.isNaN(d.getTime())) return '—';
+  return new Intl.DateTimeFormat('sv-SE', {
+    timeZone: 'Asia/Kathmandu',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(d);
+}

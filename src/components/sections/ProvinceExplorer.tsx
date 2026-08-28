@@ -1,21 +1,22 @@
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { MapPin, ChevronRight } from 'lucide-react';
-import { PROVINCES, getProvinceSearchParam } from '@/data/provinces';
-import type { Province } from '@/data/provinces';
+import { PROVINCES } from '@/data/provinces';
+import type { Province, ProvinceSlug } from '@/data/provinces';
+import { api } from '@/lib/api';
 
 /** Nepal/region imagery - one per province (Unsplash) */
 const PROVINCE_IMAGES = [
-  'https://images.unsplash.com/photo-1563986768609-322da13575f3?w=800&q=80', // Kathmandu / Bagmati
-  'https://images.unsplash.com/photo-1544735716-392fe2489ffa?w=800&q=80',   // Annapurna / Gandaki
-  'https://images.unsplash.com/photo-1578645635730-3f9b1c4e4b5a?w=800&q=80', // Lumbini
-  'https://images.unsplash.com/photo-1506905925346-21bda3d1dfcd?w=800&q=80', // Mountains / Koshi
-  'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?w=800&q=80', // Terai / Madhesh
-  'https://images.unsplash.com/photo-1519681393784-d120267933ba?w=800&q=80', // Hills / Sudurpashchim
-  'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?w=800&q=80', // Karnali
+  'https://images.unsplash.com/photo-1563986768609-322da13575f3?w=800&q=80',
+  'https://images.unsplash.com/photo-1544735716-392fe2489ffa?w=800&q=80',
+  'https://images.unsplash.com/photo-1578645635730-3f9b1c4e4b5a?w=800&q=80',
+  'https://images.unsplash.com/photo-1506905925346-21bda3d1dfcd?w=800&q=80',
+  'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?w=800&q=80',
+  'https://images.unsplash.com/photo-1519681393784-d120267933ba?w=800&q=80',
+  'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?w=800&q=80',
 ];
 
-/** Theme-aligned gradients (primary navy + accent orange) */
 const PROVINCE_COLORS: readonly string[] = [
   'from-primary-500/90',
   'from-primary-600/90',
@@ -34,52 +35,57 @@ function getProvinceStyle(index: number) {
 }
 
 export default function ProvinceExplorer() {
-  const topRow = PROVINCES.slice(0, 4);
-  const bottomRow = PROVINCES.slice(4, 7);
+  const [provinces, setProvinces] = useState<Province[]>(PROVINCES);
+
+  useEffect(() => {
+    api
+      .get<Array<{ id: number | string; name: string; slug?: string }>>('/api/provinces')
+      .then((res) => {
+        if (!Array.isArray(res.data) || !res.data.length) return;
+        const mapped: Province[] = res.data.map((p, i) => {
+          const fallback = PROVINCES.find((x) => String(x.id) === String(p.id)) ?? PROVINCES[i];
+          return {
+            id: String(p.id),
+            name: p.name || fallback?.name || `Province ${p.id}`,
+            slug: (p.slug as ProvinceSlug) || fallback?.slug || 'bagmati',
+            description: fallback?.description,
+          };
+        });
+        setProvinces(mapped);
+      })
+      .catch(() => {});
+  }, []);
+
+  const topRow = provinces.slice(0, 4);
+  const bottomRow = provinces.slice(4, 7);
 
   return (
     <section className="py-20 bg-muted/50">
       <div className="container px-4">
-        {/* Section Header */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           className="text-center mb-12"
         >
-          <span className="text-primary font-medium text-sm uppercase tracking-wider">
-            Explore by Region
-          </span>
+          <span className="text-primary font-medium text-sm uppercase tracking-wider">Explore by Region</span>
           <h2 className="font-serif text-4xl md:text-5xl font-bold text-foreground mt-2 mb-4">
             Homestays by Province
           </h2>
           <p className="text-muted-foreground max-w-2xl mx-auto">
-            Nepal is divided into seven beautiful provinces, each offering unique cultural
-            experiences and breathtaking landscapes.
+            Nepal is divided into seven beautiful provinces, each offering unique cultural experiences and breathtaking landscapes.
           </p>
         </motion.div>
 
-        {/* Top Row: 4 tall cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
           {topRow.map((province, index) => (
-            <ProvinceCard
-              key={province.id}
-              province={province}
-              index={index}
-              aspect="tall"
-            />
+            <ProvinceCard key={province.id} province={province} index={index} aspect="tall" />
           ))}
         </div>
 
-        {/* Bottom Row: 3 wide cards */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mt-6">
           {bottomRow.map((province, index) => (
-            <ProvinceCard
-              key={province.id}
-              province={province}
-              index={4 + index}
-              aspect="wide"
-            />
+            <ProvinceCard key={province.id} province={province} index={4 + index} aspect="wide" />
           ))}
         </div>
       </div>
@@ -87,56 +93,40 @@ export default function ProvinceExplorer() {
   );
 }
 
-type ProvinceCardProps = {
+function ProvinceCard({
+  province,
+  index,
+  aspect,
+}: {
   province: Province;
   index: number;
   aspect: 'tall' | 'wide';
-};
-
-function ProvinceCard({ province, index, aspect }: ProvinceCardProps) {
+}) {
   const { image, color } = getProvinceStyle(index);
+  const search = province.slug;
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 30 }}
-      whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true }}
-      transition={{ delay: index * 0.1 }}
-      whileHover={{ y: -8 }}
-    >
-      <Link
-        to={`/search?${getProvinceSearchParam(province.slug)}`}
-        className={`group block relative overflow-hidden rounded-2xl cursor-pointer ${aspect === 'tall' ? 'aspect-[4/5]' : 'aspect-[16/10]'}`}
+    <Link to={`/search?province=${encodeURIComponent(search)}`}>
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true }}
+        transition={{ delay: index * 0.05 }}
+        className={`group relative overflow-hidden rounded-2xl ${aspect === 'tall' ? 'aspect-[3/4]' : 'aspect-[16/10]'}`}
       >
-        <img
-          src={image}
-          alt={province.name}
-          className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
-        />
-        <div className={`absolute inset-0 bg-gradient-to-t ${color} to-transparent opacity-90`} />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
-
-        <div className="absolute bottom-0 left-0 right-0 p-6">
-          {aspect === 'tall' && (
-            <div className="flex items-center gap-2 text-white/80 text-sm mb-2">
-              <MapPin className="w-4 h-4 shrink-0" />
-              <span>Explore homestays</span>
-            </div>
-          )}
-          <h3 className="font-serif text-2xl font-bold text-white mb-3">
-            {province.name} Province
-          </h3>
-          {aspect === 'tall' ? (
-            <span className="flex items-center gap-2 text-white font-medium opacity-0 -translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-300">
-              Explore <ChevronRight className="w-4 h-4" />
-            </span>
-          ) : (
-            <span className="flex items-center gap-2 text-white/90 text-sm">
-              Explore <ChevronRight className="w-4 h-4" />
-            </span>
-          )}
+        <img src={image} alt={province.name} className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110" />
+        <div className={`absolute inset-0 bg-gradient-to-t ${color} to-transparent`} />
+        <div className="absolute inset-0 flex flex-col justify-end p-5 text-white">
+          <div className="mb-1 flex items-center gap-1 text-sm opacity-90">
+            <MapPin className="h-4 w-4" />
+            Province
+          </div>
+          <h3 className="font-display text-xl font-bold">{province.name}</h3>
+          <span className="mt-2 inline-flex items-center gap-1 text-sm opacity-0 transition-opacity group-hover:opacity-100">
+            Explore <ChevronRight className="h-4 w-4" />
+          </span>
         </div>
-      </Link>
-    </motion.div>
+      </motion.div>
+    </Link>
   );
 }

@@ -1,115 +1,84 @@
+import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Calendar, ExternalLink, Download } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { api } from '@/lib/api';
 
-const pressReleases = [
-  {
-    title: 'Nepali Homestays Expands to All 7 Provinces',
-    date: '2026-01-15',
-    excerpt: 'Platform now offers authentic homestay experiences across every province of Nepal.',
-  },
-  {
-    title: 'Partnership with Nepal Tourism Board Announced',
-    date: '2025-12-01',
-    excerpt: 'Collaboration aims to promote sustainable community-based tourism in Nepal.',
-  },
-  {
-    title: '10,000 Happy Guests Milestone Reached',
-    date: '2025-10-20',
-    excerpt: 'Celebrating a decade of connecting travelers with Nepali hospitality.',
-  },
-];
+type PressRelease = { title: string; date?: string; excerpt?: string; url?: string };
+type MediaFeature = { outlet: string; title?: string; url?: string };
 
-const mediaFeatures = [
-  { name: 'Lonely Planet', logo: 'LP' },
-  { name: 'National Geographic', logo: 'NG' },
-  { name: 'BBC Travel', logo: 'BBC' },
-  { name: 'Travel + Leisure', logo: 'T+L' },
-];
+type PressConfig = {
+  title?: string;
+  subtitle?: string;
+  press_releases?: PressRelease[];
+  media_features?: MediaFeature[];
+  media_kit_url?: string;
+  contact_email?: string;
+};
 
-const Press = () => {
+export default function PressPage() {
+  const [config, setConfig] = useState<PressConfig | null>(null);
+
+  useEffect(() => {
+    api
+      .get<PressConfig>('/api/settings/press')
+      .then((res) => setConfig(res.data))
+      .catch(() => setConfig({ press_releases: [], media_features: [] }));
+  }, []);
+
   return (
     <div className="min-h-screen bg-background">
-      <section className="pt-12 pb-12 bg-gradient-to-b from-primary/5 to-background">
+      <section className="bg-gradient-to-b from-primary/5 to-background pb-12 pt-12">
         <div className="section-container">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="text-center max-w-3xl mx-auto"
-          >
-            <h1 className="font-display text-4xl md:text-5xl font-bold text-foreground mb-4">
-              Press & Media
-            </h1>
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="mx-auto max-w-3xl text-center">
+            <h1 className="mb-4 font-display text-4xl font-bold md:text-5xl">{config?.title || 'Press'}</h1>
             <p className="text-lg text-muted-foreground">
-              Latest news and media resources about Nepali Homestays
+              {config?.subtitle || 'News and media resources about Nepali Homestays'}
             </p>
           </motion.div>
         </div>
       </section>
-
-      {/* Featured In */}
-      <section className="section-container py-12">
-        <h2 className="font-display text-2xl font-bold text-foreground mb-8 text-center">Featured In</h2>
-        <div className="flex flex-wrap justify-center gap-8">
-          {mediaFeatures.map((media) => (
-            <div key={media.name} className="w-24 h-24 bg-muted rounded-2xl flex items-center justify-center">
-              <span className="font-display font-bold text-2xl text-muted-foreground">{media.logo}</span>
-            </div>
-          ))}
+      <section className="section-container space-y-10 py-12">
+        <div>
+          <h2 className="mb-4 font-display text-2xl font-semibold">Press releases</h2>
+          <div className="space-y-4">
+            {(config?.press_releases ?? []).map((r) => (
+              <article key={r.title} className="rounded-xl border border-border bg-card p-5">
+                <h3 className="font-semibold">{r.title}</h3>
+                {r.date && <p className="text-xs text-muted-foreground">{r.date}</p>}
+                {r.excerpt && <p className="mt-2 text-sm text-muted-foreground">{r.excerpt}</p>}
+                {r.url && (
+                  <a href={r.url} className="mt-2 inline-block text-sm text-primary hover:underline" target="_blank" rel="noreferrer">
+                    Read more
+                  </a>
+                )}
+              </article>
+            ))}
+            {!config?.press_releases?.length && (
+              <p className="text-muted-foreground">No press releases published yet.</p>
+            )}
+          </div>
         </div>
-      </section>
-
-      {/* Press Releases */}
-      <section className="section-container py-12">
-        <h2 className="font-display text-2xl font-bold text-foreground mb-8">Press Releases</h2>
-        <div className="space-y-4">
-          {pressReleases.map((release, index) => (
-            <motion.div
-              key={release.title}
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ delay: index * 0.1 }}
-              className="bg-card rounded-2xl border border-border p-6 hover:shadow-lg transition-shadow"
-            >
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <span className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
-                    <Calendar className="w-4 h-4" />
-                    {new Date(release.date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
-                  </span>
-                  <h3 className="font-display text-xl font-semibold text-foreground mb-2">{release.title}</h3>
-                  <p className="text-muted-foreground">{release.excerpt}</p>
-                </div>
-                <Button variant="outline" size="sm">
-                  <ExternalLink className="w-4 h-4" />
-                </Button>
-              </div>
-            </motion.div>
-          ))}
-        </div>
-      </section>
-
-      {/* Media Kit */}
-      <section className="section-container py-12">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          className="bg-primary/5 rounded-2xl p-8 text-center"
-        >
-          <h3 className="font-display text-2xl font-bold text-foreground mb-4">Media Kit</h3>
-          <p className="text-muted-foreground mb-6 max-w-2xl mx-auto">
-            Download our press kit including logos, brand guidelines, and high-resolution images.
+        {(config?.media_features?.length ?? 0) > 0 && (
+          <div>
+            <h2 className="mb-4 font-display text-2xl font-semibold">Featured in</h2>
+            <ul className="space-y-2">
+              {config!.media_features!.map((m) => (
+                <li key={`${m.outlet}-${m.title}`} className="text-sm">
+                  <span className="font-medium">{m.outlet}</span>
+                  {m.title ? ` — ${m.title}` : ''}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+        {config?.contact_email && (
+          <p className="text-sm text-muted-foreground">
+            Media contact:{' '}
+            <a className="text-primary hover:underline" href={`mailto:${config.contact_email}`}>
+              {config.contact_email}
+            </a>
           </p>
-          <Button size="lg">
-            <Download className="w-4 h-4 mr-2" />
-            Download Media Kit
-          </Button>
-        </motion.div>
+        )}
       </section>
-</div>
+    </div>
   );
-};
-
-export default Press;
+}

@@ -15,45 +15,47 @@ import {
   Handshake,
   X,
   Eye,
+  type LucideIcon,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/lib/auth';
 import { useI18n } from '@/lib/i18n';
 import { api } from '@/lib/api';
 import { assets } from '@/lib/design-tokens';
+import { useHomeContent, type HomeFooterLink } from '@/hooks/useHomeContent';
 
-const footerLinks = {
+const DEFAULT_FOOTER_LINKS: Record<string, HomeFooterLink[]> = {
   company: [
-    { key: 'footer.aboutUs', href: '/about' },
-    { key: 'footer.ourTeam', href: '/team' },
-    { key: 'footer.careers', href: '/careers' },
-    { key: 'footer.press', href: '/press' },
+    { label: 'About Us', href: '/about' },
+    { label: 'Our Team', href: '/team' },
+    { label: 'Careers', href: '/careers' },
+    { label: 'Press', href: '/press' },
   ],
   explore: [
-    { key: 'footer.allHomestays', href: '/search' },
-    { key: 'footer.travelPackages', href: '/packages' },
-    { key: 'footer.destinations', href: '/destinations' },
-    { key: 'footer.experiences', href: '/experiences' },
+    { label: 'All Homestays', href: '/search' },
+    { label: 'Travel Packages', href: '/packages' },
+    { label: 'Destinations', href: '/destinations' },
+    { label: 'Experiences', href: '/experiences' },
   ],
   support: [
-    { key: 'footer.helpCenter', href: '/help' },
-    { key: 'footer.safety', href: '/safety' },
-    { key: 'footer.cancellation', href: '/cancellation' },
-    { key: 'footer.faqs', href: '/faqs' },
+    { label: 'Help Center', href: '/help' },
+    { label: 'Safety', href: '/safety' },
+    { label: 'Cancellation', href: '/cancellation' },
+    { label: 'FAQs', href: '/faqs' },
   ],
   legal: [
-    { key: 'footer.privacy', href: '/privacy' },
-    { key: 'footer.terms', href: '/terms' },
-    { key: 'footer.cookies', href: '/cookies' },
+    { label: 'Privacy', href: '/privacy' },
+    { label: 'Terms', href: '/terms' },
+    { label: 'Cookies', href: '/cookies' },
   ],
 };
 
-const socialLinks = [
-  { icon: Facebook, href: '#', label: 'Facebook' },
-  { icon: Instagram, href: '#', label: 'Instagram' },
-  { icon: Youtube, href: '#', label: 'YouTube' },
-  { icon: Twitter, href: '#', label: 'Twitter' },
-];
+const SOCIAL_ICONS: Record<string, LucideIcon> = {
+  facebook: Facebook,
+  instagram: Instagram,
+  youtube: Youtube,
+  twitter: Twitter,
+};
 
 const partnerFormDefaults = {
   name: '',
@@ -71,33 +73,49 @@ const partnerFormDefaults = {
 
 type CmsSection = { section_key: string; content: string | null };
 
-const defaultContact = {
-  address: 'Thamel, Kathmandu, Nepal',
-  phone: '+977 1-4123456',
-  email: 'info@nepalihomestays.com',
-};
-
 export default function Footer() {
   const { user } = useAuth();
   const { t } = useI18n();
   const navigate = useNavigate();
+  const { content: homeContent } = useHomeContent();
   const [partnerOpen, setPartnerOpen] = useState(false);
   const [partnerForm, setPartnerForm] = useState(partnerFormDefaults);
   const [partnerSubmitting, setPartnerSubmitting] = useState(false);
   const [partnerMessage, setPartnerMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-  const [contactInfo, setContactInfo] = useState(defaultContact);
+  const [contactInfo, setContactInfo] = useState({ address: '', phone: '', email: '' });
   const [visitorCount, setVisitorCount] = useState<number>(0);
+  const [newsletterEmail, setNewsletterEmail] = useState('');
+  const [newsletterMsg, setNewsletterMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [newsletterBusy, setNewsletterBusy] = useState(false);
+
+  const footerNav = {
+    company: homeContent?.footer_nav?.company?.length ? homeContent.footer_nav.company : DEFAULT_FOOTER_LINKS.company,
+    explore: homeContent?.footer_nav?.explore?.length ? homeContent.footer_nav.explore : DEFAULT_FOOTER_LINKS.explore,
+    support: homeContent?.footer_nav?.support?.length ? homeContent.footer_nav.support : DEFAULT_FOOTER_LINKS.support,
+    legal: homeContent?.footer_nav?.legal?.length ? homeContent.footer_nav.legal : DEFAULT_FOOTER_LINKS.legal,
+  };
+  const brandName = homeContent?.footer_brand?.brand_name || 'Nepali Homestays';
+  const brandBlurb =
+    homeContent?.footer_brand?.blurb ||
+    "Experience the warmth of Nepali hospitality. We connect travelers with authentic homestay experiences across Nepal's beautiful landscapes.";
+  const socialLinks = (homeContent?.social_links ?? [])
+    .map((s) => ({
+      label: s.label || s.network,
+      href: (s.url || '').trim(),
+      icon: SOCIAL_ICONS[(s.network || '').toLowerCase()] || Facebook,
+    }))
+    .filter((s) => s.href.length > 0);
 
   useEffect(() => {
     api
       .get<{ sections: CmsSection[] }>('/api/cms/sections?place=footer')
       .then((res) => {
         const sections = res.data?.sections ?? [];
-        const byKey = (key: string) => sections.find((s) => s.section_key === key)?.content?.trim();
+        const byKey = (key: string) => sections.find((s) => s.section_key === key)?.content?.trim() || '';
         setContactInfo({
-          address: byKey('address') || defaultContact.address,
-          phone: byKey('contact_phone') || defaultContact.phone,
-          email: byKey('contact_email') || defaultContact.email,
+          address: byKey('address'),
+          phone: byKey('contact_phone'),
+          email: byKey('contact_email'),
         });
       })
       .catch(() => {});
@@ -116,6 +134,25 @@ export default function Footer() {
     } else {
       navigate('/signup');
     }
+  };
+
+  const handleNewsletter = (e: React.FormEvent) => {
+    e.preventDefault();
+    setNewsletterMsg(null);
+    setNewsletterBusy(true);
+    api
+      .post<{ message?: string }>('/api/newsletter/subscribe', { email: newsletterEmail.trim() })
+      .then((res) => {
+        setNewsletterMsg({ type: 'success', text: res.data?.message || 'Subscribed. Thank you!' });
+        setNewsletterEmail('');
+      })
+      .catch((err) => {
+        setNewsletterMsg({
+          type: 'error',
+          text: err.response?.data?.message || 'Could not subscribe. Please try again.',
+        });
+      })
+      .finally(() => setNewsletterBusy(false));
   };
 
   const handlePartnerSubmit = (e: React.FormEvent) => {
@@ -170,17 +207,31 @@ export default function Footer() {
               <h3 className="font-display text-2xl font-bold mb-2">{t('footer.newsletter')}</h3>
               <p className="text-background/70">{t('footer.newsletterDesc')}</p>
             </div>
-            <div className="flex w-full md:w-auto gap-3">
-              <input
-                type="email"
-                placeholder="Enter your email"
-                className="flex-1 md:w-80 rounded-xl border border-background/20 bg-background/10 px-4 py-3 text-background placeholder:text-background/50 focus:outline-none focus:ring-2 focus:ring-accent"
-              />
-              <Button className="rounded-xl bg-accent px-6 py-3 text-accent-foreground hover:bg-accent/90">
-                <Send className="mr-2 h-4 w-4" />
-                {t('footer.subscribe')}
-              </Button>
-            </div>
+            <form onSubmit={handleNewsletter} className="flex w-full md:w-auto flex-col gap-2">
+              <div className="flex gap-3">
+                <input
+                  type="email"
+                  required
+                  value={newsletterEmail}
+                  onChange={(e) => setNewsletterEmail(e.target.value)}
+                  placeholder="Enter your email"
+                  className="flex-1 md:w-80 rounded-xl border border-background/20 bg-background/10 px-4 py-3 text-background placeholder:text-background/50 focus:outline-none focus:ring-2 focus:ring-accent"
+                />
+                <Button
+                  type="submit"
+                  disabled={newsletterBusy}
+                  className="rounded-xl bg-accent px-6 py-3 text-accent-foreground hover:bg-accent/90"
+                >
+                  <Send className="mr-2 h-4 w-4" />
+                  {t('footer.subscribe')}
+                </Button>
+              </div>
+              {newsletterMsg && (
+                <p className={`text-sm ${newsletterMsg.type === 'success' ? 'text-accent' : 'text-destructive'}`}>
+                  {newsletterMsg.text}
+                </p>
+              )}
+            </form>
           </motion.div>
         </div>
       </div>
@@ -216,37 +267,40 @@ export default function Footer() {
           <div className="lg:col-span-2">
             <div className="mb-6 flex items-center gap-3">
               <img src={assets.logo} alt="" className="h-12 w-auto rounded-md bg-white/10 p-1" />
-              <span className="font-display text-2xl font-semibold">Nepali Homestays</span>
+              <span className="font-display text-2xl font-semibold">{brandName}</span>
             </div>
-            <p className="mb-6 leading-relaxed text-background/80">
-              Experience the warmth of Nepali hospitality. We connect travelers with authentic homestay
-              experiences across Nepal&apos;s beautiful landscapes.
-            </p>
+            <p className="mb-6 leading-relaxed text-background/80">{brandBlurb}</p>
             <div className="space-y-3 text-background/70">
-              <div className="flex items-center gap-3">
-                <MapPin className="h-5 w-5 shrink-0 text-accent" />
-                <span>{contactInfo.address}</span>
-              </div>
-              <div className="flex items-center gap-3">
-                <Phone className="h-5 w-5 shrink-0 text-accent" />
-                <span>{contactInfo.phone}</span>
-              </div>
-              <div className="flex items-center gap-3">
-                <Mail className="h-5 w-5 shrink-0 text-accent" />
-                <a href={`mailto:${contactInfo.email}`} className="text-accent hover:underline">
-                  {contactInfo.email}
-                </a>
-              </div>
+              {contactInfo.address && (
+                <div className="flex items-center gap-3">
+                  <MapPin className="h-5 w-5 shrink-0 text-accent" />
+                  <span>{contactInfo.address}</span>
+                </div>
+              )}
+              {contactInfo.phone && (
+                <div className="flex items-center gap-3">
+                  <Phone className="h-5 w-5 shrink-0 text-accent" />
+                  <span>{contactInfo.phone}</span>
+                </div>
+              )}
+              {contactInfo.email && (
+                <div className="flex items-center gap-3">
+                  <Mail className="h-5 w-5 shrink-0 text-accent" />
+                  <a href={`mailto:${contactInfo.email}`} className="text-accent hover:underline">
+                    {contactInfo.email}
+                  </a>
+                </div>
+              )}
             </div>
           </div>
 
           <div>
             <h4 className="mb-4 font-display text-lg font-semibold">{t('footer.company')}</h4>
             <ul className="space-y-3">
-              {footerLinks.company.map((link) => (
-                <li key={link.key}>
+              {footerNav.company.map((link) => (
+                <li key={`${link.href}-${link.label}`}>
                   <Link to={link.href} className="text-background/80 transition-colors hover:text-accent">
-                    {t(link.key)}
+                    {link.label}
                   </Link>
                 </li>
               ))}
@@ -256,10 +310,10 @@ export default function Footer() {
           <div>
             <h4 className="mb-4 font-display text-lg font-semibold">{t('footer.explore')}</h4>
             <ul className="space-y-3">
-              {footerLinks.explore.map((link) => (
-                <li key={link.key}>
+              {footerNav.explore.map((link) => (
+                <li key={`${link.href}-${link.label}`}>
                   <Link to={link.href} className="text-background/70 transition-colors hover:text-accent">
-                    {t(link.key)}
+                    {link.label}
                   </Link>
                 </li>
               ))}
@@ -269,10 +323,10 @@ export default function Footer() {
           <div>
             <h4 className="mb-4 font-display text-lg font-semibold">{t('footer.support')}</h4>
             <ul className="space-y-3">
-              {footerLinks.support.map((link) => (
-                <li key={link.key}>
+              {footerNav.support.map((link) => (
+                <li key={`${link.href}-${link.label}`}>
                   <Link to={link.href} className="text-background/70 transition-colors hover:text-accent">
-                    {t(link.key)}
+                    {link.label}
                   </Link>
                 </li>
               ))}
@@ -282,10 +336,10 @@ export default function Footer() {
           <div>
             <h4 className="mb-4 font-display text-lg font-semibold">{t('footer.legal')}</h4>
             <ul className="space-y-3">
-              {footerLinks.legal.map((link) => (
-                <li key={link.key}>
+              {footerNav.legal.map((link) => (
+                <li key={`${link.href}-${link.label}`}>
                   <Link to={link.href} className="text-background/70 transition-colors hover:text-accent">
-                    {t(link.key)}
+                    {link.label}
                   </Link>
                 </li>
               ))}
@@ -298,7 +352,7 @@ export default function Footer() {
         <div className="section-container py-6">
           <div className="flex flex-col items-center justify-between gap-4 md:flex-row">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
-              <p className="text-sm text-background/70">© 2026 Nepali Homestays. All rights reserved.</p>
+              <p className="text-sm text-background/70">© 2026 {brandName}. All rights reserved.</p>
               <p
                 className="flex items-center gap-1.5 text-sm text-background/60"
                 title="Total home page visits"
@@ -317,6 +371,8 @@ export default function Footer() {
                 <motion.a
                   key={social.label}
                   href={social.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
                   whileHover={{ scale: 1.1, y: -2 }}
                   className="tap-target flex h-10 w-10 items-center justify-center rounded-full bg-background/10 transition-colors hover:bg-accent hover:text-accent-foreground"
                   aria-label={social.label}

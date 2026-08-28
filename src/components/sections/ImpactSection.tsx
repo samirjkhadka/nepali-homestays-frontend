@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, useInView } from 'framer-motion';
-import { Home, Users, MapPin, Star } from 'lucide-react';
+import { Home, Users, MapPin, Star, type LucideIcon } from 'lucide-react';
+import { useHomeContent, type HomeImpactItem } from '@/hooks/useHomeContent';
 
 function useCountUp(end: number, duration: number = 2000, startCounting: boolean = false) {
   const [count, setCount] = useState(0);
@@ -27,6 +28,8 @@ function useCountUp(end: number, duration: number = 2000, startCounting: boolean
   return count;
 }
 
+const ICON_MAP: Record<string, LucideIcon> = { Home, Users, MapPin, Star };
+
 function StatCard({
   icon: Icon,
   value,
@@ -36,7 +39,7 @@ function StatCard({
   delay,
   staticDisplay,
 }: {
-  icon: typeof Home;
+  icon: LucideIcon;
   value: number;
   suffix: string;
   label: string;
@@ -74,21 +77,29 @@ function StatCard({
   );
 }
 
-const stats: {
-  icon: typeof Home;
-  value: number;
-  suffix: string;
-  label: string;
-  description: string;
-  staticDisplay?: string;
-}[] = [
-  { icon: Home, value: 500, suffix: '+', label: 'Homestays Listed', description: 'Authentic stays across Nepal' },
-  { icon: Users, value: 50000, suffix: '+', label: 'Happy Guests', description: 'Travelers served worldwide' },
-  { icon: MapPin, value: 75, suffix: '+', label: 'Destinations', description: 'Districts covered nationwide' },
-  { icon: Star, value: 0, suffix: '', label: 'Average Rating', description: 'From verified guest reviews', staticDisplay: '4.8' },
+const FALLBACK_ITEMS: HomeImpactItem[] = [
+  { icon: 'Home', value: 500, suffix: '+', label: 'Homestays Listed', description: 'Authentic stays across Nepal', stat_key: 'listings' },
+  { icon: 'Users', value: 50000, suffix: '+', label: 'Happy Guests', description: 'Travelers served worldwide', stat_key: 'guests' },
+  { icon: 'MapPin', value: 75, suffix: '+', label: 'Destinations', description: 'Districts covered nationwide', stat_key: 'districts' },
+  { icon: 'Star', value: 0, suffix: '', label: 'Average Rating', description: 'From verified guest reviews', stat_key: 'rating', static_display: '4.8' },
 ];
 
 export function ImpactSection() {
+  const { content, impact } = useHomeContent();
+  const cfg = content?.impact;
+  const useLive = cfg?.use_live_stats !== false;
+  const items = (cfg?.items?.length ? cfg.items : FALLBACK_ITEMS).map((item) => {
+    if (!useLive || !impact) return item;
+    const key = item.stat_key;
+    if (key === 'listings' && impact.listings > 0) return { ...item, value: impact.listings, static_display: undefined };
+    if (key === 'guests' && impact.guests > 0) return { ...item, value: impact.guests, static_display: undefined };
+    if (key === 'districts' && impact.districts > 0) return { ...item, value: impact.districts, static_display: undefined };
+    if (key === 'provinces' && impact.provinces > 0) return { ...item, value: impact.provinces, static_display: undefined };
+    if (key === 'rating' && impact.average_rating != null)
+      return { ...item, static_display: String(impact.average_rating), value: 0 };
+    return item;
+  });
+
   return (
     <section className="relative overflow-hidden bg-primary/5 py-20">
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,hsl(var(--primary)/0.08),transparent_60%)]" />
@@ -98,26 +109,29 @@ export function ImpactSection() {
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ duration: 0.5 }}
-          className="mb-14 text-center"
+          className="mb-12 text-center"
         >
-          <span className="text-sm font-semibold uppercase tracking-widest text-primary">Our Impact</span>
-          <h2 className="mt-3 text-3xl font-bold text-foreground md:text-4xl">Transforming Communities Through Tourism</h2>
+          {cfg?.badge && (
+            <span className="text-sm font-semibold uppercase tracking-widest text-primary">{cfg.badge}</span>
+          )}
+          <h2 className="mt-3 font-display text-3xl font-bold text-foreground md:text-4xl">
+            {cfg?.title || 'Homestays that make a difference'}
+          </h2>
           <p className="mx-auto mt-4 max-w-2xl text-lg text-muted-foreground">
-            Every booking supports local families and preserve Nepal&apos;s rich cultural heritage.
+            {cfg?.subtitle || 'Real stays, real communities, real Nepal.'}
           </p>
         </motion.div>
-
-        <div className="grid grid-cols-2 gap-6 md:grid-cols-4">
-          {stats.map((stat, i) => (
+        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+          {items.map((s, i) => (
             <StatCard
-              key={stat.label}
-              icon={stat.icon}
-              value={stat.value}
-              suffix={stat.suffix}
-              label={stat.label}
-              description={stat.description}
+              key={s.label}
+              icon={ICON_MAP[s.icon ?? ''] ?? Home}
+              value={s.value}
+              suffix={s.suffix ?? ''}
+              label={s.label}
+              description={s.description ?? ''}
               delay={i * 0.1}
-              staticDisplay={stat.staticDisplay}
+              staticDisplay={s.static_display}
             />
           ))}
         </div>

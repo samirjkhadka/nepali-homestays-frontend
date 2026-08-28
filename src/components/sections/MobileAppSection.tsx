@@ -1,22 +1,37 @@
 import { motion } from 'framer-motion';
 import { Apple, Smartphone, Star, CheckCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-
-const appFeatures = [
-  'Book homestays on the go',
-  'Instant booking confirmations',
-  'Secure in-app messaging',
-  'Offline access to bookings',
-  'Real-time notifications',
-  'Easy payment options',
-];
+import { useHomeContent } from '@/hooks/useHomeContent';
 
 export default function MobileAppSection() {
+  const { content } = useHomeContent();
+  const app = content?.mobile_app;
+  const features = app?.features?.length
+    ? app.features
+    : [
+        'Book homestays on the go',
+        'Instant booking confirmations',
+        'Secure in-app messaging',
+        'Offline access to bookings',
+        'Real-time notifications',
+        'Easy payment options',
+      ];
+
+  const openStore = (url?: string) => {
+    if (url?.trim()) window.open(url.trim(), '_blank', 'noopener,noreferrer');
+  };
+
   return (
-    <section className="py-20 bg-gradient-to-br from-primary/5 via-background to-accent/5 overflow-hidden">
+    <section className="py-20 bg-gradient-to-br from-primary/5 via-background to-accent/5 overflow-hidden relative">
+      {app?.coming_soon !== false && (
+        <div className="absolute right-4 top-6 z-20 md:right-8 md:top-8">
+          <span className="inline-flex items-center gap-1.5 rounded-full border-2 border-accent-500 bg-accent-500/15 px-3 py-1.5 text-sm font-semibold text-accent-700">
+            Coming soon
+          </span>
+        </div>
+      )}
       <div className="section-container">
         <div className="grid lg:grid-cols-2 gap-12 items-center">
-          {/* Content */}
           <motion.div
             initial={{ opacity: 0, x: -30 }}
             whileInView={{ opacity: 1, x: 0 }}
@@ -24,20 +39,20 @@ export default function MobileAppSection() {
             transition={{ duration: 0.6 }}
           >
             <span className="inline-block px-4 py-2 bg-primary/10 text-primary rounded-full text-sm font-medium mb-6">
-              📱 Get the App
+              {app?.badge || 'Get the App'}
             </span>
             <h2 className="font-display text-3xl md:text-4xl font-bold text-foreground mb-4">
-              Your Homestay Experience,<br />
-              <span className="text-primary">Always in Your Pocket</span>
+              {app?.title || 'Your Homestay Experience,'}
+              <br />
+              <span className="text-primary">{app?.title_accent || 'Always in Your Pocket'}</span>
             </h2>
             <p className="text-muted-foreground text-lg mb-8">
-              Download our mobile app for a seamless booking experience. Access exclusive deals, 
-              manage your trips, and connect with hosts — all from your phone.
+              {app?.subtitle ||
+                'Download our mobile app for a seamless booking experience. Access exclusive deals, manage your trips, and connect with hosts — all from your phone.'}
             </p>
 
-            {/* Features Grid */}
             <div className="grid grid-cols-2 gap-3 mb-8">
-              {appFeatures.map((feature) => (
+              {features.map((feature) => (
                 <div key={feature} className="flex items-center gap-2">
                   <CheckCircle className="w-5 h-5 text-primary shrink-0" />
                   <span className="text-sm text-foreground">{feature}</span>
@@ -45,7 +60,6 @@ export default function MobileAppSection() {
               ))}
             </div>
 
-            {/* App Rating */}
             <div className="flex items-center gap-4 mb-8 p-4 bg-card rounded-xl border border-border inline-flex">
               <div className="flex">
                 {[...Array(5)].map((_, i) => (
@@ -53,16 +67,17 @@ export default function MobileAppSection() {
                 ))}
               </div>
               <div>
-                <p className="font-semibold text-foreground">4.9 Rating</p>
-                <p className="text-sm text-muted-foreground">10,000+ Downloads</p>
+                <p className="font-semibold text-foreground">{app?.rating || '4.9'} Rating</p>
+                <p className="text-sm text-muted-foreground">{app?.downloads_label || '10,000+ Downloads'}</p>
               </div>
             </div>
 
-            {/* Download Buttons */}
             <div className="flex flex-wrap gap-4">
-              <Button 
-                size="lg" 
+              <Button
+                size="lg"
                 className="bg-foreground hover:bg-foreground/90 text-background gap-3 px-6"
+                onClick={() => openStore(app?.app_store_url)}
+                disabled={!app?.app_store_url?.trim()}
               >
                 <Apple className="w-6 h-6" />
                 <div className="text-left">
@@ -70,9 +85,11 @@ export default function MobileAppSection() {
                   <div className="font-semibold">App Store</div>
                 </div>
               </Button>
-              <Button 
-                size="lg" 
+              <Button
+                size="lg"
                 className="bg-foreground hover:bg-foreground/90 text-background gap-3 px-6"
+                onClick={() => openStore(app?.play_store_url)}
+                disabled={!app?.play_store_url?.trim()}
               >
                 <Smartphone className="w-6 h-6" />
                 <div className="text-left">
@@ -83,82 +100,20 @@ export default function MobileAppSection() {
             </div>
           </motion.div>
 
-          {/* Phone Mockups */}
           <motion.div
             initial={{ opacity: 0, x: 30 }}
             whileInView={{ opacity: 1, x: 0 }}
             viewport={{ once: true }}
             transition={{ duration: 0.6, delay: 0.2 }}
-            className="relative h-[500px] md:h-[600px]"
+            className="relative h-[420px] md:h-[520px] flex items-center justify-center"
           >
-            {/* Background Glow */}
             <div className="absolute inset-0 bg-gradient-to-br from-primary/20 to-accent/20 rounded-full blur-3xl opacity-50" />
-            
-            {/* Phone 1 - Main */}
-            <motion.div
-              initial={{ y: 20 }}
-              whileInView={{ y: 0 }}
-              viewport={{ once: true }}
-              className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-20"
-            >
-              <div className="w-[240px] md:w-[280px] h-[480px] md:h-[560px] bg-foreground rounded-[3rem] p-2 shadow-2xl">
-                <div className="w-full h-full bg-card rounded-[2.5rem] overflow-hidden relative">
-                  {/* Phone Screen Content */}
-                  <div className="absolute top-6 left-1/2 -translate-x-1/2 w-20 h-6 bg-foreground rounded-full" />
-                  <div className="h-full pt-12 px-4 pb-4">
-                    <div className="h-full bg-gradient-to-b from-primary/10 to-accent/10 rounded-2xl p-4">
-                      <div className="w-full h-32 bg-primary/20 rounded-xl mb-4" />
-                      <div className="space-y-3">
-                        <div className="h-4 bg-muted rounded w-3/4" />
-                        <div className="h-3 bg-muted rounded w-1/2" />
-                        <div className="h-20 bg-card rounded-xl border border-border" />
-                        <div className="h-20 bg-card rounded-xl border border-border" />
-                      </div>
-                    </div>
-                  </div>
-                </div>
+            <div className="relative w-56 h-[420px] rounded-[2rem] border-4 border-foreground/20 bg-card shadow-elevated overflow-hidden">
+              <div className="h-full bg-gradient-to-b from-primary/20 to-background p-6 flex flex-col justify-end">
+                <p className="font-display text-xl font-bold text-foreground">Nepali Homestays</p>
+                <p className="text-sm text-muted-foreground mt-2">Book authentic stays on the go.</p>
               </div>
-            </motion.div>
-
-            {/* Phone 2 - Left */}
-            <motion.div
-              initial={{ y: 40, rotate: -12 }}
-              whileInView={{ y: 20, rotate: -12 }}
-              viewport={{ once: true }}
-              className="absolute left-0 md:left-10 top-20 z-10 hidden md:block"
-            >
-              <div className="w-[180px] h-[360px] bg-foreground/80 rounded-[2rem] p-1.5 shadow-xl opacity-60">
-                <div className="w-full h-full bg-card rounded-[1.5rem] overflow-hidden">
-                  <div className="h-full bg-gradient-to-b from-accent/10 to-primary/10 p-3">
-                    <div className="w-full h-20 bg-accent/20 rounded-lg mb-3" />
-                    <div className="space-y-2">
-                      <div className="h-3 bg-muted rounded w-full" />
-                      <div className="h-3 bg-muted rounded w-2/3" />
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </motion.div>
-
-            {/* Phone 3 - Right */}
-            <motion.div
-              initial={{ y: 40, rotate: 12 }}
-              whileInView={{ y: 20, rotate: 12 }}
-              viewport={{ once: true }}
-              className="absolute right-0 md:right-10 top-32 z-10 hidden md:block"
-            >
-              <div className="w-[180px] h-[360px] bg-foreground/80 rounded-[2rem] p-1.5 shadow-xl opacity-60">
-                <div className="w-full h-full bg-card rounded-[1.5rem] overflow-hidden">
-                  <div className="h-full bg-gradient-to-b from-primary/10 to-accent/10 p-3">
-                    <div className="w-full h-20 bg-primary/20 rounded-lg mb-3" />
-                    <div className="space-y-2">
-                      <div className="h-3 bg-muted rounded w-full" />
-                      <div className="h-3 bg-muted rounded w-2/3" />
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </motion.div>
+            </div>
           </motion.div>
         </div>
       </div>

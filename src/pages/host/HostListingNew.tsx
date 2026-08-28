@@ -203,7 +203,7 @@ export default function HostListingNew() {
       })
       .then(() => {
         toast({ title: 'Listing created. It will appear after admin approval.' });
-        navigate('/dashboard/host');
+        navigate('/host/listings');
       })
       .catch((err) => toast({ title: err.response?.data?.message || 'Failed to create listing.', variant: 'destructive' }))
       .finally(() => setLoading(false));
@@ -452,7 +452,7 @@ export default function HostListingNew() {
 
         <div className="flex gap-4">
           <Button type="submit" disabled={loading} className="bg-accent-500 hover:bg-accent-600">{loading ? 'Creating…' : 'Submit for approval'}</Button>
-          <Button type="button" variant="outline" onClick={() => navigate('/dashboard/host')}>Cancel</Button>
+          <Button type="button" variant="outline" onClick={() => navigate('/host/listings')}>Cancel</Button>
         </div>
       </form>
     </div>

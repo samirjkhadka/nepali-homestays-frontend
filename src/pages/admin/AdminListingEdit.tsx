@@ -224,7 +224,7 @@ export default function AdminListingEdit() {
       })
       .then(() => {
         toast({ title: 'Listing updated.' });
-        navigate('/admin/dashboard', { state: { tab: 'listings' } });
+        navigate('/admin/listings');
       })
       .catch((err) => toast({ title: err.response?.data?.message || 'Failed.', variant: 'destructive' }))
       .finally(() => setLoading(false));

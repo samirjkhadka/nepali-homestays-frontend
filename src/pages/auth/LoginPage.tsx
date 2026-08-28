@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { PasswordInput } from '@/components/ui/password-input';
 import { Label } from '@/components/ui/label';
 import { AuthPageLayout } from '@/components/auth/AuthPageLayout';
-import { useAuth } from '@/lib/auth';
+import { useAuth, consoleHome } from '@/lib/auth';
 import { api } from '@/lib/api';
 
 export default function LoginPage() {
@@ -74,13 +74,7 @@ export default function LoginPage() {
             navigate('/profile/change-password', { replace: true });
             return;
           }
-          navigate(
-            res.data.user.role === 'host'
-              ? '/dashboard/host'
-              : res.data.user.role === 'admin' || res.data.user.role === 'superadmin'
-                ? '/admin/dashboard'
-                : '/'
-          );
+          navigate(consoleHome(res.data.user.role) === '/dashboard' ? '/' : consoleHome(res.data.user.role));
           return;
         }
         setError(res.data.message || 'Login failed. Please try again.');

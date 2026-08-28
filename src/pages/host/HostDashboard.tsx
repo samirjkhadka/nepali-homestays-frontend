@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Link, useSearchParams, useNavigate, useLocation } from 'react-router-dom';
+import { Link, useSearchParams, useNavigate, useLocation, useParams } from 'react-router-dom';
 import * as Dialog from '@radix-ui/react-dialog';
 import { DayPicker } from 'react-day-picker';
 import 'react-day-picker/style.css';
@@ -172,7 +172,13 @@ export default function HostDashboard() {
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
   const tabFromUrl = searchParams.get('tab') as TabType | null;
-  const [tab, setTab] = useState<TabType>(TABS.includes(tabFromUrl as TabType) ? tabFromUrl! : 'overview');
+  // The section comes from the route. `?tab=` is still read as a fallback so
+  // links written before sections had URLs keep working.
+  const { section } = useParams<{ section?: string }>();
+  const tab: TabType = TABS.includes(section as TabType)
+    ? (section as TabType)
+    : TABS.includes(tabFromUrl as TabType) ? tabFromUrl! : 'overview';
+  const setTab = (next: TabType) => navigate(`/host/${next}`);
   const [hostReviews, setHostReviews] = useState<{ id: number; listing_id: number; listing_title: string; reviewer_name: string; rating: number; title: string | null; comment: string | null; created_at: string }[]>([]);
   const [hostReviewsTotal, setHostReviewsTotal] = useState(0);
   const [conversations, setConversations] = useState<{ booking_id: number; listing_title: string; other_name: string; other_user_id: number; last_message: string | null; last_message_at: string | null; unread_count: number }[]>([]);

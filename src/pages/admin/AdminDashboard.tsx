@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useParams, useNavigate } from 'react-router-dom';
 import * as Dialog from '@radix-ui/react-dialog';
 import { jsPDF } from 'jspdf';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
@@ -357,6 +357,24 @@ const ADMIN_EMAIL_TEMPLATE_KEYS = [
   'offline_booking_confirmed',
 ] as const;
 
+/** Heading for each section, replacing the labels the tab strip used to carry. */
+const SECTION_TITLES: Record<string, string> = {
+  overview: 'Dashboard',
+  listings: 'Listings',
+  users: 'Users',
+  bookings: 'Bookings',
+  corporates: 'Corporates',
+  payments: 'Payments',
+  reports: 'Reports',
+  content: 'Pages & media',
+  settings: 'Settings',
+  cancellation: 'Cancellation policies',
+  treks: 'Treks',
+  security: 'Security',
+  wallet_utilities: 'Wallet utilities',
+  logs: 'Logs',
+};
+
 const ADMIN_TABS = ['overview', 'listings', 'users', 'bookings', 'corporates', 'payments', 'reports', 'content', 'settings', 'cancellation', 'treks', 'security', 'wallet_utilities', 'logs'] as const;
 type AdminTab = (typeof ADMIN_TABS)[number];
 
@@ -393,12 +411,23 @@ function bookingStatusColor(s: string): string {
 export default function AdminDashboard() {
   const { toast } = useToast();
   const location = useLocation();
-  const [tab, setTab] = useState<AdminTab>('overview');
+  const navigate = useNavigate();
+  // The section comes from the URL, not from local state. That is what makes an
+  // admin screen linkable, bookmarkable and survivable by the back button —
+  // none of which worked when the tab lived in useState.
+  const { section } = useParams<{ section?: string }>();
+  const tab: AdminTab = ADMIN_TABS.includes(section as AdminTab) ? (section as AdminTab) : 'overview';
+  const setTab = (next: AdminTab) => navigate(`/admin/${next}`);
 
+  // Compatibility with links written before sections had URLs, which passed the
+  // tab through router state. Redirects once to the real route, so an old link
+  // lands somewhere addressable instead of silently opening the overview.
   useEffect(() => {
     const stateTab = (location.state as { tab?: string } | null)?.tab;
-    if (stateTab && ADMIN_TABS.includes(stateTab as AdminTab)) setTab(stateTab as AdminTab);
-  }, [location.state]);
+    if (stateTab && ADMIN_TABS.includes(stateTab as AdminTab) && stateTab !== tab) {
+      navigate(`/admin/${stateTab}`, { replace: true });
+    }
+  }, [location.state, tab, navigate]);
 
   const [pendingListings, setPendingListings] = useState<Listing[]>([]);
   const [pendingListingsSearch, setPendingListingsSearch] = useState('');
@@ -1146,23 +1175,9 @@ export default function AdminDashboard() {
         </Dialog.Portal>
       </Dialog.Root>
 
-      <h1 className="text-3xl font-bold text-primary-800">Admin dashboard</h1>
-      <p className="mt-1 text-muted-foreground">Moderate listings and manage users</p>
-      <div className="mt-6 flex flex-wrap gap-2 border-b border-primary-200">
-        {ADMIN_TABS.map((t) => (
-          <button
-            key={t}
-            type="button"
-            className={`px-4 py-2 font-medium capitalize transition-colors ${tab === t ? 'border-b-2 border-accent-500 text-accent-600' : 'text-muted-foreground hover:text-primary-700'}`}
-            onClick={() => {
-              setTab(t);
-              if (t === 'listings') setAdminLiveListingsFilter('all');
-            }}
-          >
-            {t === 'listings' ? 'Listings' : t === 'corporates' ? 'Corporates' : t === 'wallet_utilities' ? 'Wallet utilities' : t === 'cancellation' ? 'Cancellation' : t === 'treks' ? 'Treks' : t === 'security' ? 'Security' : t}
-          </button>
-        ))}
-      </div>
+      {/* Navigation lives in the sidebar now. The heading is per-section rather
+          than one "Admin dashboard" title above everything. */}
+      <h1 className="text-2xl font-semibold text-foreground">{SECTION_TITLES[tab] ?? 'Dashboard'}</h1>
 
       {tab === 'overview' && (
         <div className="mt-6 space-y-6">

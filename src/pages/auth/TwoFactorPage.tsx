@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent } from '@/components/ui/card';
 import { api } from '@/lib/api';
-import { useAuth } from '@/lib/auth';
+import { useAuth, consoleHome } from '@/lib/auth';
 
 interface ChallengeState {
   challenge: string;
@@ -63,7 +63,7 @@ export default function TwoFactorPage() {
 
   const finish = (user: { id: number; email: string; role: string; name?: string }) => {
     setSessionUser({ ...user, must_change_password: false });
-    navigate(user.role === 'host' ? '/dashboard/host' : '/admin/dashboard', { replace: true });
+    navigate(consoleHome(user.role), { replace: true });
   };
 
   const submitCode = (e: React.FormEvent) => {
@@ -180,7 +180,7 @@ export default function TwoFactorPage() {
               <Button
                 className="mt-4 w-full"
                 disabled={!acknowledged}
-                onClick={() => navigate('/admin/dashboard', { replace: true })}
+                onClick={() => navigate(consoleHome('admin'), { replace: true })}
               >
                 Continue
               </Button>

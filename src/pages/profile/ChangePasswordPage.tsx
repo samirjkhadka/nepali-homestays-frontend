@@ -6,7 +6,7 @@ import { PasswordInput } from '@/components/ui/password-input';
 import { Label } from '@/components/ui/label';
 import { api } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
-import { useAuth } from '@/lib/auth';
+import { useAuth, consoleHome } from '@/lib/auth';
 import { validatePassword, PASSWORD_HINT } from '@/lib/passwordValidation';
 import { KeyRound } from 'lucide-react';
 
@@ -47,7 +47,7 @@ export default function ChangePasswordPage() {
         if (mandatoryChange) {
           updateUser({ must_change_password: false });
           toast({ title: 'Password updated. You can continue using your account.' });
-          navigate(user?.role === 'host' ? '/dashboard/host' : user?.role === 'admin' ? '/admin/dashboard' : '/', { replace: true });
+          navigate(consoleHome(user?.role) === '/dashboard' ? '/' : consoleHome(user?.role), { replace: true });
           return;
         }
         toast({ title: 'Password updated. Please sign in with your new password.' });

@@ -225,7 +225,7 @@ export default function HostListingEdit() {
       })
       .then(() => {
         toast({ title: 'Listing updated.' });
-        navigate('/dashboard/host');
+        navigate('/host/overview');
       })
       .catch((err) => toast({ title: err.response?.data?.message || 'Failed.', variant: 'destructive' }))
       .finally(() => setLoading(false));

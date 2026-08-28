@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { Bell } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { api } from '@/lib/api';
-import { useAuth } from '@/lib/auth';
+import { useAuth , isAdminRole } from '@/lib/auth';
 import { formatDateTime } from '@/lib/format';
 
 type Notification = {
@@ -84,8 +84,8 @@ export function NotificationBell() {
     if (n.related_type === 'listing' && n.related_id) return `/listings/${n.related_id}`;
     if (n.related_type === 'booking' && n.related_id) return `/dashboard/guest?tab=bookings`;
     if (n.related_type === 'payment') return `/dashboard/guest?tab=payment-history`;
-    if (user?.role === 'admin') return '/admin/dashboard';
-    if (user?.role === 'host') return '/dashboard/host';
+    if (isAdminRole(user?.role)) return '/admin/overview';
+    if (user?.role === 'host') return '/host/overview';
     return null;
   };
 

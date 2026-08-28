@@ -218,7 +218,7 @@ export default function AdminListingNew() {
           ? 'Listing created. A new host account was created; they can sign in with OTP (email) or request password reset.'
           : 'Listing created. Existing host can manage it from their dashboard.';
         toast({ title: msg });
-        navigate('/admin/dashboard', { state: { tab: 'listings' } });
+        navigate('/admin/listings');
       })
       .catch((err) => toast({ title: err.response?.data?.message || 'Failed to create listing.', variant: 'destructive' }))
       .finally(() => setLoading(false));

@@ -38,6 +38,18 @@
     --destructive-foreground: 35 30% 98%;
 
     --border: 35 25% 88%;
+
+    /* Staff console sidebar. A deep, desaturated version of the brand hue
+       rather than a neutral grey: the console should read as the same product,
+       and a dark rail against a light workspace is what makes a long list of
+       sections scannable without a border round every item. */
+    --sidebar: 20 30% 14%;
+    --sidebar-foreground: 35 30% 96%;
+    --sidebar-muted: 30 12% 68%;
+    --sidebar-border: 20 25% 22%;
+    --sidebar-hover: 20 28% 20%;
+    --sidebar-active: 15 55% 42%;
+    --sidebar-active-foreground: 35 30% 98%;
     --input: 35 25% 88%;
     --ring: 15 60% 48%;
 
@@ -86,6 +98,16 @@
 
     --popover: 25 25% 13%;
     --popover-foreground: 35 25% 96%;
+
+    /* In dark mode the workspace is already dark, so the rail goes deeper
+       still — inverting it to a light sidebar would flip the whole hierarchy. */
+    --sidebar: 20 30% 9%;
+    --sidebar-foreground: 35 25% 94%;
+    --sidebar-muted: 30 10% 60%;
+    --sidebar-border: 20 22% 18%;
+    --sidebar-hover: 20 26% 15%;
+    --sidebar-active: 15 55% 46%;
+    --sidebar-active-foreground: 35 30% 98%;
 
     --primary: 15 60% 58%;
     --primary-foreground: 25 30% 8%;

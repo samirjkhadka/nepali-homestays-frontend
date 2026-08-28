@@ -16,6 +16,7 @@ import ResetPasswordPage from '@/pages/auth/ResetPasswordPage';
 import GuestDashboard from '@/pages/guest/GuestDashboard';
 import HostDashboard from '@/pages/host/HostDashboard';
 import AdminDashboard from '@/pages/admin/AdminDashboard';
+import { AdminLayout, HostLayout } from '@/components/layout/StaffLayout';
 import AdminListingNew from '@/pages/admin/AdminListingNew';
 import AdminListingEdit from '@/pages/admin/AdminListingEdit';
 import AdminSendNotifications from '@/pages/admin/AdminSendNotifications';
@@ -67,6 +68,34 @@ export default function App() {
     <>
       <RouteTracker />
       <Routes>
+        {/* Staff consoles sit OUTSIDE the public Layout: no marketing header,
+            no language switcher, no footer. An admin moderating listings is
+            using a tool, not reading the website. */}
+        <Route
+          element={
+            <ProtectedRoute roles={['admin', 'superadmin']}>
+              <AdminLayout />
+            </ProtectedRoute>
+          }
+        >
+          <Route path="/admin" element={<Navigate to="/admin/overview" replace />} />
+          {/* Every link ever written to /admin/dashboard still lands somewhere. */}
+          <Route path="/admin/dashboard" element={<Navigate to="/admin/overview" replace />} />
+          <Route path="/admin/:section" element={<AdminDashboard />} />
+        </Route>
+
+        <Route
+          element={
+            <ProtectedRoute roles={['host', 'admin', 'superadmin']}>
+              <HostLayout />
+            </ProtectedRoute>
+          }
+        >
+          <Route path="/host" element={<Navigate to="/host/overview" replace />} />
+          <Route path="/dashboard/host" element={<Navigate to="/host/overview" replace />} />
+          <Route path="/host/:section" element={<HostDashboard />} />
+        </Route>
+
         <Route path="/" element={<Layout />}>
           <Route index element={<HomePage />} />
           <Route path="videos" element={<VideosPage />} />
@@ -130,14 +159,6 @@ export default function App() {
             }
           />
           <Route
-            path="dashboard/host"
-            element={
-              <ProtectedRoute roles={['host']}>
-                <HostDashboard />
-              </ProtectedRoute>
-            }
-          />
-          <Route
             path="host/listings/new"
             element={
               <ProtectedRoute roles={['host']}>
@@ -150,14 +171,6 @@ export default function App() {
             element={
               <ProtectedRoute roles={['host']}>
                 <HostListingEdit />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="admin/dashboard"
-            element={
-              <ProtectedRoute roles={['admin']}>
-                <AdminDashboard />
               </ProtectedRoute>
             }
           />

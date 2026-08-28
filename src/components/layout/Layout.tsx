@@ -3,7 +3,7 @@ import { Link, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Menu, X, Globe, ChevronDown, LogOut, User, KeyRound, Heart, MessageSquare, Receipt, Calendar, LogIn, UserPlus, LayoutDashboard, PlusCircle, Moon, Sun } from 'lucide-react';
 import { NotificationBell } from '@/components/NotificationBell';
-import { useAuth } from '@/lib/auth';
+import { useAuth , isAdminRole } from '@/lib/auth';
 import { useI18n } from '@/lib/i18n';
 import { Button } from '@/components/ui/button';
 import { api } from '@/lib/api';
@@ -109,7 +109,7 @@ function UserMenuDesktop({
             className="absolute right-0 top-full z-50 mt-2 min-w-[200px] rounded-lg border border-border bg-card py-1 shadow-elevated"
           >
             <Link
-              to={user.role === 'admin' ? '/admin/dashboard' : `${user.role === 'host' ? hostDashboardBase : guestDashboardBase}?tab=profile`}
+              to={isAdminRole(user.role) ? '/admin/overview' : `${user.role === 'host' ? hostDashboardBase : guestDashboardBase}?tab=profile`}
               onClick={() => setShowUserDropdown(false)}
               className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-foreground hover:bg-muted"
             >
@@ -178,7 +178,7 @@ function UserMenuDesktop({
             )}
             {user.role === 'host' && (
               <>
-                <Link to="/dashboard/host" onClick={() => setShowUserDropdown(false)} className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-foreground hover:bg-muted">
+                <Link to="/host/overview" onClick={() => setShowUserDropdown(false)} className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-foreground hover:bg-muted">
                   <LayoutDashboard className="h-4 w-4" />
                   Host Dashboard
                 </Link>
@@ -193,7 +193,7 @@ function UserMenuDesktop({
               </>
             )}
             {user.role === 'admin' && (
-              <Link to="/admin/dashboard" onClick={() => setShowUserDropdown(false)} className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-foreground hover:bg-muted">
+              <Link to="/admin/overview" onClick={() => setShowUserDropdown(false)} className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-foreground hover:bg-muted">
                 <LayoutDashboard className="h-4 w-4" />
                 Admin
               </Link>
@@ -290,7 +290,7 @@ export default function Layout() {
 
   const initials = user ? getInitials(profile?.name ?? null, user.email) : '';
   const guestDashboardBase = '/dashboard/guest';
-  const hostDashboardBase = '/dashboard/host';
+  const hostDashboardBase = '/host/overview';
 
   return (
     <div className="min-h-screen bg-background">
@@ -505,7 +505,7 @@ export default function Layout() {
                   {user ? (
                     <div className="flex flex-col gap-2">
                       <Link
-                        to={user.role === 'admin' ? '/admin/dashboard' : user.role === 'host' ? '/dashboard/host' : guestDashboardBase}
+                        to={isAdminRole(user.role) ? '/admin/overview' : user.role === 'host' ? '/host/overview' : guestDashboardBase}
                         onClick={() => setIsOpen(false)}
                       >
                         <Button variant="outline" className="w-full">

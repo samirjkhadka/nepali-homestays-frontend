@@ -881,11 +881,11 @@ export default function HostDashboard() {
             </button>
           </div>
 
-          <Card className="border-primary-200">
-            <CardHeader className="border-b border-primary-100 bg-primary-50/50">
+          <Card className="border-border">
+            <CardHeader className="border-b border-border bg-muted/40">
               <div className="flex items-center gap-2">
                 <BarChart3 className="h-5 w-5 text-accent-500" />
-                <h3 className="font-semibold text-primary-800">At a glance</h3>
+                <h3 className="font-semibold text-foreground">At a glance</h3>
               </div>
               <p className="text-sm text-muted-foreground">Quick stats from your activity</p>
             </CardHeader>
@@ -929,9 +929,9 @@ export default function HostDashboard() {
           </Card>
 
           <div className="grid gap-6 lg:grid-cols-2">
-            <Card className="border-primary-200">
-              <CardHeader className="border-b border-primary-100 bg-primary-50/50">
-                <h3 className="font-semibold text-primary-800">Bookings by status</h3>
+            <Card className="border-border">
+              <CardHeader className="border-b border-border bg-muted/40">
+                <h3 className="font-semibold text-foreground">Bookings by status</h3>
                 <p className="text-sm text-muted-foreground">Distribution of your bookings</p>
               </CardHeader>
               <CardContent className="p-6">
@@ -965,9 +965,9 @@ export default function HostDashboard() {
               </CardContent>
             </Card>
 
-            <Card className="border-primary-200">
-              <CardHeader className="border-b border-primary-100 bg-primary-50/50">
-                <h3 className="font-semibold text-primary-800">Listings by status</h3>
+            <Card className="border-border">
+              <CardHeader className="border-b border-border bg-muted/40">
+                <h3 className="font-semibold text-foreground">Listings by status</h3>
                 <p className="text-sm text-muted-foreground">Approved, pending, or rejected</p>
               </CardHeader>
               <CardContent className="p-6">
@@ -1002,9 +1002,9 @@ export default function HostDashboard() {
             </Card>
           </div>
 
-          <Card className="border-primary-200">
-            <CardHeader className="border-b border-primary-100 bg-primary-50/50">
-              <h3 className="font-semibold text-primary-800">Bookings & earnings (last 6 months)</h3>
+          <Card className="border-border">
+            <CardHeader className="border-b border-border bg-muted/40">
+              <h3 className="font-semibold text-foreground">Bookings & earnings (last 6 months)</h3>
               <p className="text-sm text-muted-foreground">Monthly bookings and revenue from paid stays</p>
             </CardHeader>
             <CardContent className="p-6">
@@ -1053,11 +1053,11 @@ export default function HostDashboard() {
               const disabledByAdmin = Boolean(l.disabled_by_admin);
               const canToggle = !disabledByAdmin && (isApproved || isDisabled);
               return (
-                <Card key={l.id} className="border-primary-200">
+                <Card key={l.id} className="border-border">
                   <CardContent className="p-6 space-y-3">
                     <div className="flex items-start justify-between gap-2">
                       <div>
-                        <p className="font-semibold text-primary-800">{l.title}</p>
+                        <p className="font-semibold text-foreground">{l.title}</p>
                         {(l.location != null && l.location !== '') && (
                           <p className="mt-1 text-sm text-muted-foreground">{l.location}</p>
                         )}
@@ -1133,7 +1133,7 @@ export default function HostDashboard() {
             <Dialog.Portal>
               <Dialog.Overlay className="fixed inset-0 bg-black/50" />
               <Dialog.Content className="fixed left-1/2 top-1/2 z-50 w-full max-w-md -translate-x-1/2 -translate-y-1/2 max-h-[90vh] overflow-y-auto rounded-lg border border-primary-200 bg-background p-6 shadow-lg">
-                <Dialog.Title className="text-lg font-semibold text-primary-800">Add co-host</Dialog.Title>
+                <Dialog.Title className="text-lg font-semibold text-foreground">Add co-host</Dialog.Title>
                 <p className="mt-1 text-sm text-muted-foreground">They can log in and manage this listing. Use the same fields as the primary host profile.</p>
                 <form onSubmit={handleAddCoHost} className="mt-4 space-y-4">
                   <div>
@@ -1225,11 +1225,11 @@ export default function HostDashboard() {
               <>
                 {pendingBookings.length > 0 && (
                   <>
-                    <h3 className="font-semibold text-primary-800">Pending requests (accept/decline)</h3>
+                    <h3 className="font-semibold text-foreground">Pending requests (accept/decline)</h3>
                     {pendingBookings.map((b) => (
                       <Card key={b.id} className="border-primary-200 cursor-pointer transition-colors hover:border-primary-300" onClick={() => setSelectedBookingDetail(b)}>
                         <CardContent className="p-6">
-                          <p className="font-semibold text-primary-800">{b.listing_title}</p>
+                          <p className="font-semibold text-foreground">{b.listing_title}</p>
                           {b.listing_location && <p className="text-sm text-muted-foreground">{b.listing_location}</p>}
                           <p className="text-sm text-muted-foreground">{b.guest_name} · {b.guest_email} · {formatBookingDateRange(b.check_in, b.check_out)} · {b.guests} guests</p>
                           {b.message && <p className="mt-2 text-sm">{b.message}</p>}
@@ -1245,7 +1245,7 @@ export default function HostDashboard() {
                 )}
                 {(statusFilter === 'all' ? otherBookings : filtered).length > 0 && (
                   <>
-                    {pendingBookings.length > 0 && <h3 className="mt-8 font-semibold text-primary-800">Other bookings</h3>}
+                    {pendingBookings.length > 0 && <h3 className="mt-8 font-semibold text-foreground">Other bookings</h3>}
                     {(statusFilter === 'all' ? otherBookings : filtered).map((b) => {
                       const nights = Math.ceil(
                         (new Date(b.check_out).getTime() - new Date(b.check_in).getTime()) / (24 * 60 * 60 * 1000)
@@ -1309,7 +1309,7 @@ export default function HostDashboard() {
             <Dialog.Portal>
               <Dialog.Overlay className="fixed inset-0 bg-black/50" />
               <Dialog.Content className="fixed left-1/2 top-1/2 z-50 w-full max-w-lg -translate-x-1/2 -translate-y-1/2 max-h-[90vh] overflow-y-auto rounded-lg border border-primary-200 bg-background p-6 shadow-lg" onClick={(e) => e.stopPropagation()}>
-                <Dialog.Title className="text-lg font-semibold text-primary-800">Booking details</Dialog.Title>
+                <Dialog.Title className="text-lg font-semibold text-foreground">Booking details</Dialog.Title>
                 {selectedBookingDetail && (() => {
                   const b = selectedBookingDetail;
                   const nights = Math.ceil((new Date(b.check_out).getTime() - new Date(b.check_in).getTime()) / (24 * 60 * 60 * 1000));
@@ -1355,11 +1355,11 @@ export default function HostDashboard() {
 
       {tab === 'utilities' && !isCoHostOnly && (
         <div className="mt-6 space-y-6 max-w-4xl">
-          <Card className="border-primary-200">
-            <CardHeader className="border-b border-primary-100 bg-primary-50/50">
+          <Card className="border-border">
+            <CardHeader className="border-b border-border bg-muted/40">
               <div className="flex items-center gap-2">
                 <Wallet className="h-5 w-5 text-accent-500" />
-                <h3 className="font-semibold text-primary-800">Wallet utilities (HimalPay)</h3>
+                <h3 className="font-semibold text-foreground">Wallet utilities (HimalPay)</h3>
               </div>
               <p className="text-sm text-muted-foreground">
                 Pay for enabled wallet services via N-Cash checkout. You must be the primary owner of at least one listing.
@@ -1410,7 +1410,7 @@ export default function HostDashboard() {
                                 </div>
                               )}
                               <div className="min-w-0 flex-1">
-                                <p className="font-semibold text-primary-800 truncate">{label}</p>
+                                <p className="font-semibold text-foreground truncate">{label}</p>
                               </div>
                               <span className="text-xs text-muted-foreground shrink-0">{expanded ? '▲' : '▼'}</span>
                             </button>
@@ -1657,9 +1657,9 @@ export default function HostDashboard() {
               )}
             </CardContent>
           </Card>
-          <Card className="border-primary-200">
-            <CardHeader className="border-b border-primary-100 bg-primary-50/50">
-              <h3 className="font-semibold text-primary-800">Recent utility transactions</h3>
+          <Card className="border-border">
+            <CardHeader className="border-b border-border bg-muted/40">
+              <h3 className="font-semibold text-foreground">Recent utility transactions</h3>
             </CardHeader>
             <CardContent className="p-6">
               {utilTxnsLoading && <p className="text-sm text-muted-foreground">Loading…</p>}
@@ -1688,10 +1688,10 @@ export default function HostDashboard() {
       {tab === 'calendar' && (
         <>
         <Card className="mt-6 max-w-md border-primary-200">
-          <CardHeader className="border-b border-primary-100 bg-primary-50/50">
+          <CardHeader className="border-b border-border bg-muted/40">
             <div className="flex items-center gap-2">
               <Calendar className="h-5 w-5 text-accent-500" />
-              <h3 className="font-semibold text-primary-800">Block dates</h3>
+              <h3 className="font-semibold text-foreground">Block dates</h3>
             </div>
             <p className="text-sm text-muted-foreground">Make dates unavailable for a listing</p>
           </CardHeader>
@@ -1711,7 +1711,7 @@ export default function HostDashboard() {
                     value={blockDates}
                     onChange={(e) => setBlockDates(e.target.value)}
                     placeholder="2026-02-01, 2026-02-02 or pick below"
-                    className="border-primary-200"
+                    className="border-border"
                   />
                   <div className="rounded-md border border-primary-200 bg-background p-2 [&_.rdp]:m-0">
                     <DayPicker
@@ -1733,7 +1733,7 @@ export default function HostDashboard() {
             {/* Currently blocked dates for selected listing */}
             {blockListingId && (
               <div className="mt-8 pt-6 border-t border-primary-200">
-                <h4 className="font-semibold text-primary-800 mb-2">Currently blocked dates</h4>
+                <h4 className="font-semibold text-foreground mb-2">Currently blocked dates</h4>
                 <p className="text-sm text-muted-foreground mb-3">
                   These dates are unavailable for guests when they book this listing.
                 </p>
@@ -1775,17 +1775,17 @@ export default function HostDashboard() {
           {hostReviews.length === 0 ? (
             <Card className="border-primary-200 p-8 text-center">
               <Star className="mx-auto h-12 w-12 text-primary-300" />
-              <h3 className="mt-4 font-semibold text-primary-800">Reviews received</h3>
+              <h3 className="mt-4 font-semibold text-foreground">Reviews received</h3>
               <p className="mt-2 text-sm text-muted-foreground">No reviews yet. Guests can leave a review after completing a stay.</p>
             </Card>
           ) : (
             <div className="space-y-4">
               {hostReviews.map((r) => (
-                <Card key={r.id} className="border-primary-200">
+                <Card key={r.id} className="border-border">
                   <CardContent className="p-6">
                     <div className="flex flex-wrap items-start justify-between gap-4">
                       <div>
-                        <p className="font-semibold text-primary-800">{r.listing_title}</p>
+                        <p className="font-semibold text-foreground">{r.listing_title}</p>
                         <p className="text-sm text-muted-foreground">{r.reviewer_name}</p>
                         <div className="mt-2 flex items-center gap-1">
                           {[1, 2, 3, 4, 5].map((s) => (
@@ -1815,7 +1815,7 @@ export default function HostDashboard() {
           {conversations.length === 0 ? (
             <Card className="mt-4 border-primary-200 p-8 text-center">
               <MessageSquare className="mx-auto h-12 w-12 text-primary-300" />
-              <h3 className="mt-4 font-semibold text-primary-800">Messages</h3>
+              <h3 className="mt-4 font-semibold text-foreground">Messages</h3>
               <p className="mt-2 text-sm text-muted-foreground">Conversations with guests will appear here once you have bookings.</p>
               <Button className="mt-4 bg-accent-500 hover:bg-accent-600" asChild>
                 <Link to="/dashboard/host">Back to overview</Link>
@@ -1850,7 +1850,7 @@ export default function HostDashboard() {
                 ) : (
                   <>
                     <CardHeader className="border-b border-primary-100 bg-primary-50/30">
-                      <p className="font-semibold text-primary-800">{selectedConversation.listing_title}</p>
+                      <p className="font-semibold text-foreground">{selectedConversation.listing_title}</p>
                       <p className="text-sm text-muted-foreground">With {selectedConversation.other_name}</p>
                     </CardHeader>
                     <CardContent className="p-0">
@@ -1887,8 +1887,8 @@ export default function HostDashboard() {
 
       {tab === 'profile' && (
         <Card className="mt-6 max-w-xl border-primary-200">
-          <CardHeader className="border-b border-primary-100 bg-primary-50/50">
-            <h3 className="font-semibold text-primary-800">Profile</h3>
+          <CardHeader className="border-b border-border bg-muted/40">
+            <h3 className="font-semibold text-foreground">Profile</h3>
             <p className="text-sm text-muted-foreground">Update your host profile (shown on your listings)</p>
           </CardHeader>
           <CardContent className="p-6">

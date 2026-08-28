@@ -74,11 +74,11 @@ export function AdminTable<T>({
     <div className={`overflow-x-auto ${containerClassName}`}>
       <table className="w-full border-collapse">
         <thead>
-          <tr className="border-b border-primary-200 bg-primary-50/50 sticky top-0 z-10 shadow-sm">
+          <tr className="sticky top-0 z-10 border-b border-border bg-muted/60 backdrop-blur">
             {columns.map((col) => (
               <th
                 key={col.key}
-                className={`p-3 text-left text-sm font-medium text-primary-800 ${col.thClassName ?? ''} ${col.sortable ? 'cursor-pointer select-none hover:bg-primary-100/80' : ''}`}
+                className={`px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground ${col.thClassName ?? ''} ${col.sortable ? 'cursor-pointer select-none hover:text-foreground' : ''}`}
                 onClick={() => col.sortable && handleSort(col.key)}
               >
                 <span className="inline-flex items-center gap-1">
@@ -97,9 +97,9 @@ export function AdminTable<T>({
         </thead>
         <tbody>
           {paginatedData.map((row) => (
-            <tr key={keyExtractor(row)} className="border-b border-primary-100">
+            <tr key={keyExtractor(row)} className="border-b border-border/60 transition-colors hover:bg-muted/40">
               {columns.map((col) => (
-                <td key={col.key} className={`p-3 text-sm ${col.tdClassName ?? ''}`}>
+                <td key={col.key} className={`px-3 py-2.5 text-sm tabular-nums ${col.tdClassName ?? ''}`}>
                   {col.render ? col.render(row) : String((row as Record<string, unknown>)[col.key] ?? '—')}
                 </td>
               ))}
@@ -108,7 +108,7 @@ export function AdminTable<T>({
         </tbody>
       </table>
       {!noPagination && totalPages > 1 && (
-        <div className="flex items-center justify-between border-t border-primary-200 px-4 py-2 bg-background">
+        <div className="flex items-center justify-between border-t border-border bg-background px-4 py-2">
           <span className="text-sm text-muted-foreground">
             Page {page} of {totalPages} ({sortedData.length} total)
           </span>

@@ -1165,7 +1165,7 @@ export default function AdminDashboard() {
         <Dialog.Portal>
           <Dialog.Overlay className="fixed inset-0 bg-black/50 z-50" />
           <Dialog.Content aria-describedby={undefined} className="fixed left-1/2 top-1/2 z-[60] w-full max-w-md -translate-x-1/2 -translate-y-1/2 rounded-lg border border-primary-200 bg-background p-6 shadow-lg">
-            <Dialog.Title className="text-lg font-semibold text-primary-800">{adminConfirm?.title}</Dialog.Title>
+            <Dialog.Title className="text-lg font-semibold text-foreground">{adminConfirm?.title}</Dialog.Title>
             <p className="mt-2 text-sm text-muted-foreground">{adminConfirm?.description}</p>
             <div className="mt-6 flex justify-end gap-2">
               <Button type="button" variant="outline" onClick={() => setAdminConfirm(null)}>Cancel</Button>
@@ -1182,7 +1182,7 @@ export default function AdminDashboard() {
       {tab === 'overview' && (
         <div className="mt-6 space-y-6">
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
-            <Card className="cursor-pointer border-primary-200 transition-shadow hover:shadow-md" onClick={() => { setTab('listings'); setAdminLiveListingsFilter('all'); }}>
+            <Card className="cursor-pointer border-border transition-shadow hover:shadow-md" onClick={() => { setTab('listings'); setAdminLiveListingsFilter('all'); }}>
               <CardContent className="flex items-center gap-4 p-6">
                 <div className="rounded-full bg-accent-100 p-3">
                   <FileCheck className="h-8 w-8 text-accent-600" />
@@ -1193,7 +1193,7 @@ export default function AdminDashboard() {
                 </div>
               </CardContent>
             </Card>
-            <Card className="cursor-pointer border-primary-200 transition-shadow hover:shadow-md" onClick={() => { setTab('listings'); setAdminLiveListingsFilter('enabled'); }}>
+            <Card className="cursor-pointer border-border transition-shadow hover:shadow-md" onClick={() => { setTab('listings'); setAdminLiveListingsFilter('enabled'); }}>
               <CardContent className="flex items-center gap-4 p-6">
                 <div className="rounded-full bg-primary-100 p-3">
                   <Home className="h-8 w-8 text-primary-600" />
@@ -1204,7 +1204,7 @@ export default function AdminDashboard() {
                 </div>
               </CardContent>
             </Card>
-            <Card className="cursor-pointer border-primary-200 transition-shadow hover:shadow-md" onClick={() => { setTab('listings'); setAdminLiveListingsFilter('disabled'); }}>
+            <Card className="cursor-pointer border-border transition-shadow hover:shadow-md" onClick={() => { setTab('listings'); setAdminLiveListingsFilter('disabled'); }}>
               <CardContent className="flex items-center gap-4 p-6">
                 <div className="rounded-full bg-primary-100 p-3">
                   <AlertCircle className="h-8 w-8 text-primary-600" />
@@ -1215,7 +1215,7 @@ export default function AdminDashboard() {
                 </div>
               </CardContent>
             </Card>
-            <Card className="cursor-pointer border-primary-200 transition-shadow hover:shadow-md" onClick={() => setTab('users')}>
+            <Card className="cursor-pointer border-border transition-shadow hover:shadow-md" onClick={() => setTab('users')}>
               <CardContent className="flex items-center gap-4 p-6">
                 <div className="rounded-full bg-primary-100 p-3">
                   <Users className="h-8 w-8 text-primary-600" />
@@ -1226,7 +1226,7 @@ export default function AdminDashboard() {
                 </div>
               </CardContent>
             </Card>
-            <Card className="cursor-pointer border-primary-200 transition-shadow hover:shadow-md" onClick={() => setTab('bookings')}>
+            <Card className="cursor-pointer border-border transition-shadow hover:shadow-md" onClick={() => setTab('bookings')}>
               <CardContent className="flex items-center gap-4 p-6">
                 <div className="rounded-full bg-primary-100 p-3">
                   <Calendar className="h-8 w-8 text-primary-600" />
@@ -1237,7 +1237,7 @@ export default function AdminDashboard() {
                 </div>
               </CardContent>
             </Card>
-            <Card className="cursor-pointer border-primary-200 transition-shadow hover:shadow-md" onClick={() => setTab('payments')}>
+            <Card className="cursor-pointer border-border transition-shadow hover:shadow-md" onClick={() => setTab('payments')}>
               <CardContent className="flex items-center gap-4 p-6">
                 <div className="rounded-full bg-accent-100 p-3">
                   <CreditCard className="h-8 w-8 text-accent-600" />
@@ -1249,9 +1249,9 @@ export default function AdminDashboard() {
               </CardContent>
             </Card>
           </div>
-          <Card className="border-primary-200">
-            <CardHeader className="border-b border-primary-100 bg-primary-50/50">
-              <h2 className="font-semibold text-primary-800">Quick actions</h2>
+          <Card className="border-border">
+            <CardHeader className="border-b border-border bg-muted/40">
+              <h2 className="font-semibold text-foreground">Quick actions</h2>
               <p className="text-sm text-muted-foreground">Moderate listings and manage users from the tabs above</p>
             </CardHeader>
             <CardContent className="p-6">
@@ -1270,18 +1270,18 @@ export default function AdminDashboard() {
       {tab === 'listings' && (
         <div className="mt-6 space-y-6">
         <div className="flex items-center justify-between">
-          <h2 className="font-semibold text-primary-800">Listings</h2>
+          <h2 className="font-semibold text-foreground">Listings</h2>
           <Button asChild className="bg-accent-500 hover:bg-accent-600">
             <Link to="/admin/listings/new">Add listing</Link>
           </Button>
         </div>
-        <Card className="border-primary-200">
-          <CardHeader className="border-b border-primary-100 bg-primary-50/50">
+        <Card className="border-border">
+          <CardHeader className="border-b border-border bg-muted/40">
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div>
                 <div className="flex items-center gap-2">
                   <FileCheck className="h-5 w-5 text-accent-500" />
-                  <span className="font-semibold text-primary-800 text-lg">Listings</span>
+                  <span className="font-semibold text-foreground text-lg">Listings</span>
                 </div>
                 <p className="text-sm text-muted-foreground">Approve or reject new homestay listings</p>
               </div>
@@ -1334,11 +1334,11 @@ export default function AdminDashboard() {
           </CardContent>
         </Card>
 
-        <Card className="border-primary-200">
-          <CardHeader className="border-b border-primary-100 bg-primary-50/50">
+        <Card className="border-border">
+          <CardHeader className="border-b border-border bg-muted/40">
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div>
-                <h2 className="font-semibold text-primary-800">Approved & disabled listings</h2>
+                <h2 className="font-semibold text-foreground">Approved & disabled listings</h2>
                 <p className="text-sm text-muted-foreground">Enable or disable homestays. Disabled listings are hidden from search and the site. Set badges for approved listings.</p>
                 <div className="flex flex-wrap gap-2 mt-3">
                   {(['all', 'enabled', 'disabled'] as const).map((f) => (
@@ -1388,12 +1388,12 @@ export default function AdminDashboard() {
       {tab === 'users' && (
         <>
           <Card className="mt-6 border-primary-200">
-            <CardHeader className="border-b border-primary-100 bg-primary-50/50">
+            <CardHeader className="border-b border-border bg-muted/40">
               <div className="flex flex-wrap items-center justify-between gap-4">
                 <div>
                   <div className="flex items-center gap-2">
                     <Users className="h-5 w-5 text-primary-600" />
-                    <h2 className="font-semibold text-primary-800">Users</h2>
+                    <h2 className="font-semibold text-foreground">Users</h2>
                   </div>
                   <p className="text-sm text-muted-foreground">Manage users, roles, and block/unblock. Add admin users (they verify OTP on first login).</p>
                 </div>
@@ -1496,7 +1496,7 @@ export default function AdminDashboard() {
             <Dialog.Portal>
               <Dialog.Overlay className="fixed inset-0 bg-black/50" />
               <Dialog.Content aria-describedby={undefined} className="fixed left-1/2 top-1/2 z-50 w-full max-w-2xl max-h-[90vh] -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-lg border border-primary-200 bg-background p-6 shadow-lg">
-                <Dialog.Title className="text-lg font-semibold text-primary-800">User detail</Dialog.Title>
+                <Dialog.Title className="text-lg font-semibold text-foreground">User detail</Dialog.Title>
                 {selectedUserDetail && (
                   <div className="mt-4 space-y-2 text-sm">
                     <p><span className="font-medium text-muted-foreground">ID:</span> {selectedUserDetail.id}</p>
@@ -1508,7 +1508,7 @@ export default function AdminDashboard() {
                     {selectedUserDetail.blocked && <p className="text-red-600 font-medium">Blocked</p>}
                     {selectedUserDetail.role === 'host' && (
                       <div className="mt-4 border-t border-primary-100 pt-4 space-y-3">
-                        <h3 className="font-semibold text-primary-800">Host wallet services (HimalPay)</h3>
+                        <h3 className="font-semibold text-foreground">Host wallet services (HimalPay)</h3>
                         <p className="text-xs text-muted-foreground">
                           Enable SKUs this host may sell. Platform pricing slabs are configured under the Wallet utilities admin tab; disabled platform SKUs do not appear here.
                         </p>
@@ -1603,7 +1603,7 @@ export default function AdminDashboard() {
             <Dialog.Portal>
               <Dialog.Overlay className="fixed inset-0 bg-black/50" />
               <Dialog.Content aria-describedby={undefined} className="fixed left-1/2 top-1/2 z-50 w-full max-w-md -translate-x-1/2 -translate-y-1/2 rounded-lg border border-primary-200 bg-background p-6 shadow-lg">
-                <Dialog.Title className="text-lg font-semibold text-primary-800">Reset user password</Dialog.Title>
+                <Dialog.Title className="text-lg font-semibold text-foreground">Reset user password</Dialog.Title>
                 <p className="mt-2 text-sm text-muted-foreground">
                   A strong temporary password will be emailed to the user. They must choose a new password the next time they sign in.
                 </p>
@@ -1646,7 +1646,7 @@ export default function AdminDashboard() {
             <Dialog.Portal>
               <Dialog.Overlay className="fixed inset-0 bg-black/50" />
               <Dialog.Content aria-describedby={undefined} className="fixed left-1/2 top-1/2 z-50 w-full max-w-md -translate-x-1/2 -translate-y-1/2 rounded-lg border border-primary-200 bg-background p-6 shadow-lg">
-                <Dialog.Title className="text-lg font-semibold text-primary-800">Add admin user</Dialog.Title>
+                <Dialog.Title className="text-lg font-semibold text-foreground">Add admin user</Dialog.Title>
                 <p className="mt-1 text-sm text-muted-foreground">New admin will need to verify OTP on first login.</p>
                 <form className="mt-4 space-y-3" onSubmit={(e) => { e.preventDefault(); if (!addAdminForm.name.trim() || !addAdminForm.email.trim() || !addAdminForm.password) { toast({ title: 'Name, email and password required.', variant: 'destructive' }); return; } setAddAdminSaving(true); api.post('/api/admin/users', { name: addAdminForm.name.trim(), email: addAdminForm.email.trim(), phone: addAdminForm.phone.trim() || undefined, password: addAdminForm.password }).then(() => { toast({ title: 'Admin user created.' }); setAddAdminOpen(false); setAddAdminForm({ name: '', email: '', phone: '', password: '' }); const params = new URLSearchParams(); if (usersSearch.trim()) params.set('search', usersSearch.trim()); return api.get<{ users: User[] }>(`/api/admin/users?${params}`); }).then((r) => { if (r?.data?.users) setUsers(r.data.users); }).catch((err) => toast({ title: err.response?.data?.message || 'Failed to create admin.', variant: 'destructive' })).finally(() => setAddAdminSaving(false)); }}>
                   <div>
@@ -1679,12 +1679,12 @@ export default function AdminDashboard() {
 
       {tab === 'bookings' && (
         <Card className="mt-6 border-primary-200">
-          <CardHeader className="border-b border-primary-100 bg-primary-50/50">
+          <CardHeader className="border-b border-border bg-muted/40">
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div>
                 <div className="flex items-center gap-2">
                   <Calendar className="h-5 w-5 text-accent-500" />
-                  <h2 className="font-semibold text-primary-800">Booking oversight</h2>
+                  <h2 className="font-semibold text-foreground">Booking oversight</h2>
                 </div>
                 <p className="text-sm text-muted-foreground">View all bookings ({adminBookingsTotal} total)</p>
               </div>
@@ -1741,7 +1741,7 @@ export default function AdminDashboard() {
       {tab === 'corporates' && (
         <div className="mt-6 space-y-6">
           <div className="flex flex-wrap items-center justify-between gap-4">
-            <h2 className="font-semibold text-primary-800">Corporate accounts & admin-assisted bookings</h2>
+            <h2 className="font-semibold text-foreground">Corporate accounts & admin-assisted bookings</h2>
             <div className="flex flex-wrap items-center gap-2">
               <Button size="sm" variant="outline" onClick={() => { setEditingCorporate(null); setCorporateForm({ name: '', status: 'provisional', contact_name: '', contact_email: '', contact_phone: '', billing_method: '', approval_required: false, max_nightly_rate: null, notes: '' }); setCorporateFormOpen(true); }}>
                 <Plus className="h-4 w-4 mr-1" /> Add corporate
@@ -1751,12 +1751,12 @@ export default function AdminDashboard() {
               </Button>
             </div>
           </div>
-          <Card className="border-primary-200">
-            <CardHeader className="border-b border-primary-100 bg-primary-50/50">
+          <Card className="border-border">
+            <CardHeader className="border-b border-border bg-muted/40">
               <div className="flex flex-wrap items-center gap-4">
                 <div className="flex items-center gap-2">
                   <Building2 className="h-5 w-5 text-accent-500" />
-                  <h2 className="font-semibold text-primary-800">Corporates</h2>
+                  <h2 className="font-semibold text-foreground">Corporates</h2>
                 </div>
                 <input
                   type="text"
@@ -1802,7 +1802,7 @@ export default function AdminDashboard() {
             <Dialog.Portal>
               <Dialog.Overlay className="fixed inset-0 bg-black/50" />
               <Dialog.Content aria-describedby={undefined} className="fixed left-1/2 top-1/2 z-50 w-full max-w-md -translate-x-1/2 -translate-y-1/2 rounded-lg border border-primary-200 bg-background p-6 shadow-lg">
-                <Dialog.Title className="text-lg font-semibold text-primary-800">{editingCorporate ? 'Edit corporate' : 'Add corporate'}</Dialog.Title>
+                <Dialog.Title className="text-lg font-semibold text-foreground">{editingCorporate ? 'Edit corporate' : 'Add corporate'}</Dialog.Title>
                 <form className="mt-4 space-y-3" onSubmit={(e) => { e.preventDefault(); setCorporateFormSaving(true); const payload = { name: corporateForm.name!, status: (corporateForm.status as string) || 'provisional', contact_name: corporateForm.contact_name || undefined, contact_email: corporateForm.contact_email || undefined, contact_phone: corporateForm.contact_phone || undefined, billing_method: corporateForm.billing_method || undefined, approval_required: !!corporateForm.approval_required, max_nightly_rate: corporateForm.max_nightly_rate != null ? Number(corporateForm.max_nightly_rate) : undefined, notes: corporateForm.notes || undefined }; if (editingCorporate) { api.patch(`/api/admin/corporates/${editingCorporate.id}`, payload).then((res) => { toast({ title: 'Corporate updated.' }); setCorporateFormOpen(false); const updated = res.data.corporate as Corporate; setCorporates((prev) => prev.map((x) => x.id === editingCorporate.id ? updated : x)); }).catch(() => toast({ title: 'Failed to update.', variant: 'destructive' })).finally(() => setCorporateFormSaving(false)); } else { api.post('/api/admin/corporates', payload).then((res) => { toast({ title: 'Corporate created.' }); setCorporates((prev) => [res.data.corporate, ...prev]); setCorporatesTotal((t) => t + 1); setCorporateFormOpen(false); }).catch(() => toast({ title: 'Failed to create.', variant: 'destructive' })).finally(() => setCorporateFormSaving(false)); } }}>
                   <div>
                     <label className="block text-sm font-medium text-primary-700">Name *</label>
@@ -1858,7 +1858,7 @@ export default function AdminDashboard() {
             <Dialog.Portal>
               <Dialog.Overlay className="fixed inset-0 bg-black/50" />
               <Dialog.Content aria-describedby={undefined} className="fixed left-1/2 top-1/2 z-50 max-h-[90vh] w-full max-w-lg -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-lg border border-primary-200 bg-background p-6 shadow-lg">
-                <Dialog.Title className="text-lg font-semibold text-primary-800">Create corporate booking</Dialog.Title>
+                <Dialog.Title className="text-lg font-semibold text-foreground">Create corporate booking</Dialog.Title>
                 <p className="mt-1 text-sm text-muted-foreground">Add guest names (one per line or comma-separated) or upload CSV. Number of guests and total price are calculated from the list.</p>
                 <form className="mt-4 space-y-3" onSubmit={(e) => {
                   e.preventDefault();
@@ -2033,7 +2033,7 @@ export default function AdminDashboard() {
                         {nights > 0 && <p><span className="font-medium text-muted-foreground">Nights:</span> {nights}</p>}
                         {nights > 0 && pricePerNight > 0 && <p><span className="font-medium text-muted-foreground">Accommodation subtotal (NPR):</span> {subtotal.toLocaleString()} ({pricePerNight.toLocaleString()} × {nights} × {guests})</p>}
                         {amenityTotal > 0 && <p><span className="font-medium text-muted-foreground">Amenities (NPR):</span> {amenityTotal.toLocaleString()}</p>}
-                        {total > 0 && <p className="font-semibold text-primary-800"><span className="font-medium text-muted-foreground">Total (NPR):</span> {total.toLocaleString()}</p>}
+                        {total > 0 && <p className="font-semibold text-foreground"><span className="font-medium text-muted-foreground">Total (NPR):</span> {total.toLocaleString()}</p>}
                       </div>
                     );
                   })()}
@@ -2054,12 +2054,12 @@ export default function AdminDashboard() {
 
       {tab === 'payments' && (
         <Card className="mt-6 border-primary-200">
-          <CardHeader className="border-b border-primary-100 bg-primary-50/50">
+          <CardHeader className="border-b border-border bg-muted/40">
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div>
                 <div className="flex items-center gap-2">
                   <CreditCard className="h-5 w-5 text-accent-500" />
-                  <h2 className="font-semibold text-primary-800">Payment management</h2>
+                  <h2 className="font-semibold text-foreground">Payment management</h2>
                 </div>
                 <p className="text-sm text-muted-foreground">Track payments and reconciliation ({adminPaymentsTotal} total)</p>
               </div>
@@ -2098,12 +2098,12 @@ export default function AdminDashboard() {
 
       {tab === 'reports' && (
         <Card className="mt-6 border-primary-200">
-          <CardHeader className="border-b border-primary-100 bg-primary-50/50">
+          <CardHeader className="border-b border-border bg-muted/40">
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div>
                 <div className="flex items-center gap-2">
                   <BarChart3 className="h-5 w-5 text-accent-500" />
-                  <h2 className="font-semibold text-primary-800">Reports & analytics</h2>
+                  <h2 className="font-semibold text-foreground">Reports & analytics</h2>
                 </div>
                 <p className="text-sm text-muted-foreground">Booking and payment details</p>
               </div>
@@ -2142,11 +2142,11 @@ export default function AdminDashboard() {
 
       {tab === 'content' && (
         <div className="mt-6 space-y-6">
-          <Card className="border-primary-200">
-            <CardHeader className="border-b border-primary-100 bg-primary-50/50">
+          <Card className="border-border">
+            <CardHeader className="border-b border-border bg-muted/40">
               <div className="flex items-center gap-2">
                 <Youtube className="h-5 w-5 text-accent-500" />
-                <h2 className="font-semibold text-primary-800">Landing page video</h2>
+                <h2 className="font-semibold text-foreground">Landing page video</h2>
               </div>
               <p className="text-sm text-muted-foreground">YouTube video URL shown on the homepage. Leave empty to hide the video section.</p>
             </CardHeader>
@@ -2169,11 +2169,11 @@ export default function AdminDashboard() {
               </form>
             </CardContent>
           </Card>
-          <Card className="border-primary-200">
-            <CardHeader className="border-b border-primary-100 bg-primary-50/50">
+          <Card className="border-border">
+            <CardHeader className="border-b border-border bg-muted/40">
               <div className="flex items-center gap-2">
                 <Newspaper className="h-5 w-5 text-accent-500" />
-                <h2 className="font-semibold text-primary-800">Blogs & News</h2>
+                <h2 className="font-semibold text-foreground">Blogs & News</h2>
               </div>
               <p className="text-sm text-muted-foreground">Blogs and news are fetched from Homestay Khabar. Click Sync to pull the latest articles and save them; the homepage Blogs section will show these synced items.</p>
             </CardHeader>
@@ -2184,11 +2184,11 @@ export default function AdminDashboard() {
               </Button>
             </CardContent>
           </Card>
-          <Card className="border-primary-200">
-            <CardHeader className="border-b border-primary-100 bg-primary-50/50">
+          <Card className="border-border">
+            <CardHeader className="border-b border-border bg-muted/40">
               <div className="flex items-center gap-2">
                 <Youtube className="h-5 w-5 text-accent-500" />
-                <h2 className="font-semibold text-primary-800">YouTube video gallery (Video Stories)</h2>
+                <h2 className="font-semibold text-foreground">YouTube video gallery (Video Stories)</h2>
               </div>
               <p className="text-sm text-muted-foreground">Video URLs shown on the homepage &quot;Video Stories&quot; section and on the View all videos page. Set the channel URL or ID below (default: Homestay Khabar) and click &quot;Sync videos&quot; to pull latest videos (no API key), or add URLs manually.</p>
             </CardHeader>
@@ -2257,13 +2257,13 @@ export default function AdminDashboard() {
               </form>
             </CardContent>
           </Card>
-          <Card className="border-primary-200">
-            <CardHeader className="border-b border-primary-100 bg-primary-50/50">
+          <Card className="border-border">
+            <CardHeader className="border-b border-border bg-muted/40">
               <div className="flex flex-wrap items-center justify-between gap-4">
                 <div>
                   <div className="flex items-center gap-2">
                     <FileText className="h-5 w-5 text-accent-500" />
-                    <h2 className="font-semibold text-primary-800">CMS sections</h2>
+                    <h2 className="font-semibold text-foreground">CMS sections</h2>
                   </div>
                   <p className="text-sm text-muted-foreground">Edit About Us, Privacy Policy, Terms, FAQs, Help Center, Safety, Cancellation, Address, Contact, and other footer/page content. Set display place (e.g. footer, page) and sort order.</p>
                 </div>
@@ -2354,7 +2354,7 @@ export default function AdminDashboard() {
               <Dialog.Portal>
                 <Dialog.Overlay className="fixed inset-0 bg-black/50" />
                 <Dialog.Content aria-describedby={undefined} className="fixed left-1/2 top-1/2 z-50 w-full max-w-2xl max-h-[90vh] overflow-y-auto -translate-x-1/2 -translate-y-1/2 rounded-lg border border-primary-200 bg-background p-6 shadow-lg">
-                  <Dialog.Title className="text-lg font-semibold text-primary-800">
+                  <Dialog.Title className="text-lg font-semibold text-foreground">
                     {editingCmsSection ? `Edit: ${editingCmsSection.section_key}` : `New section: ${cmsSectionForm.section_key}`}
                   </Dialog.Title>
                   <form
@@ -2496,11 +2496,11 @@ export default function AdminDashboard() {
 
       {tab === 'settings' && (
         <div className="mt-6 space-y-6">
-          <Card className="border-primary-200">
-            <CardHeader className="border-b border-primary-100 bg-primary-50/50">
+          <Card className="border-border">
+            <CardHeader className="border-b border-border bg-muted/40">
               <div className="flex items-center gap-2">
                 <CreditCard className="h-5 w-5 text-accent-500" />
-                <h2 className="font-semibold text-primary-800">Default booking fee (service charge or discount)</h2>
+                <h2 className="font-semibold text-foreground">Default booking fee (service charge or discount)</h2>
               </div>
               <p className="text-sm text-muted-foreground">Default applied when no category or listing-specific rule matches. Add a service charge (e.g. 5%) or discount (e.g. 10% or fixed). Leave value empty for no fee.</p>
             </CardHeader>
@@ -2594,9 +2594,9 @@ export default function AdminDashboard() {
           </Card>
 
           {/* Service charge by category (homestay category) */}
-          <Card className="border-primary-200">
-            <CardHeader className="border-b border-primary-100 bg-primary-50/50">
-              <h2 className="font-semibold text-primary-800">Service charge by category</h2>
+          <Card className="border-border">
+            <CardHeader className="border-b border-border bg-muted/40">
+              <h2 className="font-semibold text-foreground">Service charge by category</h2>
               <p className="text-sm text-muted-foreground">Assign a service charge or discount to all homestays in a category (e.g. Rural 5%, Eco 10%). Overrides the default above. Uses the same homestay categories as listings: Rural, Urban, Eco, Cultural, Farmstay.</p>
             </CardHeader>
             <CardContent className="p-6">
@@ -2663,9 +2663,9 @@ export default function AdminDashboard() {
           </Card>
 
           {/* Service charge by listing (single homestay) */}
-          <Card className="border-primary-200">
-            <CardHeader className="border-b border-primary-100 bg-primary-50/50">
-              <h2 className="font-semibold text-primary-800">Service charge by listing</h2>
+          <Card className="border-border">
+            <CardHeader className="border-b border-border bg-muted/40">
+              <h2 className="font-semibold text-foreground">Service charge by listing</h2>
               <p className="text-sm text-muted-foreground">Assign a service charge or discount to a single homestay (overrides category and default). E.g. Homestay 4 = Rs 10 flat, Homestay 5 = 2.3%.</p>
             </CardHeader>
             <CardContent className="p-6">
@@ -2713,9 +2713,9 @@ export default function AdminDashboard() {
             </CardContent>
           </Card>
 
-          <Card className="border-primary-200">
-            <CardHeader className="border-b border-primary-100 bg-primary-50/50">
-              <h2 className="font-semibold text-primary-800">Online payment gateway</h2>
+          <Card className="border-border">
+            <CardHeader className="border-b border-border bg-muted/40">
+              <h2 className="font-semibold text-foreground">Online payment gateway</h2>
               <p className="text-sm text-muted-foreground">
                 When on, guests pay via your configured gateway when they reserve. When off, they submit a reservation request only; they receive a confirmation email and see a message that your team will call them (or they can use your contact details).
               </p>
@@ -2831,9 +2831,9 @@ export default function AdminDashboard() {
             </CardContent>
           </Card>
 
-          <Card className="border-primary-200">
-            <CardHeader className="border-b border-primary-100 bg-primary-50/50">
-              <h2 className="font-semibold text-primary-800">Partial payment (min %)</h2>
+          <Card className="border-border">
+            <CardHeader className="border-b border-border bg-muted/40">
+              <h2 className="font-semibold text-foreground">Partial payment (min %)</h2>
               <p className="text-sm text-muted-foreground">Minimum percent of total that guests must pay when choosing &quot;Pay partial now&quot; (e.g. 25). No discount applies when paying partial. Rest is paid at checkout; host marks as paid.</p>
             </CardHeader>
             <CardContent className="p-6">
@@ -2871,11 +2871,11 @@ export default function AdminDashboard() {
           </Card>
 
           {/* Home placements (hero carousel + featured section) — Admin → Settings → scroll to "Home placements" */}
-          <Card className="border-primary-200">
-            <CardHeader className="border-b border-primary-100 bg-primary-50/50">
+          <Card className="border-border">
+            <CardHeader className="border-b border-border bg-muted/40">
               <div className="flex items-center gap-2">
                 <Home className="h-5 w-5 text-accent-500" />
-                <h2 className="font-semibold text-primary-800">Home placements (Hero &amp; Featured)</h2>
+                <h2 className="font-semibold text-foreground">Home placements (Hero &amp; Featured)</h2>
               </div>
               <p className="text-sm text-muted-foreground">
                 Choose which homestays appear on the public homepage: hero carousel (max {MAX_HOME_HERO_CAROUSEL} slides) and the featured block (max {MAX_HOME_FEATURED} cards). Order below controls hero slide order. Set placement prices (optional); paid placement for hosts can be added later.
@@ -3157,9 +3157,9 @@ export default function AdminDashboard() {
 
           {/* Homepage partners */}
           {tab === 'settings' && (
-            <Card className="border-primary-200">
-              <CardHeader className="border-b border-primary-100 bg-primary-50/50">
-                <h2 className="font-semibold text-primary-800">Homepage — Our Partners</h2>
+            <Card className="border-border">
+              <CardHeader className="border-b border-border bg-muted/40">
+                <h2 className="font-semibold text-foreground">Homepage — Our Partners</h2>
                 <p className="text-sm text-muted-foreground">
                   Manage homepage partner groups with simple fields. Add categories and partner rows without editing JSON.
                 </p>
@@ -3442,9 +3442,9 @@ export default function AdminDashboard() {
           )}
 
           {tab === 'settings' && (
-            <Card className="border-primary-200">
-              <CardHeader className="border-b border-primary-100 bg-primary-50/50">
-                <h2 className="font-semibold text-primary-800">Festivals Page Configuration</h2>
+            <Card className="border-border">
+              <CardHeader className="border-b border-border bg-muted/40">
+                <h2 className="font-semibold text-foreground">Festivals Page Configuration</h2>
                 <p className="text-sm text-muted-foreground">
                   Configure hero text and the month-wise festival cards shown on `/festivals`.
                 </p>
@@ -3575,9 +3575,9 @@ export default function AdminDashboard() {
           )}
 
           {tab === 'settings' && (
-            <Card className="border-primary-200">
-              <CardHeader className="border-b border-primary-100 bg-primary-50/50">
-                <h2 className="font-semibold text-primary-800">Trip Planner Page Configuration</h2>
+            <Card className="border-border">
+              <CardHeader className="border-b border-border bg-muted/40">
+                <h2 className="font-semibold text-foreground">Trip Planner Page Configuration</h2>
                 <p className="text-sm text-muted-foreground">
                   Configure hero text, route map copy, and suggested route cards shown on `/trip-planner`.
                 </p>
@@ -3719,11 +3719,11 @@ export default function AdminDashboard() {
 
           {/* Home content + marketing page JSON */}
           {tab === 'settings' && (
-            <Card className="border-primary-200">
-              <CardHeader className="border-b border-primary-100 bg-primary-50/50">
+            <Card className="border-border">
+              <CardHeader className="border-b border-border bg-muted/40">
                 <div className="flex items-center gap-2">
                   <Home className="h-5 w-5 text-accent-500" />
-                  <h2 className="font-semibold text-primary-800">Home & marketing content</h2>
+                  <h2 className="font-semibold text-foreground">Home & marketing content</h2>
                 </div>
                 <p className="text-sm text-muted-foreground">
                   Edit home trust/impact/testimonials/mobile/social/footer JSON and marketing page configs (team, careers, destinations, etc.).
@@ -3858,11 +3858,11 @@ export default function AdminDashboard() {
 
           {/* Listing display (homestay detail page text) */}
           {listingDisplayForm && (
-            <Card className="border-primary-200">
-              <CardHeader className="border-b border-primary-100 bg-primary-50/50">
+            <Card className="border-border">
+              <CardHeader className="border-b border-border bg-muted/40">
                 <div className="flex items-center gap-2">
                   <Home className="h-5 w-5 text-accent-500" />
-                  <h2 className="font-semibold text-primary-800">Listing display (homestay detail page)</h2>
+                  <h2 className="font-semibold text-foreground">Listing display (homestay detail page)</h2>
                 </div>
                 <p className="text-sm text-muted-foreground">Labels, highlights, trust badges and empty-state text shown on the homestay detail page and booking card.</p>
               </CardHeader>
@@ -4070,11 +4070,11 @@ export default function AdminDashboard() {
           )}
 
           {/* Sparrow SMS */}
-          <Card className="border-primary-200">
-            <CardHeader className="border-b border-primary-100 bg-primary-50/50">
+          <Card className="border-border">
+            <CardHeader className="border-b border-border bg-muted/40">
               <div className="flex items-center gap-2">
                 <MessageSquare className="h-5 w-5 text-accent-500" />
-                <h2 className="font-semibold text-primary-800">Sparrow SMS</h2>
+                <h2 className="font-semibold text-foreground">Sparrow SMS</h2>
               </div>
               <p className="text-sm text-muted-foreground">Configure Sparrow SMS (Nepal) for sending SMS. Get token and sender ID from <a href="https://docs.sparrowsms.com/sms/documentation/" target="_blank" rel="noreferrer" className="text-accent-600 underline">Sparrow SMS</a>. Leave empty to disable SMS.</p>
             </CardHeader>
@@ -4120,11 +4120,11 @@ export default function AdminDashboard() {
             </CardContent>
           </Card>
 
-          <Card className="border-primary-200">
-            <CardHeader className="border-b border-primary-100 bg-primary-50/50">
+          <Card className="border-border">
+            <CardHeader className="border-b border-border bg-muted/40">
               <div className="flex items-center gap-2">
                 <Mail className="h-5 w-5 text-accent-500" />
-                <h2 className="font-semibold text-primary-800">Email templates</h2>
+                <h2 className="font-semibold text-foreground">Email templates</h2>
               </div>
               <p className="text-sm text-muted-foreground">
                 Override subject and body for each transactional email. Leave fields blank to use the built-in default. Use placeholders such as{' '}
@@ -4246,11 +4246,11 @@ export default function AdminDashboard() {
 
           {/* Notification delivery (email vs SMS, who receives) */}
           {notificationSettings && (
-            <Card className="border-primary-200">
-              <CardHeader className="border-b border-primary-100 bg-primary-50/50">
+            <Card className="border-border">
+              <CardHeader className="border-b border-border bg-muted/40">
                 <div className="flex items-center gap-2">
                   <Bell className="h-5 w-5 text-accent-500" />
-                  <h2 className="font-semibold text-primary-800">Notification delivery</h2>
+                  <h2 className="font-semibold text-foreground">Notification delivery</h2>
                 </div>
                 <p className="text-sm text-muted-foreground">Choose whether to send each notification by email and/or SMS, and to whom (host or guest).</p>
               </CardHeader>
@@ -4474,12 +4474,12 @@ export default function AdminDashboard() {
           </div>
 
           {logsSubTab === 'email_sms' && (
-            <Card className="border-primary-200">
-              <CardHeader className="border-b border-primary-100 bg-primary-50/50">
+            <Card className="border-border">
+              <CardHeader className="border-b border-border bg-muted/40">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
                     <Mail className="h-5 w-5 text-accent-500" />
-                    <h2 className="font-semibold text-primary-800">Email & SMS log</h2>
+                    <h2 className="font-semibold text-foreground">Email & SMS log</h2>
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="text-sm text-muted-foreground">Search</span>
@@ -4528,12 +4528,12 @@ export default function AdminDashboard() {
           )}
 
           {logsSubTab === 'journey' && (
-            <Card className="border-primary-200">
-              <CardHeader className="border-b border-primary-100 bg-primary-50/50">
+            <Card className="border-border">
+              <CardHeader className="border-b border-border bg-muted/40">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
                     <Activity className="h-5 w-5 text-accent-500" />
-                    <h2 className="font-semibold text-primary-800">User journey log</h2>
+                    <h2 className="font-semibold text-foreground">User journey log</h2>
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="text-sm text-muted-foreground">Event type</span>
@@ -4583,12 +4583,12 @@ export default function AdminDashboard() {
           )}
 
           {logsSubTab === 'api' && (
-            <Card className="border-primary-200">
-              <CardHeader className="border-b border-primary-100 bg-primary-50/50">
+            <Card className="border-border">
+              <CardHeader className="border-b border-border bg-muted/40">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
                     <BarChart3 className="h-5 w-5 text-accent-500" />
-                    <h2 className="font-semibold text-primary-800">API log</h2>
+                    <h2 className="font-semibold text-foreground">API log</h2>
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="text-sm text-muted-foreground">Path contains</span>
@@ -4633,12 +4633,12 @@ export default function AdminDashboard() {
           )}
 
           {logsSubTab === 'errors' && (
-            <Card className="border-primary-200">
-              <CardHeader className="border-b border-primary-100 bg-primary-50/50">
+            <Card className="border-border">
+              <CardHeader className="border-b border-border bg-muted/40">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
                     <AlertCircle className="h-5 w-5 text-accent-500" />
-                    <h2 className="font-semibold text-primary-800">Error log</h2>
+                    <h2 className="font-semibold text-foreground">Error log</h2>
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="text-sm text-muted-foreground">Source</span>
@@ -4698,12 +4698,12 @@ export default function AdminDashboard() {
                 </CardContent>
               </Card>
               {!logsFiltersApplied ? (
-                <Card className="border-primary-200"><CardContent className="py-12 text-center text-muted-foreground">Set date range and click Apply filters to load analytics.</CardContent></Card>
+                <Card className="border-border"><CardContent className="py-12 text-center text-muted-foreground">Set date range and click Apply filters to load analytics.</CardContent></Card>
               ) : !analyticsData ? (
-                <Card className="border-primary-200"><CardContent className="py-12 text-center text-muted-foreground">No data for the selected date range.</CardContent></Card>
+                <Card className="border-border"><CardContent className="py-12 text-center text-muted-foreground">No data for the selected date range.</CardContent></Card>
               ) : (
             <div className="grid gap-4 md:grid-cols-2">
-              <Card className="border-primary-200">
+              <Card className="border-border">
                 <CardHeader><h3 className="font-medium">Email/SMS by day</h3></CardHeader>
                 <CardContent>
                   <ResponsiveContainer width="100%" height={220}>
@@ -4719,7 +4719,7 @@ export default function AdminDashboard() {
                   </ResponsiveContainer>
                 </CardContent>
               </Card>
-              <Card className="border-primary-200">
+              <Card className="border-border">
                 <CardHeader><h3 className="font-medium">User journey by day</h3></CardHeader>
                 <CardContent>
                   <ResponsiveContainer width="100%" height={220}>
@@ -4735,7 +4735,7 @@ export default function AdminDashboard() {
                   </ResponsiveContainer>
                 </CardContent>
               </Card>
-              <Card className="border-primary-200">
+              <Card className="border-border">
                 <CardHeader><h3 className="font-medium">API responses by day</h3></CardHeader>
                 <CardContent>
                   <ResponsiveContainer width="100%" height={220}>
@@ -4752,7 +4752,7 @@ export default function AdminDashboard() {
                   </ResponsiveContainer>
                 </CardContent>
               </Card>
-              <Card className="border-primary-200">
+              <Card className="border-border">
                 <CardHeader><h3 className="font-medium">Errors by day</h3></CardHeader>
                 <CardContent>
                   <ResponsiveContainer width="100%" height={220}>
@@ -4786,14 +4786,14 @@ export default function AdminDashboard() {
                 </CardContent>
               </Card>
               {!logsFiltersApplied ? (
-                <Card className="border-primary-200"><CardContent className="py-12 text-center text-muted-foreground">Set date range and click Apply filters to load heat map data.</CardContent></Card>
+                <Card className="border-border"><CardContent className="py-12 text-center text-muted-foreground">Set date range and click Apply filters to load heat map data.</CardContent></Card>
               ) : (
             <div className="grid gap-4 md:grid-cols-2">
-              <Card className="border-primary-200">
-                <CardHeader className="border-b border-primary-100 bg-primary-50/50">
+              <Card className="border-border">
+                <CardHeader className="border-b border-border bg-muted/40">
                   <div className="flex items-center gap-2">
                     <MousePointer className="h-5 w-5 text-accent-500" />
-                    <h2 className="font-semibold text-primary-800">Page view heat map</h2>
+                    <h2 className="font-semibold text-foreground">Page view heat map</h2>
                   </div>
                   <p className="text-sm text-muted-foreground">Views per route (top 50)</p>
                 </CardHeader>
@@ -4811,9 +4811,9 @@ export default function AdminDashboard() {
                   </table>
                 </CardContent>
               </Card>
-              <Card className="border-primary-200">
-                <CardHeader className="border-b border-primary-100 bg-primary-50/50">
-                  <h2 className="font-semibold text-primary-800">Click events (sample)</h2>
+              <Card className="border-border">
+                <CardHeader className="border-b border-border bg-muted/40">
+                  <h2 className="font-semibold text-foreground">Click events (sample)</h2>
                   <p className="text-sm text-muted-foreground">Recent clicks with position for heat map</p>
                 </CardHeader>
                 <CardContent className="p-0 overflow-x-auto max-h-96 overflow-y-auto">
@@ -4856,7 +4856,7 @@ export default function AdminDashboard() {
             {emailSmsDetail && (
               <>
                 <div className="flex items-center justify-between border-b border-primary-100 p-4 bg-primary-50/50">
-                  <Dialog.Title className="font-semibold text-primary-800">Email / SMS log detail</Dialog.Title>
+                  <Dialog.Title className="font-semibold text-foreground">Email / SMS log detail</Dialog.Title>
                   <Dialog.Close asChild>
                     <button type="button" className="rounded p-1 hover:bg-primary-200" aria-label="Close"><X className="h-5 w-5" /></button>
                   </Dialog.Close>
@@ -4890,7 +4890,7 @@ export default function AdminDashboard() {
           <Dialog.Overlay className="fixed inset-0 z-50 bg-black/50" />
           <Dialog.Content aria-describedby={undefined} className="fixed left-1/2 top-1/2 z-50 w-full max-w-2xl max-h-[90vh] -translate-x-1/2 -translate-y-1/2 rounded-lg border border-primary-200 bg-background shadow-lg overflow-hidden flex flex-col">
             <div className="flex items-center justify-between border-b border-primary-100 p-4 bg-primary-50/50">
-              <Dialog.Title className="font-semibold text-primary-800">User journey — Session timeline</Dialog.Title>
+              <Dialog.Title className="font-semibold text-foreground">User journey — Session timeline</Dialog.Title>
               <Dialog.Close asChild>
                 <button type="button" className="rounded p-1 hover:bg-primary-200" aria-label="Close" onClick={() => { setSelectedJourneySessionId(null); setJourneySessionEvents([]); }}><X className="h-5 w-5" /></button>
               </Dialog.Close>
@@ -4920,7 +4920,7 @@ export default function AdminDashboard() {
             {selectedApiLog && (
               <>
                 <div className="flex items-center justify-between border-b border-primary-100 pb-3">
-                  <Dialog.Title className="font-semibold text-primary-800">API log detail</Dialog.Title>
+                  <Dialog.Title className="font-semibold text-foreground">API log detail</Dialog.Title>
                   <Dialog.Close asChild>
                     <button type="button" className="rounded p-1 hover:bg-primary-200" aria-label="Close"><X className="h-5 w-5" /></button>
                   </Dialog.Close>
@@ -4958,7 +4958,7 @@ export default function AdminDashboard() {
             {selectedErrorLog && (
               <>
                 <div className="flex items-center justify-between border-b border-primary-100 p-4 bg-primary-50/50">
-                  <Dialog.Title className="font-semibold text-primary-800">Error log detail</Dialog.Title>
+                  <Dialog.Title className="font-semibold text-foreground">Error log detail</Dialog.Title>
                   <Dialog.Close asChild>
                     <button type="button" className="rounded p-1 hover:bg-primary-200" aria-label="Close"><X className="h-5 w-5" /></button>
                   </Dialog.Close>
@@ -5045,7 +5045,7 @@ export default function AdminDashboard() {
               return (
                 <>
                   <div className="flex items-center justify-between border-b border-primary-100 pb-3">
-                    <Dialog.Title className="font-semibold text-primary-800">Booking details</Dialog.Title>
+                    <Dialog.Title className="font-semibold text-foreground">Booking details</Dialog.Title>
                     <Dialog.Close asChild>
                       <button type="button" className="rounded p-1 hover:bg-primary-100" aria-label="Close">
                         <X className="h-5 w-5" />
@@ -5076,7 +5076,7 @@ export default function AdminDashboard() {
                   </dl>
                   {selectedBooking.status === 'pending' && (
                     <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50/50 p-3 text-sm space-y-3">
-                      <p className="font-semibold text-primary-800">Offline reservation — confirm payment</p>
+                      <p className="font-semibold text-foreground">Offline reservation — confirm payment</p>
                       <p className="text-muted-foreground">Upload a payment confirmation slip, add optional remarks, then mark the booking as paid.</p>
                       <div>
                         <input
@@ -5112,7 +5112,7 @@ export default function AdminDashboard() {
                         onChange={(e) => setOfflineRemarks(e.target.value)}
                         placeholder="Remarks (e.g. bank reference, amount received)"
                         rows={3}
-                        className="border-primary-200"
+                        className="border-border"
                       />
                       <Button
                         type="button"
@@ -5146,7 +5146,7 @@ export default function AdminDashboard() {
                   )}
                   {hasInvoice && (
                     <div className="mt-4 rounded-lg border border-primary-200 bg-primary-50/50 p-3">
-                      <h4 className="font-semibold text-primary-800 mb-2">Invoice / Price quotation</h4>
+                      <h4 className="font-semibold text-foreground mb-2">Invoice / Price quotation</h4>
                       <dl className="space-y-1 text-sm">
                         {subtotal != null && (
                           <div className="flex justify-between">
@@ -5179,7 +5179,7 @@ export default function AdminDashboard() {
                           </div>
                         )}
                         {total != null && (
-                          <div className="flex justify-between font-semibold text-primary-800 mt-2 pt-2 border-t border-primary-200">
+                          <div className="flex justify-between font-semibold text-foreground mt-2 pt-2 border-t border-primary-200">
                             <dt>Total (guest pays)</dt>
                             <dd>NPR {total.toLocaleString()}</dd>
                           </div>
@@ -5232,7 +5232,7 @@ export default function AdminDashboard() {
               return (
                 <>
                   <div className="flex items-center justify-between border-b border-primary-100 pb-3">
-                    <Dialog.Title className="font-semibold text-primary-800">Transaction receipt</Dialog.Title>
+                    <Dialog.Title className="font-semibold text-foreground">Transaction receipt</Dialog.Title>
                     <Dialog.Close asChild>
                       <button type="button" className="rounded p-1 hover:bg-primary-100" aria-label="Close">
                         <X className="h-5 w-5" />

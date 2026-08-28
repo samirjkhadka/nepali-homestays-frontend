@@ -10,6 +10,7 @@ import ListingDetailPage from '@/pages/public/ListingDetailPage';
 import LoginPage from '@/pages/auth/LoginPage';
 import SignupPage from '@/pages/auth/SignupPage';
 import VerifyPage from '@/pages/auth/VerifyPage';
+import TwoFactorPage from '@/pages/auth/TwoFactorPage';
 import ForgotPasswordPage from '@/pages/auth/ForgotPasswordPage';
 import ResetPasswordPage from '@/pages/auth/ResetPasswordPage';
 import GuestDashboard from '@/pages/guest/GuestDashboard';
@@ -99,6 +100,7 @@ export default function App() {
           <Route path="wishlist" element={<WishlistNavRedirect />} />
           <Route path="signin" element={<LoginPage />} />
           <Route path="login" element={<LoginPage />} />
+          <Route path="two-factor" element={<TwoFactorPage />} />
           <Route path="signup" element={<SignupPage />} />
           <Route path="verify" element={<VerifyPage />} />
           <Route path="forgot-password" element={<ForgotPasswordPage />} />

@@ -13,7 +13,7 @@ export default function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
-  const { login } = useAuth();
+  const { setSessionUser } = useAuth();
   const [emailOrPhone, setEmailOrPhone] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -32,6 +32,9 @@ export default function LoginPage() {
     api
       .post<{
         requireOtp?: boolean;
+        requireTwoFactor?: boolean;
+        twoFactorSetupRequired?: boolean;
+        twoFactorChallenge?: string;
         token?: string;
         user?: { id: number; email: string; role: string; must_change_password?: boolean };
         mustChangePassword?: boolean;
@@ -39,6 +42,20 @@ export default function LoginPage() {
         email?: string;
       }>('/api/auth/login', { email: emailOrPhone.trim(), password })
       .then((res) => {
+        // The second factor is checked BEFORE the email-OTP branch: an admin who
+        // owes a factor gets no session here, and the challenge is the only
+        // thing carried forward. It is not a token and opens nothing.
+        if (res.data.requireTwoFactor && res.data.twoFactorChallenge) {
+          navigate('/two-factor', {
+            replace: true,
+            state: {
+              challenge: res.data.twoFactorChallenge,
+              setupRequired: Boolean(res.data.twoFactorSetupRequired),
+              email: res.data.email,
+            },
+          });
+          return;
+        }
         if (res.data.requireOtp !== false) {
           const emailForVerify = res.data.email ?? (emailOrPhone.includes('@') ? emailOrPhone : '');
           if (!emailForVerify) {
@@ -48,16 +65,22 @@ export default function LoginPage() {
           navigate('/verify', { state: { email: emailForVerify } });
           return;
         }
-        if (res.data.token && res.data.user) {
+        if (res.data.user) {
           const mustChange =
             Boolean(res.data.user.must_change_password) || Boolean(res.data.mustChangePassword);
           const user = { ...res.data.user, must_change_password: mustChange };
-          login(res.data.token, user);
+          setSessionUser(user);
           if (mustChange) {
             navigate('/profile/change-password', { replace: true });
             return;
           }
-          navigate(res.data.user.role === 'host' ? '/dashboard/host' : '/');
+          navigate(
+            res.data.user.role === 'host'
+              ? '/dashboard/host'
+              : res.data.user.role === 'admin' || res.data.user.role === 'superadmin'
+                ? '/admin/dashboard'
+                : '/'
+          );
           return;
         }
         setError(res.data.message || 'Login failed. Please try again.');

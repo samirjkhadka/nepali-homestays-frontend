@@ -10,6 +10,7 @@ import { Users, FileCheck, Calendar, CreditCard, BarChart3, FileText, Youtube, X
 import { WalletUtilitiesPanel } from '@/components/admin/WalletUtilitiesPanel';
 import { CancellationPoliciesPanel } from '@/components/admin/CancellationPoliciesPanel';
 import { RouteStopsPanel } from '@/components/admin/RouteStopsPanel';
+import { TwoFactorPanel } from '@/components/admin/TwoFactorPanel';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line, CartesianGrid, Legend } from 'recharts';
 import { api } from '@/lib/api';
 import { bookingFeeDelta, parseAmenityChargesJson } from '@/lib/booking-price-breakdown';
@@ -356,7 +357,7 @@ const ADMIN_EMAIL_TEMPLATE_KEYS = [
   'offline_booking_confirmed',
 ] as const;
 
-const ADMIN_TABS = ['overview', 'listings', 'users', 'bookings', 'corporates', 'payments', 'reports', 'content', 'settings', 'cancellation', 'treks', 'wallet_utilities', 'logs'] as const;
+const ADMIN_TABS = ['overview', 'listings', 'users', 'bookings', 'corporates', 'payments', 'reports', 'content', 'settings', 'cancellation', 'treks', 'security', 'wallet_utilities', 'logs'] as const;
 type AdminTab = (typeof ADMIN_TABS)[number];
 
 const LISTING_BADGES = ['recommended', 'featured', 'new'] as const;
@@ -1158,7 +1159,7 @@ export default function AdminDashboard() {
               if (t === 'listings') setAdminLiveListingsFilter('all');
             }}
           >
-            {t === 'listings' ? 'Listings' : t === 'corporates' ? 'Corporates' : t === 'wallet_utilities' ? 'Wallet utilities' : t === 'cancellation' ? 'Cancellation' : t === 'treks' ? 'Treks' : t}
+            {t === 'listings' ? 'Listings' : t === 'corporates' ? 'Corporates' : t === 'wallet_utilities' ? 'Wallet utilities' : t === 'cancellation' ? 'Cancellation' : t === 'treks' ? 'Treks' : t === 'security' ? 'Security' : t}
           </button>
         ))}
       </div>
@@ -4393,6 +4394,8 @@ export default function AdminDashboard() {
       {tab === 'cancellation' && <div className="mt-6"><CancellationPoliciesPanel /></div>}
 
       {tab === 'treks' && <div className="mt-6"><RouteStopsPanel /></div>}
+
+      {tab === 'security' && <div className="mt-6"><TwoFactorPanel /></div>}
 
       {tab === 'wallet_utilities' && <WalletUtilitiesPanel />}
 

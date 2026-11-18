@@ -1,8 +1,11 @@
 @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap');
 
-@tailwind base;
+/* @tailwind base;
 @tailwind components;
-@tailwind utilities;
+@tailwind utilities; */
+
+@import "tailwindcss";
+@config "../tailwind.config.js";
 
 /* Nepali Homestays – warm earthy design system (aligned with nepal-homestay-connect) */
 

@@ -581,7 +581,7 @@ export default function HostDashboard() {
                           <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
                         ))}
                       </Pie>
-                      <Tooltip formatter={(value: number | undefined) => [value ?? 0, 'Bookings']} />
+                      <Tooltip formatter={(value) => [value ?? 0, 'Bookings']} />
                       <Legend />
                     </PieChart>
                   </ResponsiveContainer>
@@ -617,7 +617,7 @@ export default function HostDashboard() {
                           <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
                         ))}
                       </Pie>
-                      <Tooltip formatter={(value: number | undefined) => [value ?? 0, 'Listings']} />
+                      <Tooltip formatter={(value) => [Number(value) || 0, 'Listings']} />
                       <Legend />
                     </PieChart>
                   </ResponsiveContainer>
@@ -650,7 +650,11 @@ export default function HostDashboard() {
                       <YAxis yAxisId="left" tick={{ fontSize: 12 }} allowDecimals={false} />
                       <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 12 }} tickFormatter={(v) => formatPrice(String(v))} />
                       <Tooltip
-                        formatter={(value: number | undefined, name?: string) => [(name === 'earnings' ? formatPrice(String(value ?? 0)) : (value ?? 0)), name === 'earnings' ? 'Earnings' : 'Bookings']}
+                        formatter={(value, name) => {
+                          const numericValue = typeof value === 'number' ? value : Number(Array.isArray(value) ? value[0] : value ?? 0);
+                          const isEarnings = String(name) === 'earnings';
+                          return [isEarnings ? formatPrice(String(numericValue)) : numericValue, isEarnings ? 'Earnings' : 'Bookings'];
+                        }}
                         labelFormatter={(label) => `Month: ${label}`}
                       />
                       <Legend />
